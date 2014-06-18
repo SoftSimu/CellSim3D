@@ -153,9 +153,6 @@ __shared__ float  sumz[256];
   float RCNNS, SCNNS, TCNNS;
 __shared__ float CMx, CMy, CMz;
   
-//  printf("  in cell divison, rank %d, new fullerene #%d\n", rank, (No_of_C180s)+1);
-
-
 int tid  = threadIdx.x;
 int atom = tid;
 
@@ -188,7 +185,6 @@ if ( tid == 0 )
    CMx = sumx[0]/180.0f;
    CMy = sumy[0]/180.0f;
    CMz = sumz[0]/180.0f;
-//   printf("%f %f %f\n",CMx, CMy, CMz);
    }
 
 __syncthreads();
@@ -197,10 +193,8 @@ __syncthreads();
   if ( atom < 180 ) 
      {
 
-     float PI = 3.14159265358979324f;
-
-     float ALP =PI*(d_ran2[0]-0.5f);
-     float ALP2=PI*(d_ran2[1]-0.5f);
+     float ALP =d_ran2[1];
+     float ALP2=d_ran2[0];
 
      float SC =  cosf(ALP)*cosf(ALP2)*(d_XP[192*rank+atom]-CMx)
                 -sinf(ALP)*cosf(ALP2)*(d_YP[rank*192+atom]-CMy)
@@ -215,17 +209,17 @@ __syncthreads();
      newrank = No_of_C180s;                
   
      SCNNS = SC;
-     RCNNS = RC;
-     if ( TC > 0.0f )
+     TCNNS = TC;
+     if ( RC > 0.0f )
          {
-         TCNNS = -repulsion_range/2.0f;
-         if ( TC < repulsion_range/2.0f ) TC = repulsion_range/2.0f;
+         RCNNS = -repulsion_range/2.0f;
+         if ( RC < repulsion_range/2.0f ) RC = repulsion_range/2.0f;
          }
      else
          {
-         TCNNS = TC;
-         if ( TCNNS > -repulsion_range/2.0f ) TCNNS = -repulsion_range/2.0f;
-         TC = repulsion_range/2.0f;
+         RCNNS = RC;
+         if ( RCNNS > -repulsion_range/2.0f ) RCNNS = -repulsion_range/2.0f;
+         RC = repulsion_range/2.0f;
          }
 
 
@@ -246,7 +240,6 @@ __syncthreads();
      d_Y[newrank*192+atom] = d_YP[newrank*192+atom];
      d_Z[newrank*192+atom] = d_ZP[newrank*192+atom];
      }
-//  printf("%f %f %f\n", d_X[newrank*192+atom], d_Y[newrank*192+atom], d_Z[newrank*192+atom]);
 
 
 }

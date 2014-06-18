@@ -158,13 +158,15 @@ if ( rank < No_of_C180s )
 
 
 __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz, 
-                    float *Minx, float *Maxx, float *Miny, float *Maxy)
+                    float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz)
 {
 
 __shared__ float  minx[1024];
 __shared__ float  maxx[1024];
 __shared__ float  miny[1024];
 __shared__ float  maxy[1024];
+__shared__ float  minz[1024];
+__shared__ float  maxz[1024];
 
 int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 int tid       = threadIdx.x;
@@ -173,6 +175,8 @@ minx[tid] = +1.0E8f;
 maxx[tid] = -1.0E8f;
 miny[tid] = +1.0E8f;
 maxy[tid] = -1.0E8f;
+minz[tid] = +1.0E8f;
+maxz[tid] = -1.0E8f;
 
 if ( fullerene < No_of_C180s )
     {
@@ -180,6 +184,8 @@ if ( fullerene < No_of_C180s )
     maxx[tid] = d_bounding_xyz[6*fullerene+1];
     miny[tid] = d_bounding_xyz[6*fullerene+2];
     maxy[tid] = d_bounding_xyz[6*fullerene+3];
+    minz[tid] = d_bounding_xyz[6*fullerene+4];
+    maxz[tid] = d_bounding_xyz[6*fullerene+5];
     }
 
 __syncthreads();
@@ -192,20 +198,20 @@ for ( int s = blockDim.x/2; s > 0; s>>=1)
       maxx[tid] = fmaxf(maxx[tid],maxx[tid+s]);
       miny[tid] = fminf(miny[tid],miny[tid+s]);
       maxy[tid] = fmaxf(maxy[tid],maxy[tid+s]);
+      minz[tid] = fminf(minz[tid],minz[tid+s]);
+      maxz[tid] = fmaxf(maxz[tid],maxz[tid+s]);
       }
    __syncthreads();
    }
 
 if ( tid == 0 )
    {
-//   Minx[blockIdx.x+0]  = minx[0];
-//   Minx[blockIdx.x+1]  = maxx[0];
-//   Minx[blockIdx.x+2]  = miny[0];
-//   Minx[blockIdx.x+3]  = maxy[0];
    Minx[blockIdx.x]  = minx[0]; 
    Maxx[blockIdx.x]  = maxx[0];
    Miny[blockIdx.x]  = miny[0];
    Maxy[blockIdx.x]  = maxy[0];
+   Minz[blockIdx.x]  = minz[0];
+   Maxz[blockIdx.x]  = maxz[0];
    }
 
 }
@@ -214,7 +220,8 @@ if ( tid == 0 )
 
 
 __global__ void makeNNlist( int No_of_C180s, float *d_bounding_xyz, 
-                        float Minx, float Miny, float attrac, int Xdiv, int Ydiv,
+                        float Minx, float Miny, float Minz, float attrac, 
+                        int Xdiv, int Ydiv, int Zdiv, 
                         int *d_NoofNNlist, int *d_NNlist, float DL)
 {
 
@@ -225,33 +232,53 @@ int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 
 if ( fullerene < No_of_C180s )
    {
+
    int startx = (int)((d_bounding_xyz[6*fullerene+0]-attrac - Minx)/DL);
    if ( startx < 0 ) startx = 0;
    int endx   = (int)((d_bounding_xyz[6*fullerene+1]+attrac - Minx)/DL);
    if ( endx >= Xdiv ) endx = Xdiv-1;
+
    int starty = (int)((d_bounding_xyz[6*fullerene+2]-attrac - Miny)/DL);
    if ( starty < 0 ) starty = 0;
    int  endy  = (int)((d_bounding_xyz[6*fullerene+3]+attrac - Miny)/DL);
    if ( endy >= Ydiv ) endy = Ydiv-1;
+
+   int startz = (int)((d_bounding_xyz[6*fullerene+4]-attrac - Minz)/DL);
+   if ( startz < 0 ) startz = 0;
+   int  endz  = (int)((d_bounding_xyz[6*fullerene+5]+attrac - Minz)/DL);
+   if ( endz >= Zdiv ) endz = Zdiv-1;
+
    for ( int j1 = startx; j1 <= endx; ++j1 ) 
         for ( int j2 = starty; j2 <= endy; ++j2 ) 
-            {
-            int index = atomicAdd( &d_NoofNNlist[j2*Xdiv+j1] , 1); //returns old
-            d_NNlist[ 16*(j2*Xdiv+j1) + index] = fullerene;
-            }
+            for ( int j3 = startz; j3 <= endz; ++j3 ) 
+                {
+                int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+                if ( index > 32 ) 
+                   {
+                   printf("Fullerene %d, NN-list too short\n", fullerene);
+//                   printf("Full %d, NN-list too short: ", fullerene);
+//                   for ( int k = 0; k < 32; ++k ) 
+//                        printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
+//                   printf("\n");
+                   continue;
+                   }
+                d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+                }
    }
 
 }
   
 
 __global__ void minmaxpost( int No_of_C180s, 
-                    float *Minx, float *Maxx, float *Miny, float *Maxy)
+                    float *Minx, float *Maxx, float *Miny, float *Maxy,  float *Minz, float *Maxz)
 {
 
 __shared__ float  minx[1024];
 __shared__ float  maxx[1024];
 __shared__ float  miny[1024];
 __shared__ float  maxy[1024];
+__shared__ float  minz[1024];
+__shared__ float  maxz[1024];
 
 int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 int tid       = threadIdx.x;
@@ -260,6 +287,8 @@ minx[tid] = +1.0E8f;
 maxx[tid] = -1.0E8f;
 miny[tid] = +1.0E8f;
 maxy[tid] = -1.0E8f;
+minz[tid] = +1.0E8f;
+maxz[tid] = -1.0E8f;
 
 if ( fullerene < No_of_C180s )
     {
@@ -267,6 +296,8 @@ if ( fullerene < No_of_C180s )
     maxx[tid] = Maxx[fullerene];
     miny[tid] = Miny[fullerene];
     maxy[tid] = Maxy[fullerene];
+    minz[tid] = Minz[fullerene];
+    maxz[tid] = Maxz[fullerene];
     }
 
 __syncthreads();
@@ -279,6 +310,8 @@ for ( int s = blockDim.x/2; s > 0; s>>=1)
       maxx[tid] = fmaxf(maxx[tid],maxx[tid+s]);
       miny[tid] = fminf(miny[tid],miny[tid+s]);
       maxy[tid] = fmaxf(maxy[tid],maxy[tid+s]);
+      minz[tid] = fminf(minz[tid],minz[tid+s]);
+      maxz[tid] = fmaxf(maxz[tid],maxz[tid+s]);
       }
    __syncthreads();
    }
@@ -289,6 +322,8 @@ if ( tid == 0 )
    Minx[blockIdx.x+1]  = maxx[0];
    Minx[blockIdx.x+2]  = miny[0];
    Minx[blockIdx.x+3]  = maxy[0];
+   Minx[blockIdx.x+4]  = minz[0];
+   Minx[blockIdx.x+5]  = maxz[0];
    }
 
 }

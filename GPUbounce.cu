@@ -62,14 +62,16 @@
 
                            // global minimum and maximum of x and y, preprocessfirst 
                            // global minimum and maximum of x and y, postprocesssecond 
-  float *d_Minx, *d_Maxx, *d_Miny, *d_Maxy;
-  float *Minx, *Maxx, *Miny, *Maxy;
+  float *d_Minx, *d_Maxx, *d_Miny, *d_Maxy, *d_Minz, *d_Maxz;
+  float *Minx, *Maxx, *Miny, *Maxy, *Minz, *Maxz;
  
   float DL;
-  int Xdiv, Ydiv;
+  int Xdiv, Ydiv, Zdiv;
 
   int *d_NoofNNlist;
   int *d_NNlist;
+  int *NoofNNlist;
+  int *NNlist;
 
   float *d_CMx, *d_CMy, *d_CMz;
   float *CMx, *CMy, *CMz;
@@ -91,26 +93,30 @@
 int main(int argc, char *argv[])
 {
   int i;
-  int rank,step;
+  int rank,globalrank,step;
   int noofblocks, threadsperblock, prevnoofblocks;
-  int Orig_No_of_C180s;
+  int Orig_No_of_C180s, temp_No_of_C180s, newcells;
   int reductionblocks;
   float PSS;
+  float s, theta, phi;
   FILE *outfile;
   cudaError_t myError;
 
+  printf("CellDiv version 0.9\n"); 
+
   if ( argc != 2 ) 
      {
-     printf("Usage: Celldiv no_of_threads\n"); 
+     printf("Usage: CellDiv no_of_threads\n"); 
      return(0);
      }
 
   No_of_threads = atoi(argv[1]);
+
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
-  if ( Side_length*Side_length != No_of_threads ) 
+  if ( No_of_threads > MaxNoofC180s || Side_length*Side_length != No_of_threads ) 
      {
      printf("Usage: Celldiv no_of_threads\n"); 
-     printf("       no_of_threads should be a square, n^2\n");
+     printf("       no_of_threads should be a square, n^2, < %d\n", MaxNoofC180s);
      return(0);
      }
 
@@ -166,16 +172,18 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Maxx ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Miny ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Maxy ,         1024*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Minz ,         1024*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Maxz ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    16*1024*1024*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    32*1024*1024*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
 
   GPUMemory += MaxNoofC180s*6L*sizeof(float);
   GPUMemory += MaxNoofC180s*3L*sizeof(float);
   GPUMemory += MaxNoofC180s*sizeof(float);
-  GPUMemory += 4L*1024L*sizeof(float);
+  GPUMemory += 6L*1024L*sizeof(float);
   GPUMemory += 1024L*1024L*sizeof(int);
-  GPUMemory += 16L*1024L*1024L*sizeof(int);
+  GPUMemory += 32L*1024L*1024L*sizeof(int);
   GPUMemory += 92L*7L*sizeof(int);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   GPUMemory += 10000L*sizeof(float);
@@ -189,11 +197,15 @@ int main(int argc, char *argv[])
   Maxx  = (float *)calloc(1024, sizeof(float));
   Miny  = (float *)calloc(1024, sizeof(float));
   Maxy  = (float *)calloc(1024, sizeof(float));
+  Minz  = (float *)calloc(1024, sizeof(float));
+  Maxz  = (float *)calloc(1024, sizeof(float));
+  NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
+  NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
 
   CPUMemory += MaxNoofC180s*6L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(float);
   CPUMemory += 3L*MaxNoofC180s*sizeof(float);
-  CPUMemory += 4L*1024L*sizeof(float);
+  CPUMemory += 6L*1024L*sizeof(float);
 
   printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
   printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
@@ -225,32 +237,24 @@ int main(int argc, char *argv[])
   
   reductionblocks = (No_of_C180s-1)/1024+1;
   minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz, 
-                            d_Minx, d_Maxx, d_Miny, d_Maxy);
-  minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy);
+                            d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+  minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
   cudaMemset(d_NoofNNlist, 0, 1024*1024);
-  cudaMemcpy(Minx, d_Minx, 4*sizeof(float),cudaMemcpyDeviceToHost);
-//  printf("%f %f %f %f\n",Minx[0], Minx[1], Minx[2], Minx[3]);
-  DL = 3.8f;
+  cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
+//  DL = 3.8f;
+  DL = 2.9f;
   Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
   Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], 
-                        attraction_range, Xdiv, Ydiv, d_NoofNNlist, d_NNlist, DL);
+  Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
+  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
+                        attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
-// cudaMemcpy(NoofNNlist, d_NoofNNlist, 1024*sizeof(int),cudaMemcpyDeviceToHost);
-// cudaMemcpy(NNlist, d_NNlist, 1024*sizeof(int),cudaMemcpyDeviceToHost);
-//  printf("Xdiv = %d, Ydiv = %d\n",Xdiv, Ydiv);
-//  for ( i = Xdiv*Ydiv-1; i >= 0; --i )
-//    {
-//    if ( i%Xdiv == 0 ) printf("\n");
-//    printf("%2d ",NoofNNlist[i]);
-//    for ( j = 0; j < NoofNNlist[i]; ++j ) printf("%d ",NNlist[16*i+j]);
-//    printf("\n");
-//    }
-//  printf("\n");
+  globalrank = 0;
 
   for ( step = 1; step <= Time_steps+1; ++step )
      {
-     if ( step < Division_step ) PSS=80.0*Temperature;
+//     if ( step < Division_step ) PSS=80.0*Temperature;
+     if ( step < 8000 ) PSS=80.0*Temperature;
      Pressure = PSS;
   
      if ( (step/1000)*1000 == step ) printf("   time %-8d %d C180s\n",step,No_of_C180s);
@@ -265,14 +269,15 @@ int main(int argc, char *argv[])
 
      propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign, 
                d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
+               d_CMx, d_CMy, d_CMz,
                R0, Pressure, Youngs_mod ,
                internal_damping, delta_t, d_bounding_xyz,
                attraction_strength, attraction_range,
                repulsion_strength, repulsion_range,
                viscotic_damping, mass,
-               Minx[0], Minx[2], Xdiv, Ydiv, d_NoofNNlist, d_NNlist, DL);
+               Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
-     if ( step%10000 == 0 )
+     if ( step%Division_step == 0 )
         {
         printf("   time %-8d", step);
 
@@ -291,15 +296,38 @@ int main(int argc, char *argv[])
             }
         printf("\n");
            
-        rank = 0;
-        printf("       in cell division, rank %d, new fullerene #%d\n",  
-                                rank, No_of_C180s+1);
-        ranmar(ran2,2);
-        cudaMemcpy( d_ran2, ran2, 2*sizeof(float),cudaMemcpyHostToDevice);
-        NDIV[rank] += 1;
-        cell_division<<<1,256>>>(rank, d_XP, d_YP, d_ZP,  d_X, d_Y, d_Z,  
+        temp_No_of_C180s =  No_of_C180s;
+        newcells = 0;
+        for ( rank = 0; rank < temp_No_of_C180s; ++rank ) 
+            {
+            globalrank = (globalrank+1)%temp_No_of_C180s;
+            if ( volume[globalrank] < 2.9f ) continue;
+            printf("       in cell division, cell %3d divides, new cell #%3d\n",  
+                                globalrank, No_of_C180s+1);
+            do 
+               {
+               ranmar(ran2,2);
+               ran2[0] = 2.0f*ran2[0]-1.0f; 
+               ran2[1] = 2.0f*ran2[1]-1.0f; 
+               s = ran2[0]*ran2[0] + ran2[1]*ran2[1];
+               }
+            while ( s >= 1.0f);
+            theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);
+            if ( fabsf(ran2[0]) < 0.000001 ) phi = 0.0f;
+            else phi = acos(ran2[0]/sqrtf(s));
+            if ( ran2[1] < 0 ) phi = -phi;
+//            printf("THETA = %f, PHI = %f\n", theta*180.0f/3.141592654f, phi*180.0f/3.141592654f);
+            ran2[0] = theta; ran2[1] = phi;
+                    
+            cudaMemcpy( d_ran2, ran2, 2*sizeof(float),cudaMemcpyHostToDevice);
+            NDIV[rank] += 1;
+            cell_division<<<1,256>>>(globalrank, d_XP, d_YP, d_ZP,  d_X, d_Y, d_Z,  
                                  No_of_C180s, d_ran2, repulsion_range);
-        ++No_of_C180s;                
+            ++No_of_C180s;                
+            ++newcells;
+            if ( No_of_C180s > MaxNoofC180s ){printf("Too meny cells: %d\nExiting!\n", No_of_C180s);return(-1);}
+//            if ( newcells > (int)(0.1f*temp_No_of_C180s) ) break;
+            }
         }
 
      bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
@@ -308,15 +336,16 @@ int main(int argc, char *argv[])
 
      reductionblocks = (No_of_C180s-1)/1024+1;
      minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz, 
-                           d_Minx, d_Maxx, d_Miny, d_Maxy);
-     minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy);
+                           d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+     minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
      cudaMemset(d_NoofNNlist, 0, 1024*1024);
 
-     cudaMemcpy(Minx, d_Minx, 4*sizeof(float),cudaMemcpyDeviceToHost);
+     cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
      Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
      Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-     makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], 
-                        attraction_range, Xdiv, Ydiv, d_NoofNNlist, d_NNlist, DL);
+     Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
+     makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4], 
+                        attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
 //     if ( step%500          == 0 ) 
      if ( step == Time_steps+1 ) 
@@ -333,7 +362,7 @@ int main(int argc, char *argv[])
          { printf( "4 Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
      }
 
-
+  printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
   cudaFree( (void *)d_bounding_xyz );
 
   cudaFree( (void *)d_XP ); 
@@ -454,10 +483,6 @@ int read_fullerene_nn(void)
 
   if ( end < 180 ) {printf("Error: Unable to read line %d in file C180NN\n",end);return(-1);}
 
-//for ( i = 0; i < 180 ; ++i )
-//    printf("%d,%d,%d,%d\n", C180_nn_1[i], C180_nn_2[i], C180_nn_3[i], C180_sign[i] ) ;
-
-
   printf("   Reading C180C ..\n");
 
   infil = fopen("C180C","r");
@@ -573,18 +598,20 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                float d_XP[], float d_YP[], float d_ZP[], 
                float d_X[],  float d_Y[],  float d_Z[], 
                float d_XM[], float d_YM[], float d_ZM[], 
+               float *d_CMx, float *d_CMy, float *d_CMz,
                float R0, float Pressure, float Youngs_mod ,
                float internal_damping, float delta_t,
                float d_bounding_xyz[], 
                float attraction_strength, float attraction_range,
                float repulsion_strength, float repulsion_range,
                float viscotic_damping, float mass,
-               float Minx, float Miny,  int Xdiv, int Ydiv, int *d_NoofNNlist, int *d_NNlist, float DL)
+               float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv, 
+               int *d_NoofNNlist, int *d_NNlist, float DL)
 {
 int rank, atom, nn_rank, nn_atom;
 int N1, N2, N3; 
 int NooflocalNN;
-int localNNs[6];
+int localNNs[8];
 float deltaX, deltaY, deltaZ;
 float A1, A2, A3;
 float B1, B2, B3;
@@ -596,8 +623,6 @@ rank = blockIdx.x;
 atom = threadIdx.x;
 
 
-//  for ( rank = 0; rank < No_of_C180s; ++rank )
-//    for ( atom = 0 ; atom < 180; ++atom )
   if ( rank < No_of_C180s && atom < 180 )
         {
         N1 = d_C180_nn[  0+atom];
@@ -645,27 +670,27 @@ atom = threadIdx.x;
             FZ += -(internal_damping/delta_t)*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
             }
 
-//LL1 is the    range of the  repulsive force between cells
-//ST1 is the strength of the  repulsive force between cells
-//LL2 is the    range of the attractive force between cells
-//ST2 is the strength of the attractive force between cells
-
-
 
         NooflocalNN = 0;
+
         int startx = (int)((X -Minx)/DL);
         if ( startx < 0 ) startx = 0;
         if ( startx >= Xdiv ) startx = Xdiv-1;
+
         int starty = (int)((Y - Miny)/DL);
         if ( starty < 0 ) starty = 0;
         if ( starty >= Ydiv ) starty = Ydiv-1;
-        int index = starty*Xdiv+startx;
+
+        int startz = (int)((Z - Minz)/DL);
+        if ( startz < 0 ) startz = 0;
+        if ( startz >= Zdiv ) startz = Zdiv-1;
+
+        int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
 
                                                   // interfullerene attraction and repulsion
-//        for ( nn_rank = 0 ; nn_rank < No_of_C180s ; ++nn_rank )
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
             {
-            nn_rank = d_NNlist[16*index+nn_rank1-1];
+            nn_rank = d_NNlist[32*index+nn_rank1-1];
             if ( nn_rank == rank ) continue;
            
             deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
@@ -679,7 +704,7 @@ atom = threadIdx.x;
  
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range ) continue;
             ++NooflocalNN;
-            if ( NooflocalNN > 6 ) {printf("Recoverable error: NooflocalNN = %d, should be < 6\n",NooflocalNN);continue;}
+            if ( NooflocalNN > 8 ) {printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);continue;}
             localNNs[NooflocalNN-1] = nn_rank;
             }
           
@@ -709,6 +734,10 @@ atom = threadIdx.x;
                    FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
                    FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
                    FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                   if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
+                         deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
+                         deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
+                           printf("fullerene %d inside %d?\n",rank, nn_rank);
                    }
 
                 }
