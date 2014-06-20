@@ -57,3 +57,7 @@ __global__ void bounding_boxes( int No_of_C180s,
 void rmarin(int ij, int kl);
 void ranmar(float rvec[], int len);
 
+
+
+// Function to write the trajectory
+void write_traj(int t_step, FILE* trajfile); 

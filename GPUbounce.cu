@@ -100,6 +100,7 @@ int main(int argc, char *argv[])
   float PSS;
   float s, theta, phi;
   FILE *outfile;
+  FILE *trajfile; // pointer to xyz file
   cudaError_t myError;
 
   printf("CellDiv version 0.9\n"); 
@@ -251,13 +252,28 @@ int main(int argc, char *argv[])
 
   globalrank = 0;
 
+  // open trajectory file
+  trajfile = fopen ("traj.xyz", "w");
+  if ( trajfile == NULL)
+	{
+	  printf("Failed to open traj.xyz\n");
+	  return -1;
+	}
+  
+  write_traj(0, trajfile); 
+
   for ( step = 1; step <= Time_steps+1; ++step )
      {
 //     if ( step < Division_step ) PSS=80.0*Temperature;
      if ( step < 8000 ) PSS=80.0*Temperature;
      Pressure = PSS;
   
-     if ( (step/1000)*1000 == step ) printf("   time %-8d %d C180s\n",step,No_of_C180s);
+     if ( (step/1000)*1000 == step )
+	   {
+		 printf("   time %-8d %d C180s\n",step,No_of_C180s);
+	   }
+
+	 // Add code to output trajectory here. 
      
      noofblocks      = No_of_C180s;
      if ( prevnoofblocks < noofblocks )
@@ -348,19 +364,26 @@ int main(int argc, char *argv[])
                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
 //     if ( step%500          == 0 ) 
-     if ( step == Time_steps+1 ) 
-           {
-           cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-           PSNET(No_of_C180s*270,Side_length,L1,X,Y,Z,CCI);
-           }
+     if ( step%10000 == 0 ) 
+	   {
+		 printf("Writing trajectory to traj.xyz..."); 
+		 cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+		 cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+		 cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+		 write_traj(step, trajfile); 
+	   }
 
      Temperature += delta_t;
      myError = cudaGetLastError();
      if ( cudaSuccess != myError )
          { printf( "4 Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
      }
+
+  // Write postscript file
+  cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+  cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+  cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+  PSNET(No_of_C180s*270,Side_length,L1,X,Y,Z,CCI);
 
   printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
   cudaFree( (void *)d_bounding_xyz );
@@ -382,6 +405,8 @@ int main(int argc, char *argv[])
   cudaFree( (void *)d_C180_nn);
   cudaFree( (void *)d_C180_sign);
   free(CMx); free(CMy); free(CMz);
+
+  fclose(trajfile); 
 
   return(0);
 }
@@ -769,3 +794,14 @@ atom = threadIdx.x;
 
 
 
+void write_traj(int t_step, FILE* trajfile)
+{
+
+  fprintf(trajfile, "%d\n", No_of_C180s * 192);
+  fprintf(trajfile, "Step: %d\n", t_step); 
+
+  for (int p = 0; p < No_of_C180s * 192; p++)
+	{
+	  fprintf(trajfile, "%.7f,%.7f,%.7f\n", X[p], Y[p], Z[p]);
+	}
+}
