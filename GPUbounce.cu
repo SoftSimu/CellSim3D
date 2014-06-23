@@ -260,7 +260,7 @@ int main(int argc, char *argv[])
 	  return -1;
 	}
   
-  write_traj(0, trajfile); 
+  write_traj(1, trajfile); 
 
   for ( step = 1; step <= Time_steps+1; ++step )
      {
@@ -273,8 +273,6 @@ int main(int argc, char *argv[])
 		 printf("   time %-8d %d C180s\n",step,No_of_C180s);
 	   }
 
-	 // Add code to output trajectory here. 
-     
      noofblocks      = No_of_C180s;
      if ( prevnoofblocks < noofblocks )
         {
@@ -308,7 +306,7 @@ int main(int argc, char *argv[])
         for ( i = 0; i < No_of_C180s; ++i )
             {
             printf("%f ",  volume[i]); 
-            if ( ((i+1)/5)*5 == i+1 ) printf("\n                               ");
+            if ( ((i+1)/5)*5 == i+1 ) printf("\n");
             }
         printf("\n");
            
@@ -363,10 +361,10 @@ int main(int argc, char *argv[])
      makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4], 
                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
-//     if ( step%500          == 0 ) 
-     if ( step%10000 == 0 ) 
+ 
+     if ( step%9990 == 0 ) 
 	   {
-		 printf("Writing trajectory to traj.xyz..."); 
+		 printf("Writing trajectory to traj.xyz...\n"); 
 		 cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		 cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		 cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
@@ -800,7 +798,7 @@ void write_traj(int t_step, FILE* trajfile)
   fprintf(trajfile, "%d\n", No_of_C180s * 192);
   fprintf(trajfile, "Step: %d\n", t_step); 
 
-  for (int p = 0; p < No_of_C180s * 192; p++)
+  for (int p = 0; p < No_of_C180s*192; p++)
 	{
 	  fprintf(trajfile, "%.7f,%.7f,%.7f\n", X[p], Y[p], Z[p]);
 	}
