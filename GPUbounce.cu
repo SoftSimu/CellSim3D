@@ -103,6 +103,9 @@ int main(int argc, char *argv[])
   FILE *trajfile; // pointer to xyz file
   cudaError_t myError;
 
+  int* dividingCells; //Cells that are about to divide
+  int* totalCells; // No. of cells at every Dividing_steps
+
   printf("CellDiv version 0.9\n"); 
 
   if ( argc != 2 ) 
@@ -144,6 +147,20 @@ int main(int argc, char *argv[])
   if ( outfile == NULL ) {printf("Unable to open file psfil\n");return(-1);}
   fclose(outfile);
 
+  /* PM
+	 Allocate memory for the dividingCells array that will be used to
+	 calculate the mitotic index.
+  */
+
+  dividingCells = (int *)calloc((Time_steps/Division_step) + 1, sizeof(int));
+  totalCells = (int *)calloc((Time_steps/Division_step) + 1, sizeof(int));
+  /*
+  printf ("\nTime_steps %d Division_step %d %d\n%d %d %d", Time_steps, Division_step, Time_steps/Division_step + 1, dividingCells[0], dividingCells[1], dividingCells[2]);
+  char c; 
+  scanf("c", c);
+  */
+  
+  
   getDevice();
   
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
@@ -315,7 +332,8 @@ int main(int argc, char *argv[])
 		  for ( rank = 0; rank < temp_No_of_C180s; ++rank ) 
             {
 			  globalrank = (globalrank+1)%temp_No_of_C180s;
-			  if ( volume[globalrank] < 2.9f ) continue;
+			  if ( volume[globalrank] < 2.9f )
+				continue;
 			  printf("       in cell division, cell %3d divides, new cell #%3d\n",  
 					 globalrank, No_of_C180s+1);
 			  do 
@@ -342,6 +360,8 @@ int main(int argc, char *argv[])
 			  if ( No_of_C180s > MaxNoofC180s ){printf("Too meny cells: %d\nExiting!\n", No_of_C180s);return(-1);}
 			  //            if ( newcells > (int)(0.1f*temp_No_of_C180s) ) break;
             }
+		  dividingCells[(step-1)/Division_step] = newcells;
+		  totalCells[(step-1)/Division_step] = No_of_C180s; 
         }
 
 	  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
@@ -364,7 +384,7 @@ int main(int argc, char *argv[])
  
 	  if ( step%9990 == 0 ) 
 		{
-		  printf("Writing trajectory to traj.xyz...\n"); 
+		  printf("   Writing trajectory to traj.xyz...\n"); 
 		  cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		  cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		  cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
@@ -384,8 +404,20 @@ int main(int argc, char *argv[])
   PSNET(No_of_C180s*270,Side_length,L1,X,Y,Z,CCI);
 
   printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
-  cudaFree( (void *)d_bounding_xyz );
 
+  FILE* MitIndFile; 
+  MitIndFile = fopen("mit-index.dat", "w");
+  if (MitIndFile == NULL){
+	printf("Failed to open mit-index.dat\n");
+  }
+  else{
+	for (int i = 0; i < (Time_steps/Division_step) + 1; i++){
+	  if ( dividingCells[i]!=0 && totalCells[i]!=0 )
+		fprintf(MitIndFile, "%f\n", (float)dividingCells[i]/totalCells[i]);
+	}
+  }
+   														    
+  cudaFree( (void *)d_bounding_xyz );
   cudaFree( (void *)d_XP ); 
   cudaFree( (void *)d_YP );
   cudaFree( (void *)d_ZP );  
@@ -403,9 +435,10 @@ int main(int argc, char *argv[])
   cudaFree( (void *)d_C180_nn);
   cudaFree( (void *)d_C180_sign);
   free(CMx); free(CMy); free(CMz);
+  free(dividingCells); free(totalCells);
 
   fclose(trajfile); 
-
+  fclose(MitIndFile); 
   return(0);
 }
 
@@ -470,7 +503,7 @@ int generate_random(int no_of_ran1_vectors)
   CPUMemory += (MaxNoofC180s+1L)*sizeof(float);
   seed=5513974+32570;
   //      seed=5513974+rank*5;        // JVW need a random number generator 
-  // JVW for 1000000 C180s: inmplemented
+  // JVW for 1,000,000 C180s: inmplemented
   // JVW by calling ranmar as needed.
   // JVW Random numbers are not stored!
   ij = seed/30082;

@@ -6,3 +6,7 @@ psfil
 *.xyz*
 *.log*
 *.csv*
+.directory
+*.png
+*.svg
+*.dat
