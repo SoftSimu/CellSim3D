@@ -1,8 +1,20 @@
-#include <cuda.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include "postscript.h"
+#ifndef STD_INC
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <time.h>
+  #include <math.h>
+#endif
+
+
+#ifndef CUDA_INC
+  #include <cuda.h>
+#endif
+
+#ifndef CELLDIV_INC
+  #include "postscript.h"
+  #include "marsaglia.h"
+#endif
+
 
 #define MaxNoofC180s 250000
 
@@ -14,6 +26,7 @@ float viscotic_damping, internal_damping;          //  C, DMP
 int   Division_step, Time_steps;
 float delta_t;
 int   Restart;
+int trajWriteInt; // trajectory write interval
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f;
 
@@ -154,6 +167,7 @@ int main(int argc, char *argv[])
 
   dividingCells = (int *)calloc((Time_steps/Division_step) + 1, sizeof(int));
   totalCells = (int *)calloc((Time_steps/Division_step) + 1, sizeof(int));
+  CPUMemory += (long)(Time_steps/Division_step) + 1L; 
   /*
   printf ("\nTime_steps %d Division_step %d %d\n%d %d %d", Time_steps, Division_step, Time_steps/Division_step + 1, dividingCells[0], dividingCells[1], dividingCells[2]);
   char c; 
@@ -382,9 +396,9 @@ int main(int argc, char *argv[])
 											 attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
  
-	  if ( step%9990 == 0 ) 
+	  if ( step%trajWriteInt == 0 ) 
 		{
-		  printf("   Writing trajectory to traj.xyz...\n"); 
+		  //printf("   Writing trajectory to traj.xyz...\n"); 
 		  cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		  cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		  cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
@@ -495,19 +509,20 @@ int initialize_C180s(int Orig_No_of_C180s)
 
 int generate_random(int no_of_ran1_vectors)    
 {
-  int seed,ij,kl;
-  void rmarin(int ij, int kl);
-  void ranmar(float rvec[], int len);
+  // This function uses marsaglia random number generator
+  // Defined in marsaglia.h
+  int seed_ij, seed_kl ,ij,kl;
 
   ran2 = (float *)calloc(MaxNoofC180s+1,sizeof(float));
   CPUMemory += (MaxNoofC180s+1L)*sizeof(float);
-  seed=5513974+32570;
-  //      seed=5513974+rank*5;        // JVW need a random number generator 
-  // JVW for 1,000,000 C180s: inmplemented
-  // JVW by calling ranmar as needed.
-  // JVW Random numbers are not stored!
-  ij = seed/30082;
-  kl = seed - 30082*ij;
+
+  time_t current_time; 
+  time(&current_time);
+  seed_ij = (int)current_time;
+  localtime(&current_time);
+  seed_kl = (int)current_time; 
+  ij = seed_ij%31328; 
+  kl = seed_kl%30081;
   rmarin(ij,kl);
   
   return(0);
@@ -614,10 +629,11 @@ int read_global_params(void)
   if ( fscanf(infil,"%f",&Youngs_mod)          != 1 ) {error = 6;}
   if ( fscanf(infil,"%f",&viscotic_damping)    != 1 ) {error = 7;}
   if ( fscanf(infil,"%f",&internal_damping)    != 1 ) {error = 8;}
-  if ( fscanf(infil,"%d",&Division_step)        != 1 ) {error = 9;}
-  if ( fscanf(infil,"%d",&Time_steps)           != 1 ) {error = 10;}
+  if ( fscanf(infil,"%d",&Division_step)       != 1 ) {error = 9;}
+  if ( fscanf(infil,"%d",&Time_steps)          != 1 ) {error = 10;}
   if ( fscanf(infil,"%f",&delta_t)             != 1 ) {error = 11;}
-  if ( fscanf(infil,"%d",&Restart)              != 1 ) {error = 12;}
+  if ( fscanf(infil,"%d",&Restart)             != 1 ) {error = 12;}
+  if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 13;}
   fclose(infil);
 
   if ( error == 1 ) 
@@ -639,6 +655,7 @@ int read_global_params(void)
   printf("      Time steps          = %d\n",Time_steps);
   printf("      delta t             = %f\n",delta_t);
   printf("      Restart             = %d\n",Restart);
+  printf("      trajWriteInterval   = %d\n",trajWriteInt); 
 
   return(0);
 }
