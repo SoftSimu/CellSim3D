@@ -1,0 +1,10 @@
+#!/bin/bash
+
+re='[0-9]+'
+
+if ! [[ $1 =~ $re ]]; then
+	echo "Must give me a perfect square number."
+else
+	./CellDiv $1 | tee out.log
+#	echo okay
+fi
