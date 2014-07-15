@@ -10,7 +10,9 @@
 100000
 0.0001
 0
-100
+1000
+0
+0.6
 --------------------------
 MASS
 REPULSION RANGE
@@ -25,3 +27,5 @@ TIME STEPS
 DT
 RESTART
 TRAJECTORY WRITE INTERVAL
+countOnlyInternal (0 - no, 1 - yes)
+radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always) 

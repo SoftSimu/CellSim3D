@@ -26,7 +26,11 @@ float viscotic_damping, internal_damping;          //  C, DMP
 int   Division_step, Time_steps;
 float delta_t;
 int   Restart;
-int trajWriteInt; // trajectory write interval
+int   trajWriteInt; // trajectory write interval
+int   countOnlyInternal; // 0 - Count all new cells
+                         // 1 - Count only the cells born within 0.6Rmax from
+                         //     the center of mass of the system
+float radFrac;
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f;
 
@@ -108,7 +112,7 @@ int main(int argc, char *argv[])
   int i;
   int rank,globalrank,step;
   int noofblocks, threadsperblock, prevnoofblocks;
-  int Orig_No_of_C180s, temp_No_of_C180s, newcells;
+  int Orig_No_of_C180s, temp_No_of_C180s, newcells, newcells_imp, No_of_C180s_imp; 
   int reductionblocks;
   float PSS;
   float s, theta, phi;
@@ -118,6 +122,12 @@ int main(int argc, char *argv[])
 
   int* dividingCells; //Cells that are about to divide
   int* totalCells; // No. of cells at every Dividing_steps
+  int* newCellInds; 
+
+  float CoMx, CoMy, CoMz, Rmax; // CoM of the whole system, and the max radius from the Com
+  float tempX, tempY, tempZ; // multipurpose temporary coords or vectors
+
+  //int min_no_of_cells = 10; 
 
   printf("CellDiv version 0.9\n"); 
 
@@ -128,6 +138,7 @@ int main(int argc, char *argv[])
 	}
 
   No_of_threads = atoi(argv[1]);
+
 
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
   if ( No_of_threads > MaxNoofC180s || Side_length*Side_length != No_of_threads ) 
@@ -167,6 +178,7 @@ int main(int argc, char *argv[])
 
   dividingCells = (int *)calloc((Time_steps/Division_step) + 1, sizeof(int));
   totalCells = (int *)calloc((Time_steps/Division_step) + 1, sizeof(int));
+  
   CPUMemory += (long)(Time_steps/Division_step) + 1L; 
   /*
   printf ("\nTime_steps %d Division_step %d %d\n%d %d %d", Time_steps, Division_step, Time_steps/Division_step + 1, dividingCells[0], dividingCells[1], dividingCells[2]);
@@ -312,6 +324,7 @@ int main(int argc, char *argv[])
 		  //             noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
         }
 
+
 	  propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign, 
 												 d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
 												 d_CMx, d_CMy, d_CMz,
@@ -327,12 +340,19 @@ int main(int argc, char *argv[])
 		  printf("   time %-8d", step);
 
 		  CenterOfMass<<<No_of_C180s,256>>>( No_of_C180s,
-											 d_XP, d_YP, d_ZP, d_CMx, d_CMy, d_CMz);
+		  									 d_XP, d_YP, d_ZP, d_CMx, d_CMy, d_CMz);
 
 		  volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
 									   d_XP, d_YP, d_ZP, d_CMx , d_CMy, d_CMz, d_volume);
 
 		  cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+
+		  if (countOnlyInternal != 0){
+			newCellInds = (int *)calloc(No_of_C180s, sizeof(int)); // The system can only double at maximum
+		  }
+
+
+		  /* No need to print all of this
 		  printf(" cell volumes: ");
 		  for ( i = 0; i < No_of_C180s; ++i )
             {
@@ -340,6 +360,9 @@ int main(int argc, char *argv[])
 			  if ( ((i+1)/5)*5 == i+1 ) printf("\n");
             }
 		  printf("\n");
+		  */
+
+		  
            
 		  temp_No_of_C180s =  No_of_C180s;
 		  newcells = 0;
@@ -348,8 +371,7 @@ int main(int argc, char *argv[])
 			  globalrank = (globalrank+1)%temp_No_of_C180s;
 			  if ( volume[globalrank] < 2.9f )
 				continue;
-			  printf("       in cell division, cell %3d divides, new cell #%3d\n",  
-					 globalrank, No_of_C180s+1);
+			  //printf("       in cell division, cell %3d divides, new cell #%3d\n",  					 globalrank, No_of_C180s+1);
 			  do 
 				{
 				  ranmar(ran2,2);
@@ -370,12 +392,93 @@ int main(int argc, char *argv[])
 			  cell_division<<<1,256>>>(globalrank, d_XP, d_YP, d_ZP,  d_X, d_Y, d_Z,  
 									   No_of_C180s, d_ran2, repulsion_range);
 			  ++No_of_C180s;                
-			  ++newcells;
+  			  ++newcells;
+			  if (countOnlyInternal != 0){
+				newCellInds[newcells - 1] = No_of_C180s; // index of the new cell
+			  }
+			  
 			  if ( No_of_C180s > MaxNoofC180s ){printf("Too meny cells: %d\nExiting!\n", No_of_C180s);return(-1);}
 			  //            if ( newcells > (int)(0.1f*temp_No_of_C180s) ) break;
             }
-		  dividingCells[(step-1)/Division_step] = newcells;
-		  totalCells[(step-1)/Division_step] = No_of_C180s; 
+
+		  // Get the cells that are within the radius of gyration
+
+		  if (countOnlyInternal != 0){
+
+			cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+			// Calculate the center of mass of the system
+
+			CoMx = 0;
+			CoMy = 0;
+			CoMz = 0; 
+
+			for (int cell_ind = 0; cell_ind < No_of_C180s ; cell_ind++) {
+			  CoMx += 192 * mass * CMx[cell_ind];
+			  CoMy += 192 * mass * CMy[cell_ind];
+			  CoMz += 192 * mass * CMz[cell_ind]; 
+			}
+	  	  
+			CoMx = (1/(192*mass*No_of_C180s)) * CoMx;
+			CoMy = (1/(192*mass*No_of_C180s)) * CoMy;
+			CoMz = (1/(192*mass*No_of_C180s)) * CoMz;
+
+			// calculate the max radius
+		  
+			Rmax = 0;
+			tempX = 0;
+			tempY = 0;
+			tempZ = 0;
+
+			for (int cell_ind = 0; cell_ind < No_of_C180s; cell_ind++) {
+			  tempX = CMx[cell_ind] - CoMx;
+			  tempY = CMy[cell_ind] - CoMy;
+			  tempZ = CMz[cell_ind] - CoMz;
+			  Rmax = max(sqrtf( tempX*tempX + tempY*tempY + tempZ*tempZ ), Rmax);
+			}
+
+			if (newcells > 0){
+			  newcells_imp = 0; 
+			  float dist = Rmax; 
+			  for (int new_cell_ind = 0; new_cell_ind < newcells; new_cell_ind++) {
+				tempX = CMx[newCellInds[new_cell_ind]] - CoMx;
+				tempY = CMy[newCellInds[new_cell_ind]] - CoMy;
+				tempZ = CMz[newCellInds[new_cell_ind]] - CoMz;
+
+				dist = sqrtf( tempX*tempX + tempY*tempY + tempZ*tempZ );
+
+				if (dist < 0.6*Rmax){
+				  newcells_imp++; 
+				}
+						  
+			  }
+
+			  dist = Rmax;
+			  No_of_C180s_imp = 0; 
+			  for (int cell_ind = 0; cell_ind < No_of_C180s; cell_ind++) {
+				tempX = CMx[cell_ind] - CoMx;
+				tempY = CMy[cell_ind] - CoMy;
+				tempZ = CMz[cell_ind] - CoMz;
+				dist = sqrtf( tempX*tempX + tempY*tempY + tempZ*tempZ );
+				if (dist < 0.6*Rmax){
+				  No_of_C180s_imp++;
+				}
+			  }
+			}
+
+			dividingCells[(step-1)/Division_step] = newcells_imp;
+			totalCells[(step-1)/Division_step] = No_of_C180s_imp;
+			printf (" %d new cells born!\n", newcells);
+			free(newCellInds); 
+		  }
+		  else{
+		  		  
+			dividingCells[(step-1)/Division_step] = newcells;
+			totalCells[(step-1)/Division_step] = No_of_C180s;
+			printf (" %d new cells born!\n", newcells);
+		  }
         }
 
 	  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
@@ -388,7 +491,7 @@ int main(int argc, char *argv[])
 	  minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
 	  cudaMemset(d_NoofNNlist, 0, 1024*1024);
 
-	  cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
+	  cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
 	  Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
 	  Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
 	  Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
@@ -404,6 +507,8 @@ int main(int argc, char *argv[])
 		  cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 		  write_traj(step, trajfile); 
 		}
+
+	  
 
 	  Temperature += delta_t;
 	  myError = cudaGetLastError();
@@ -421,15 +526,19 @@ int main(int argc, char *argv[])
 
   FILE* MitIndFile; 
   MitIndFile = fopen("mit-index.dat", "w");
-  if (MitIndFile == NULL){
-	printf("Failed to open mit-index.dat\n");
-  }
-  else{
-	for (int i = 0; i < (Time_steps/Division_step) + 1; i++){
+ 
+  if (MitIndFile == NULL)
+	{
+	  printf("Failed to open mit-index.dat\n");
+	  exit(1); 
+	}
+
+  
+  for (int i = 0; i < (Time_steps/Division_step) + 1; i++)
+	{
 	  if ( dividingCells[i]!=0 && totalCells[i]!=0 )
 		fprintf(MitIndFile, "%f\n", (float)dividingCells[i]/totalCells[i]);
 	}
-  }
    														    
   cudaFree( (void *)d_bounding_xyz );
   cudaFree( (void *)d_XP ); 
@@ -634,13 +743,19 @@ int read_global_params(void)
   if ( fscanf(infil,"%f",&delta_t)             != 1 ) {error = 11;}
   if ( fscanf(infil,"%d",&Restart)             != 1 ) {error = 12;}
   if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 13;}
+  if ( fscanf(infil,"%d",&countOnlyInternal)   != 1 ) {error = 14;}
+  if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 15;}
   fclose(infil);
 
-  if ( error == 1 ) 
+  if ( error != 0 ) 
 	{
 	  printf("   Error reading line %d from file inp.dat\n",error);
 	  return(-1);
 	}
+
+  if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
+	countOnlyInternal = 0;
+  }
 
   printf("      mass                = %f\n",mass);
   printf("      spring equilibrium  = %f\n",R0);
@@ -655,8 +770,11 @@ int read_global_params(void)
   printf("      Time steps          = %d\n",Time_steps);
   printf("      delta t             = %f\n",delta_t);
   printf("      Restart             = %d\n",Restart);
-  printf("      trajWriteInterval   = %d\n",trajWriteInt); 
+  printf("      trajWriteInterval   = %d\n",trajWriteInt);
+  printf("      countOnlyInternal   = %d\n", countOnlyInternal);
+  printf("      radFrac             = %f\n", radFrac);
 
+  
   return(0);
 }
 
@@ -850,6 +968,6 @@ void write_traj(int t_step, FILE* trajfile)
 
   for (int p = 0; p < No_of_C180s*192; p++)
 	{
-	  fprintf(trajfile, "%.7f,%.7f,%.7f\n", X[p], Y[p], Z[p]);
+	  fprintf(trajfile, "C  %.7f  %.7f  %.7f\n", X[p], Y[p], Z[p]);
 	}
 }
