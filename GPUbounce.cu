@@ -30,7 +30,10 @@ int   trajWriteInt; // trajectory write interval
 int   countOnlyInternal; // 0 - Count all new cells
                          // 1 - Count only the cells born within 0.6Rmax from
                          //     the center of mass of the system
-float radFrac;
+float radFrac; // The factor to count cells within a raduys (<Rmax)
+
+int   overWriteMitInd; // 0 No, 1 yes
+
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f;
 
@@ -139,7 +142,7 @@ int main(int argc, char *argv[])
 
   No_of_threads = atoi(argv[1]);
 
-
+  
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
   if ( No_of_threads > MaxNoofC180s || Side_length*Side_length != No_of_threads ) 
 	{
@@ -147,6 +150,7 @@ int main(int argc, char *argv[])
 	  printf("       no_of_threads should be a square, n^2, < %d\n", MaxNoofC180s);
 	  return(0);
 	}
+
 
   No_of_C180s      = No_of_threads;                
   Orig_No_of_C180s = No_of_C180s;                
@@ -524,8 +528,11 @@ int main(int argc, char *argv[])
 
   printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
 
-  FILE* MitIndFile; 
-  MitIndFile = fopen("mit-index.dat", "w");
+  FILE* MitIndFile;
+  if (overWriteMitInd == 0)
+	MitIndFile = fopen("mit-index.dat", "w");
+  else
+	MitIndFile = fopen("mit-index.dat", "a");
  
   if (MitIndFile == NULL)
 	{
@@ -745,6 +752,8 @@ int read_global_params(void)
   if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 13;}
   if ( fscanf(infil,"%d",&countOnlyInternal)   != 1 ) {error = 14;}
   if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 15;}
+  if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 16;}
+  
   fclose(infil);
 
   if ( error != 0 ) 
