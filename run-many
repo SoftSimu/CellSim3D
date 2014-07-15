@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Runs many simulations and puts the output log files in run-many
+
+if [ "$#" -ne 2 ]; then
+	echo "Usage: run-many num_threads num_runs"
+	exit 1
+fi
+
+if ! [ -e run_logs ]; then
+	mkdir run_logs
+fi
+
+for i in $(eval echo {1..$2}); do
+	timeStamp=$(date +%Y-%m-%d_%H:%M)
+	./CellDiv $1 | tee "run_logs/run"$i"_"$timeStamp"_out.log"
+	echo haha
+done
