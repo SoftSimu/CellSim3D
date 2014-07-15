@@ -7,12 +7,13 @@
 2.0
 100.0
 10000
-100000
+250000
 0.0001
 0
 1000
 0
 0.6
+0
 --------------------------
 MASS
 REPULSION RANGE
@@ -28,4 +29,5 @@ DT
 RESTART
 TRAJECTORY WRITE INTERVAL
 countOnlyInternal (0 - no, 1 - yes)
-radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always) 
+radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always)
+overWriteMitIndFile
