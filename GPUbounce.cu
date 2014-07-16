@@ -530,9 +530,9 @@ int main(int argc, char *argv[])
 
   FILE* MitIndFile;
   if (overWriteMitInd == 0)
-	MitIndFile = fopen("mit-index.dat", "w");
-  else
 	MitIndFile = fopen("mit-index.dat", "a");
+  else
+	MitIndFile = fopen("mit-index.dat", "w");
  
   if (MitIndFile == NULL)
 	{
