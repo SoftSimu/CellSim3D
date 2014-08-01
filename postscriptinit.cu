@@ -142,8 +142,10 @@ return(0);
 }
 
 
-__global__ void  cell_division(int rank, float *d_XP, float *d_YP, float *d_ZP,
-                                         float *d_X,  float *d_Y,  float *d_Z,
+__global__ void  cell_division(int rank,
+                               float *d_XP, float *d_YP, float *d_ZP,
+                               float *d_X,  float *d_Y,  float *d_Z,
+                               float* AllCMx, float* AllCMy, float* AllCMz, 
                                int No_of_C180s, float *d_ran2, float repulsion_range)
   {
 __shared__ float  sumx[256];
@@ -156,36 +158,11 @@ __shared__ float CMx, CMy, CMz;
 int tid  = threadIdx.x;
 int atom = tid;
 
-sumx[tid] = 0.0;
-sumy[tid] = 0.0;
-sumz[tid] = 0.0;
-
-if ( tid < 180 )
-    {
-    sumx[tid] = d_XP[rank*192+tid];
-    sumy[tid] = d_YP[rank*192+tid];
-    sumz[tid] = d_ZP[rank*192+tid];
-    }
-
-__syncthreads();
-
-for ( int s = blockDim.x/2; s > 0; s>>=1)
-   {
-   if ( tid < s )
-      {
-      sumx[tid] += sumx[tid+s];
-      sumy[tid] += sumy[tid+s];
-      sumz[tid] += sumz[tid+s];
-      }
-   __syncthreads();
-   }
-
-if ( tid == 0 ) 
-   {
-   CMx = sumx[0]/180.0f;
-   CMy = sumy[0]/180.0f;
-   CMz = sumz[0]/180.0f;
-   }
+ if (tid == 0){
+   CMx = AllCMx[rank];
+   CMy = AllCMy[rank];
+   CMz = AllCMz[rank];
+ }
 
 __syncthreads();
 

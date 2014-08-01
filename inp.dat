@@ -7,13 +7,14 @@
 2.0
 100.0
 10000
-250000
+100000
 0.0001
 0
 1000
 0
 0.6
-0
+1
+10000
 --------------------------
 MASS
 REPULSION RANGE
@@ -27,7 +28,8 @@ DIVISION STEP
 TIME STEPS
 DT
 RESTART
-TRAJECTORY WRITE INTERVAL
+TRAJECTORY WRITE INTERVAL (Must be < Time_Steps and Time_steps%trajWriteInt == 0)
 countOnlyInternal (0 - no, 1 - yes)
 radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always)
 overWriteMitIndFile
+New cell count interval (Must be < Time_Steps and Time_steps%newCellCountInt == 0)

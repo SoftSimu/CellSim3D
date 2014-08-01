@@ -1,8 +1,10 @@
 int getDevice(void);
 
-__global__ void cell_division(int rank, float *XP, float *YP, float *ZP,
-                                        float *X,  float *Y,  float *Z,
-int No_of_C180s, float *ran2, float repulsion_range);
+__global__ void  cell_division(int rank,
+                               float *d_XP, float *d_YP, float *d_ZP,
+                               float *d_X,  float *d_Y,  float *d_Z,
+                               float* AllCMx, float* AllCMy, float* AllCMz, 
+                               int No_of_C180s, float *d_ran2, float repulsion_range);
 
 __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz, 
                            float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
@@ -18,9 +20,10 @@ __global__ void CenterOfMass( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
                float *CMx, float *CMy, float *CMz);
 
-__global__ void volumes( int No_of_C180s, int *C180_56,
-                         float *X,    float *Y,   float *Z,
-                         float *CMx , float *CMy, float *CMz, float *vol);
+__global__ void volumes( int No_of_C180s, int *C180_56, 
+                         float *X,    float *Y,   float *Z, 
+                         float *CMx , float *CMy, float *CMz, float *vol,
+                         char* cell_div);
 
 int printboundingbox(int rank, float *bounding_xyz);
 int initialize_C180s(int Orig_No_of_C180s);
@@ -61,3 +64,7 @@ void ranmar(float rvec[], int len);
 
 // Function to write the trajectory
 void write_traj(int t_step, FILE* trajfile); 
+
+
+// Function to get the indeces of dividing cells
+void count_and_get_div(); 

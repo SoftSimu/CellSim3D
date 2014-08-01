@@ -4,7 +4,8 @@
 
 __global__ void volumes( int No_of_C180s, int *C180_56, 
                          float *X,    float *Y,   float *Z, 
-                         float *CMx , float *CMy, float *CMz, float *vol)
+                         float *CMx , float *CMy, float *CMz, float *vol,
+                         char* cell_div)
 {
 __shared__ float locX[192];
 __shared__ float locY[192];
@@ -73,7 +74,12 @@ if ( tid < 92 )
 
 __syncthreads();
 
-if ( tid == 0) vol[fullerene] = volume/6.0;
+ if ( tid == 0){
+   vol[fullerene] = volume/6.0;
+   if ((volume/6.0) > 2.9f){
+     cell_div[fullerene] = 1;
+   }
+ }
 
 }
 
