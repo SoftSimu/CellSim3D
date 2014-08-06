@@ -76,7 +76,7 @@ __syncthreads();
 
  if ( tid == 0){
    vol[fullerene] = volume/6.0;
-   if ((volume/6.0) > 2.9f){
+   if ((volume/6.0) > 2.9f){   
      cell_div[fullerene] = 1;
    }
  }

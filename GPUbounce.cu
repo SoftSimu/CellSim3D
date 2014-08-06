@@ -101,11 +101,14 @@ int *NNlist;
 
 float *d_CMx, *d_CMy, *d_CMz;
 float *CMx, *CMy, *CMz;
+float sysCMx = 1.0, sysCMy = 1.0, sysCMz = 1.0;
+float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0; 
   
 float Pressure;          // pressure
 float Temperature;       // equation of state relates Pressure and Temperature
   
-int  No_of_C180s;        // the global number of C180 fullerenes             
+int  No_of_C180s;        // the global number of C180 fullerenes
+int  No_of_C180s_in;     // the number of C180s near the center of mass of the system
 
 float *ran2;             // host: ran2[]
 float *d_ran2;           // device: ran2[], used in celldivision
@@ -119,9 +122,9 @@ long int CPUMemory;
 int main(int argc, char *argv[])
 {
   int i;
-  int rank,globalrank,step;
+  int globalrank,step;
   int noofblocks, threadsperblock, prevnoofblocks;
-  int Orig_No_of_C180s, temp_No_of_C180s, newcells, newcells_imp, No_of_C180s_imp; 
+  int Orig_No_of_C180s, newcells;  
   int reductionblocks;
   float PSS;
   float s, theta, phi;
@@ -132,9 +135,7 @@ int main(int argc, char *argv[])
   int* dividingCells; //Cells that are about to divide
   int* totalCells; // No. of cells at every Dividing_steps
 
-  float CoMx, CoMy, CoMz, Rmax; // CoM of the whole system, and the max radius from the Com
-  float tempX, tempY, tempZ; // multipurpose temporary coords or vectors
-
+  
   int* num_new_cells_per_step;
   int countOffset = 0; 
 
@@ -192,7 +193,8 @@ int main(int argc, char *argv[])
   totalCells = (int *)calloc((Time_steps/newCellCountInt) + 1, sizeof(int));
   num_new_cells_per_step = (int *)calloc(Time_steps, sizeof(int));
   
-  CPUMemory += (long)(Time_steps/Division_step) + 1L; 
+  CPUMemory += (2L*(long)(Time_steps/newCellCountInt) + 1L + (long)Time_steps) * sizeof(int);
+  
   
   
   getDevice();
@@ -353,6 +355,8 @@ int main(int argc, char *argv[])
 												 Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
       // ------------------------------ Begin Cell Division ------------------------------------------------
+
+      
       CenterOfMass<<<No_of_C180s,256>>>( No_of_C180s,
                                          d_XP, d_YP, d_ZP, d_CMx, d_CMy, d_CMz);
       volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
@@ -369,7 +373,7 @@ int main(int argc, char *argv[])
             s = ran2[0]*ran2[0] + ran2[1]*ran2[1];
           }
         while ( s >= 1.0f);
-        theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);p
+        theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);
         if ( fabsf(ran2[0]) < 0.000001 ) phi = 0.0f;
         else phi = acos(ran2[0]/sqrtf(s));
         if ( ran2[1] < 0 ) phi = -phi;
@@ -389,13 +393,10 @@ int main(int argc, char *argv[])
       }
 
       if (countOnlyInternal == 1){
-        // Code here for counting only the cells near the center of the system
-        
-      }
-      else {
-        num_new_cells_per_step[step-1] = num_cell_div; 
+        num_cell_div -= num_cells_far(); 
       }
 
+      num_new_cells_per_step[step-1] = num_cell_div; 
       if (step%newCellCountInt == 0){
         newcells = 0;
         for (int i = 0; i < newCellCountInt; i++) {
@@ -468,10 +469,16 @@ int main(int argc, char *argv[])
 	}
 
   
-  for (int i = 0; i < (Time_steps/Division_step) + 1; i++)
+  for (int i = 0; i < (Time_steps/newCellCountInt) + 1; i++)
 	{
-	  if ( dividingCells[i]!=0 && totalCells[i]!=0 )
+	  if ( dividingCells[i]!=0 && totalCells[i]!=0 ){
 		fprintf(MitIndFile, "%f\n", (float)dividingCells[i]/totalCells[i]);
+      }
+      else {
+        fprintf(MitIndFile, "%f\n", 0.0);
+
+      }
+
 	}
    														    
   cudaFree( (void *)d_bounding_xyz );
@@ -684,15 +691,14 @@ int read_global_params(void)
   if ( fscanf(infil,"%f",&Youngs_mod)          != 1 ) {error = 6;}
   if ( fscanf(infil,"%f",&viscotic_damping)    != 1 ) {error = 7;}
   if ( fscanf(infil,"%f",&internal_damping)    != 1 ) {error = 8;}
-  if ( fscanf(infil,"%d",&Division_step)       != 1 ) {error = 9;}
-  if ( fscanf(infil,"%d",&Time_steps)          != 1 ) {error = 10;}
-  if ( fscanf(infil,"%f",&delta_t)             != 1 ) {error = 11;}
-  if ( fscanf(infil,"%d",&Restart)             != 1 ) {error = 12;}
-  if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 13;}
-  if ( fscanf(infil,"%d",&countOnlyInternal)   != 1 ) {error = 14;}
-  if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 15;}
-  if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 16;}
-  if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 17;}
+  if ( fscanf(infil,"%d",&Time_steps)          != 1 ) {error = 9;}
+  if ( fscanf(infil,"%f",&delta_t)             != 1 ) {error = 10;}
+  if ( fscanf(infil,"%d",&Restart)             != 1 ) {error = 11;}
+  if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 12;}
+  if ( fscanf(infil,"%d",&countOnlyInternal)   != 1 ) {error = 13;}
+  if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 14;}
+  if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 15;}
+  if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 16;}
 
   
   fclose(infil);
@@ -745,7 +751,6 @@ int read_global_params(void)
   printf("      Youngs modulus      = %f\n",Youngs_mod);
   printf("      viscotic damping    = %f\n",viscotic_damping);
   printf("      internal damping    = %f\n",internal_damping);
-  printf("      Division step       = %d\n",Division_step);
   printf("      Time steps          = %d\n",Time_steps);
   printf("      delta t             = %f\n",delta_t);
   printf("      Restart             = %d\n",Restart);
@@ -834,7 +839,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
 		  FX += +Youngs_mod*(R-R0)/R0*deltaX/R+Pressure*NX;
 		  FY += +Youngs_mod*(R-R0)/R0*deltaY/R+Pressure*NY;
-		  FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
+n		  FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
 
 		  FX += -(internal_damping/delta_t)*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
 		  FY += -(internal_damping/delta_t)*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
@@ -894,7 +899,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 			  if ( R >= attraction_range*attraction_range ) continue;
 			  R = sqrt(R);
 
-			  if ( R < attraction_range ) 
+n			  if ( R < attraction_range ) 
 				{
 				  FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
 				  FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
@@ -937,9 +942,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
 }
 
-
-
-
 void write_traj(int t_step, FILE* trajfile)
 {
 
@@ -953,7 +955,7 @@ void write_traj(int t_step, FILE* trajfile)
 }
 
 
-void count_and_get_div(){
+inline void count_and_get_div(){
   num_cell_div = 0;
   cudaMemcpy(cell_div, d_cell_div, No_of_C180s*sizeof(char), cudaMemcpyDeviceToHost);
   for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
@@ -965,3 +967,72 @@ void count_and_get_div(){
   }
   cudaMemcpy(d_cell_div, cell_div, No_of_C180s*sizeof(char), cudaMemcpyHostToDevice); 
 }
+
+
+
+inline void calc_sys_CM(){ // Put this into a kernel at some point
+
+  cudaMemcpy(X, d_X, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(Y, d_Y, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(Z, d_Z, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  sysCMx = 0;
+  sysCMy = 0;
+  sysCMz = 0;
+  
+  for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
+    sysCMx += X[cellInd];
+    sysCMy += Y[cellInd]; 
+    sysCMz += Z[cellInd];
+  }
+
+  sysCMx = sysCMx/No_of_C180s;
+  sysCMy = sysCMy/No_of_C180s;
+  sysCMz = sysCMz/No_of_C180s;
+
+}
+
+
+inline float getRmax2(){
+  float dx, dy, dz, Rmax2 = 0;
+  for (int cell = 0; cell < No_of_C180s; cell++) {
+    dx = CMx[cell] - sysCMx;
+    dy = CMy[cell] - sysCMy;
+    dz = CMz[cell] - sysCMz;
+
+    Rmax2 = max(Rmax2, dx*dx + dy*dy + dz*dz);    
+
+  }
+
+  return Rmax2; 
+
+}
+
+inline int num_cells_far(){
+
+  if (num_cell_div == 0 || No_of_C180s < 50) return 0;
+
+  calc_sys_CM();
+
+  cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
+
+  float dx, dy, dz, dr2;
+  float Rmax2 = getRmax2(); 
+  int farCellCount = 0; 
+    
+  for (int cell = 0; cell < num_cell_div; cell++) {
+    dx = CMx[cell] - sysCMx;
+    dy = CMy[cell] - sysCMy;
+    dz = CMz[cell] - sysCMz;
+
+    dr2 = dx*dx + dy*dy + dz*dz;
+
+    if (dr2 > radFrac*radFrac*Rmax2)
+      farCellCount++;   
+  }
+
+  return farCellCount; 
+
+}
+

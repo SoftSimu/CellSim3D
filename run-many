@@ -14,5 +14,4 @@ fi
 for i in $(eval echo {1..$2}); do
 	timeStamp=$(date +%Y-%m-%d_%H:%M)
 	./CellDiv $1 | tee "run_logs/run"$i"_"$timeStamp"_out.log"
-	echo haha
 done

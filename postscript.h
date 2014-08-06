@@ -67,4 +67,11 @@ void write_traj(int t_step, FILE* trajfile);
 
 
 // Function to get the indeces of dividing cells
-void count_and_get_div(); 
+inline void count_and_get_div(); 
+
+
+inline void calc_sys_CM();
+
+inline float getRmax2();
+
+inline int num_cells_far(); 

@@ -18,6 +18,7 @@ def func(x, a, b, c):
 
     
 data = np.loadtxt(sys.argv[1])
+data = data[data!=0.0]
 x = np.array(range(data.size))
 y = func(x, 0.5, 0.5, 0.5) # Some guesses for a, b, c
 
@@ -25,8 +26,8 @@ p, pcov = curve_fit(func, x, data)
 
 fit = func (x, p[0], p[1], p[2])
 
-plt.plot(x, data, '.')
+plt.plot(x, data,".")
 plt.plot(x, fit, "k-")
 plt.ylabel('Mitotic Index')
-plt.xlabel('Division Step/10000')
-plt.savefig('MitoticIndex.svg')
+plt.xlabel('Time Step/10000')
+plt.savefig('MitoticIndex.png')

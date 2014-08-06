@@ -19,7 +19,7 @@ def func(x, a, b, c):
     
 data = np.loadtxt(sys.argv[1])
 
-num_sims = 10
+num_sims = int(sys.argv[2])
 
 MI_per_sim = data.size/num_sims
 
@@ -36,32 +36,32 @@ for i in range(num_sims):
 
 
 for i in range(MI_per_sim):
-    err_bars[i] = np.std(data_mat[i, :])
     avg_MI[i] = np.mean(data_mat[i, :])
+    err_bars[i] = np.std(data_mat[i, :])
 
-
+mask = avg_MI != 0
+mask = mask * (avg_MI < 0.2)
+offset = mask.sum()
+avg_MI = avg_MI[mask]
+err_bars = err_bars[mask] 
     
 x = np.array(range(avg_MI.size))
 y = func(x, 0.5, 0.5, 0.5) # Some guesses for a, b, c
 
-x_t = np.transpose(x)
-xx = np.array([x_t, x_t, x_t, x_t, x_t, x_t, x_t, x_t, x_t, x_t])
-
-
-p, pcov = curve_fit(func, xx, data_mat)
-
-
+p, pcov = curve_fit(func, x, avg_MI)
 
 
 fit = func (x, p[0], p[1], p[2])
 
-plt.errorbar(x, avg_MI, err_bars, linestyle='None', marker='*')
+for i in range(num_sims):
+    plt.plot(x, data_mat[:, i][mask], '.', color='#B0B0B0')
+
+plt.errorbar(x, avg_MI, err_bars, linestyle='line', marker='o', color='black')
 
 plt.plot(x, fit, "k-")
 
-for i in range(num_sims):
-    plt.plot(x, data_mat[:, i], "ko")
+
 
 plt.ylabel('Mitotic Index')
-plt.xlabel('Division Step/10000')
-plt.savefig('MitoticIndex.svg')
+plt.xlabel('Time Step/1000')
+plt.savefig('MitoticIndex.png')
