@@ -189,8 +189,8 @@ int main(int argc, char *argv[])
 	 calculate the mitotic index.
   */
 
-  dividingCells = (int *)calloc((Time_steps/newCellCountInt) + 1, sizeof(int));
-  totalCells = (int *)calloc((Time_steps/newCellCountInt) + 1, sizeof(int));
+  dividingCells = (int *)calloc((Time_steps/newCellCountInt), sizeof(int));
+  totalCells = (int *)calloc((Time_steps/newCellCountInt), sizeof(int));
   num_new_cells_per_step = (int *)calloc(Time_steps, sizeof(int));
   
   CPUMemory += (2L*(long)(Time_steps/newCellCountInt) + 1L + (long)Time_steps) * sizeof(int);
@@ -403,7 +403,7 @@ int main(int argc, char *argv[])
           newcells += num_new_cells_per_step[countOffset + i];
         }                  
         dividingCells[(step-1)/newCellCountInt] = newcells;
-        totalCells[(step-1)/newCellCountInt] = No_of_C180s; // Checkout how MIs are even calculated first
+        totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells; // Checkout how MIs are even calculated first
         countOffset += newCellCountInt; 
       }
 
@@ -839,7 +839,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
 		  FX += +Youngs_mod*(R-R0)/R0*deltaX/R+Pressure*NX;
 		  FY += +Youngs_mod*(R-R0)/R0*deltaY/R+Pressure*NY;
-n		  FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
+		  FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
 
 		  FX += -(internal_damping/delta_t)*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
 		  FY += -(internal_damping/delta_t)*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
@@ -899,7 +899,7 @@ n		  FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
 			  if ( R >= attraction_range*attraction_range ) continue;
 			  R = sqrt(R);
 
-n			  if ( R < attraction_range ) 
+			  if ( R < attraction_range ) 
 				{
 				  FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
 				  FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
@@ -972,17 +972,14 @@ inline void count_and_get_div(){
 
 inline void calc_sys_CM(){ // Put this into a kernel at some point
 
-  cudaMemcpy(X, d_X, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(Y, d_Y, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(Z, d_Z, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
   sysCMx = 0;
   sysCMy = 0;
   sysCMz = 0;
   
   for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
-    sysCMx += X[cellInd];
-    sysCMy += Y[cellInd]; 
-    sysCMz += Z[cellInd];
+    sysCMx += CMx[cellInd];
+    sysCMy += CMy[cellInd]; 
+    sysCMz += CMz[cellInd];
   }
 
   sysCMx = sysCMx/No_of_C180s;
@@ -1011,17 +1008,17 @@ inline int num_cells_far(){
 
   if (num_cell_div == 0 || No_of_C180s < 50) return 0;
 
-  calc_sys_CM();
-
   cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
+  cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+  calc_sys_CM();
 
   float dx, dy, dz, dr2;
   float Rmax2 = getRmax2(); 
   int farCellCount = 0; 
     
-  for (int cell = 0; cell < num_cell_div; cell++) {
+  for (int cell = No_of_C180s - num_cell_div; cell < No_of_C180s; cell++) { // Only check the newest cells
     dx = CMx[cell] - sysCMx;
     dy = CMy[cell] - sysCMy;
     dz = CMz[cell] - sysCMz;
