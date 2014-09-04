@@ -29,7 +29,7 @@ with open(trajFileName, "r") as trajFile:
     while(line != ""):
         line = line.strip()
         nAtoms = int(line)
-        msg = trajFile.readline().strip()
+        step = trajFile.readline().strip()[6:]
 
         print "Processing %s ..." % msg
 

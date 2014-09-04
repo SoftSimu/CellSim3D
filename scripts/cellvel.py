@@ -48,7 +48,7 @@ with open(trajFileName, 'r') as trajFile:
         else:
             if (isFirst):
                 isFirst = False
-                print "Cell was born in step %d" % step
+                print "Cell was near step %d" % step
                 foundStep = step
 
             # only contribute to the system center of mass for all the
@@ -70,9 +70,11 @@ with open(trajFileName, 'r') as trajFile:
                 sysCMy += float(line[1])
                 sysCMz += float(line[2])
                 
-            cmx /= 192.0
-            cmy /= 192.0
-            cmz /= 192.0
+            cmx /= 180.0
+            cmy /= 180.0
+            cmz /= 180.0
+
+            
 
             cellX.append(cmx)
             cellY.append(cmy)
@@ -91,9 +93,11 @@ with open(trajFileName, 'r') as trajFile:
                 sysCMy += float(line[1])
                 sysCMz += float(line[2])
 
-            sysCMx /= nCells
-            sysCMy /= nCells
-            sysCMz /= nCells
+            sysCMx /= nCells * 180
+            sysCMy /= nCells * 180 
+            sysCMz /= nCells * 180
+
+#            print sysCMx, sysCMy, sysCMz
 
             sysX.append(sysCMx)
             sysY.append(sysCMy)
@@ -111,19 +115,18 @@ if (isFirst):
     sys.exit()
 
 
-
-
 cellX = np.array(cellX)
 cellY = np.array(cellY)
 cellZ = np.array(cellZ)
 
-sysCMx = np.array(sysCMx)
-sysCMy = np.array(sysCMy)
-sysCMz = np.array(sysCMz)
+sysX = np.array(sysX)
+sysY = np.array(sysY)
+sysZ = np.array(sysZ)
 
-cellX -= sysCMx
-cellY -= sysCMy
-cellZ -= sysCMz 
+
+cellX = cellX - sysX
+cellY = cellY - sysY
+cellZ = cellZ - sysZ
     
 plt.subplot(2, 2, 1)
 plt.plot(cellX, cellY, "k.")
