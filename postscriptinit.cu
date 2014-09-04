@@ -148,9 +148,6 @@ __global__ void  cell_division(int rank,
                                float* AllCMx, float* AllCMy, float* AllCMz, 
                                int No_of_C180s, float *d_ran2, float repulsion_range)
   {
-__shared__ float  sumx[256];
-__shared__ float  sumy[256];
-__shared__ float  sumz[256];
   int newrank;
   float RCNNS, SCNNS, TCNNS;
 __shared__ float CMx, CMy, CMz;
