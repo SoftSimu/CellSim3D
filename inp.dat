@@ -14,6 +14,7 @@
 0.6
 1
 10000
+100000
 --------------------------
 MASS
 REPULSION RANGE
@@ -32,3 +33,4 @@ countOnlyInternal (0 - no, 1 - yes)
 radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always)
 overWriteMitIndFile
 New cell count interval (Must be < Time_Steps and Time_steps%newCellCountInt == 0)
+No of equillibration time steps 
