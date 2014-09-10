@@ -9,3 +9,5 @@ psfil
 *.png
 *.svg
 *.dat
+images/*
+graphs/*
