@@ -161,6 +161,7 @@ for i in xrange(len(cellX) - 1):
 plt.plot(range(foundStep, step, dt), v, 'k.')
 plt.xlabel("t")
 plt.ylabel("V")
+plt.text(0.5, 0.5, "dt = %s steps" % dt)
 plt.savefig("cell_%d_vel.png" % cellNo)
 plt.close()
 

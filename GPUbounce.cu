@@ -34,7 +34,8 @@ float radFrac; // The factor to count cells within a raduys (<Rmax)
 
 int   overWriteMitInd; // 0 No, 1 yes
 
-int newCellCountInt; // Interval at which to count the divided cells 
+int newCellCountInt; // Interval at which to count the divided cells
+int equiStepCount; 
 
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f;
@@ -324,7 +325,7 @@ int main(int argc, char *argv[])
   
   write_traj(1, trajfile); 
 
-  for ( step = 1; step <= Time_steps+1; ++step )
+  for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
 	{
 	  //     if ( step < Division_step ) PSS=80.0*Temperature;
 	  if ( step < 8000 ) PSS=80.0*Temperature;
@@ -354,64 +355,64 @@ int main(int argc, char *argv[])
 												 viscotic_damping, mass,
 												 Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
-      // ------------------------------ Begin Cell Division ------------------------------------------------
+      if (step > Time_steps+1){
+        Pressure = 0;
+      }
+      else {
 
-      
-      CenterOfMass<<<No_of_C180s,256>>>( No_of_C180s,
+        // ------------------------------ Begin Cell Division ------------------------------------------------
+
+        CenterOfMass<<<No_of_C180s,256>>>( No_of_C180s,
                                          d_XP, d_YP, d_ZP, d_CMx, d_CMy, d_CMz);
-      volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
-                                   d_XP, d_YP, d_ZP, d_CMx , d_CMy, d_CMz, d_volume, d_cell_div);
-      count_and_get_div();
+        volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+                                     d_XP, d_YP, d_ZP, d_CMx , d_CMy, d_CMz, d_volume, d_cell_div);
+        count_and_get_div();
 
-      for (int divCell = 0; divCell < num_cell_div; divCell++) {
-        globalrank = cell_div_inds[divCell];
-        do 
-          {
-            ranmar(ran2,2);
-            ran2[0] = 2.0f*ran2[0]-1.0f; 
-            ran2[1] = 2.0f*ran2[1]-1.0f; 
-            s = ran2[0]*ran2[0] + ran2[1]*ran2[1];
-          }
-        while ( s >= 1.0f);
-        theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);
-        if ( fabsf(ran2[0]) < 0.000001 ) phi = 0.0f;
-        else phi = acos(ran2[0]/sqrtf(s));
-        if ( ran2[1] < 0 ) phi = -phi;
+        for (int divCell = 0; divCell < num_cell_div; divCell++) {
+          globalrank = cell_div_inds[divCell];
+          do 
+            {
+              ranmar(ran2,2);
+              ran2[0] = 2.0f*ran2[0]-1.0f; 
+              ran2[1] = 2.0f*ran2[1]-1.0f; 
+              s = ran2[0]*ran2[0] + ran2[1]*ran2[1];
+            }
+          while ( s >= 1.0f);
+          theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);
+          if ( fabsf(ran2[0]) < 0.000001 ) phi = 0.0f;
+          else phi = acos(ran2[0]/sqrtf(s));
+          if ( ran2[1] < 0 ) phi = -phi;
 
-        ran2[0] = theta; ran2[1] = phi;
+          ran2[0] = theta; ran2[1] = phi;
                     
-        cudaMemcpy( d_ran2, ran2, 2*sizeof(float),cudaMemcpyHostToDevice);
-        NDIV[globalrank] += 1;
+          cudaMemcpy( d_ran2, ran2, 2*sizeof(float),cudaMemcpyHostToDevice);
+          NDIV[globalrank] += 1;
 
-        cell_division<<<1,256>>>(globalrank,
-                                 d_XP, d_YP, d_ZP,
-                                 d_X, d_Y, d_Z,
-                                 d_CMx, d_CMy, d_CMz, 
-                                 No_of_C180s, d_ran2, repulsion_range);
-        ++No_of_C180s;
+          cell_division<<<1,256>>>(globalrank,
+                                   d_XP, d_YP, d_ZP,
+                                   d_X, d_Y, d_Z,
+                                   d_CMx, d_CMy, d_CMz, 
+                                   No_of_C180s, d_ran2, repulsion_range);
+          ++No_of_C180s;
         
+        }
+
+        if (countOnlyInternal == 1){
+          num_cell_div -= num_cells_far(); 
+        }
+
+        num_new_cells_per_step[step-1] = num_cell_div; 
+        if (step%newCellCountInt == 0){
+          newcells = 0;
+          for (int i = 0; i < newCellCountInt; i++) {
+            newcells += num_new_cells_per_step[countOffset + i];
+          }                  
+          dividingCells[(step-1)/newCellCountInt] = newcells;
+          totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells; // Checkout how MIs are even calculated first
+          countOffset += newCellCountInt; 
+        }
+        // --------------------------------------- End Cell Division -----------------------------------------------------------      
       }
-
-      if (countOnlyInternal == 1){
-        num_cell_div -= num_cells_far(); 
-      }
-
-      num_new_cells_per_step[step-1] = num_cell_div; 
-      if (step%newCellCountInt == 0){
-        newcells = 0;
-        for (int i = 0; i < newCellCountInt; i++) {
-          newcells += num_new_cells_per_step[countOffset + i];
-        }                  
-        dividingCells[(step-1)/newCellCountInt] = newcells;
-        totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells; // Checkout how MIs are even calculated first
-        countOffset += newCellCountInt; 
-      }
-
-
-
-      // --------------------------------------- End Cell Division -----------------------------------------------------------      
-
-      
 
 	  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
 										 d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM, 
@@ -447,6 +448,7 @@ int main(int argc, char *argv[])
 	  if ( cudaSuccess != myError )
 		{ printf( "4 Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
 	}
+
 
   // Write postscript file
   cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
@@ -516,6 +518,7 @@ int main(int argc, char *argv[])
   fclose(trajfile); 
   fclose(MitIndFile);
   return(0);
+  
 }
 
 
@@ -699,6 +702,7 @@ int read_global_params(void)
   if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 14;}
   if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 15;}
   if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 16;}
+  if ( fscanf(infil,"%d",&equiStepCount)       != 1 ) {error = 17;} 
 
   
   fclose(infil);
@@ -742,6 +746,10 @@ int read_global_params(void)
 	return -1;
   }
 
+  if (equiStepCount <= 0){
+    equiStepCount = 0;
+  }
+
   printf("      mass                = %f\n",mass);
   printf("      spring equilibrium  = %f\n",R0);
   printf("      repulsion range     = %f\n",repulsion_range);
@@ -757,7 +765,8 @@ int read_global_params(void)
   printf("      trajWriteInterval   = %d\n",trajWriteInt);
   printf("      countOnlyInternal   = %d\n", countOnlyInternal);
   printf("      radFrac             = %f\n", radFrac);
-  printf("      newCellCountInt     = %d\n", newCellCountInt); 
+  printf("      newCellCountInt     = %d\n", newCellCountInt);
+  printf("      equiStepCount       = %d\n", equiStepCount); 
 
   
   return(0);
