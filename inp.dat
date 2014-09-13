@@ -1,20 +1,21 @@
 0.04
 0.2
 0.3
-100.0
-0.5
+120.0
+0.85
 1000.0
 2.0
 100.0
 100000
 0.0001
 0
-100
+2000
 0
 0.6
 1
 10000
 100000
+traj_25_adh085_rep1200.xyz
 --------------------------
 MASS
 REPULSION RANGE
@@ -34,3 +35,4 @@ radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always)
 overWriteMitIndFile
 New cell count interval (Must be < Time_Steps and Time_steps%newCellCountInt == 0)
 No of equillibration time steps 
+Trajectory File name (extension doesn't matter) 

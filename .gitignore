@@ -11,3 +11,7 @@ psfil
 *.dat
 images/*
 graphs/*
+*traj*
+.render_queue
+.render_done
+.now_proc

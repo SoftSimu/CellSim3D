@@ -1,11 +1,12 @@
 import bpy
 import csv
+import sys 
 
 # This script presupposes a scene with camera, lights, and mesh object named Cube.
 # Cube material is copied to fullerene cell meshes. Current settings are used for rendering.
 
 imageindex = 0                  
-f = open('traj.xyz')
+f = open(sys.argv[6])
 while True:
 # read and append fullerene cell vertex coords for each time step
     imageindex += 1                 # current time step
@@ -63,8 +64,9 @@ while True:
 #    bpy.ops.render.render()                                    # ...if you want to render on screen
 #    bpy.context.area.type = original_type                       # switch back to text window
 
-# save image indexed by current time step    
-    imagename = "images/testcells_""%i"".png" % imageindex
+# save image indexed by current time step
+    imagename = sys.argv[7]
+    imagename +="/images/CellDiv_""%i"".png" % imageindex
     bpy.context.scene.render.filepath = imagename
     bpy.ops.render.render(write_still=True)  # render to file
     

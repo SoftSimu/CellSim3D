@@ -3,6 +3,7 @@
   #include <stdlib.h>
   #include <time.h>
   #include <math.h>
+  #include <locale.h>
 #endif
 
 
@@ -35,7 +36,8 @@ float radFrac; // The factor to count cells within a raduys (<Rmax)
 int   overWriteMitInd; // 0 No, 1 yes
 
 int newCellCountInt; // Interval at which to count the divided cells
-int equiStepCount; 
+int equiStepCount;
+char trajFileName[256]; 
 
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f;
@@ -316,7 +318,7 @@ int main(int argc, char *argv[])
   globalrank = 0;
 
   // open trajectory file
-  trajfile = fopen ("traj.xyz", "w");
+  trajfile = fopen (trajFileName, "w");
   if ( trajfile == NULL)
 	{
 	  printf("Failed to open traj.xyz\n");
@@ -686,6 +688,7 @@ int read_global_params(void)
   
   error = 0;
 
+
   if ( fscanf(infil,"%f",&mass)                != 1 ) {error = 1;}
   if ( fscanf(infil,"%f",&repulsion_range)     != 1 ) {error = 2;}
   if ( fscanf(infil,"%f",&attraction_range)    != 1 ) {error = 3;}
@@ -702,9 +705,9 @@ int read_global_params(void)
   if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 14;}
   if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 15;}
   if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 16;}
-  if ( fscanf(infil,"%d",&equiStepCount)       != 1 ) {error = 17;} 
+  if ( fscanf(infil,"%d",&equiStepCount)       != 1 ) {error = 17;}
+  if ( fscanf(infil,"%s",trajFileName)         != 1 ) {error = 18;}
 
-  
   fclose(infil);
 
   if ( error != 0 ) 
@@ -766,7 +769,8 @@ int read_global_params(void)
   printf("      countOnlyInternal   = %d\n", countOnlyInternal);
   printf("      radFrac             = %f\n", radFrac);
   printf("      newCellCountInt     = %d\n", newCellCountInt);
-  printf("      equiStepCount       = %d\n", equiStepCount); 
+  printf("      equiStepCount       = %d\n", equiStepCount);
+  printf("      trajFileName        = %s\n", trajFileName); 
 
   
   return(0);
