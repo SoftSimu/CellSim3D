@@ -40,6 +40,10 @@ with open(trajFileName, 'r') as trajFile:
         temp = step 
         step = int(trajFile.readline().strip()[6:])
         nCells = nAtoms/192
+
+        if not foundStep:
+            print "Processing step %d" % step 
+        
         if (nCells < cellNo):
             # skip the current time step if it does not contain
             # the cell of interest 
@@ -48,7 +52,7 @@ with open(trajFileName, 'r') as trajFile:
         else:
             if (isFirst):
                 isFirst = False
-                print "Cell was near step %d" % step
+                print "Cell was born near step %d" % step
                 foundStep = step
 
             # only contribute to the system center of mass for all the
