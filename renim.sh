@@ -5,7 +5,6 @@ while [ TRUE ]; do
 
     # find unprocessed trajectory file
     trajFile=$(ls -tr traj*.xyz 2> /dev/null | head -n 2> /dev/null)
-    echo $trajFile
     if [ -z $trajFile ]; then
         if [ -z $echoed ]; then
             echo "No new trajectories to render..."
