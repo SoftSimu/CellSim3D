@@ -1,13 +1,36 @@
 #!/usr/bin/env bash
+echoed=''
 
-shopt -s nullglob
-for trajFile in traj*.xyz; do
-        # Render the queued trajectories
+while [ TRUE ]; do
+
+    # find unprocessed trajectory file
+    trajFile=$(ls -tr traj*.xyz 2> /dev/null | head -n 2> /dev/null)
+    echo $trajFile
+    if [ -z $trajFile ]; then
+        if [ -z $echoed ]; then
+            echo "No new trajectories to render..."
+            echoed="yes"
+        fi
+        #break
+        echo -ne "\b\b\b\b\boOO  "
+        sleep 0.4
+        echo -ne "\b\b\b\b\bOoO  "
+        sleep 0.4
+        echo -ne "\b\b\b\b\bOOo  "
+        sleep 0.4
+        echo -ne "\b\b\b\b\bOoO  "
+        sleep 0.4
+        echo -ne "\b\b\b\b\boOO  "
+        sleep 0.4
+        #sleep 3 
+    else
+        echoed=''
+        echo "Found $trajFile"        
         # Create directory
         trajName="${trajFile%.*}"
         mkdir -p "$trajName/images" # 'already exists' message shouldn't happen
         # Start rendering with blender
-        rm "$trajName/images"/*
+        rm "$trajName/images"/* 2> /dev/null
         echo "Blender is rendering $trajName..."
         echo "you may monitor the $trajName/images folder to see progress"
         blender -b CellDiv.blend -Y -P render.py "$trajFile" "$trajName" &> /dev/null &
@@ -16,15 +39,15 @@ for trajFile in traj*.xyz; do
         trap "kill $pid 2> /dev/null" EXIT
 
         tmp="unlikely string"
-        echo -ne "oOO"
+        echo -ne "oOO   "
         while kill -0 $pid 2> /dev/null; do
-            echo -ne "\b\b\bOoO"
+            echo -ne "\b\b\b\b\b\bOoO   "
             sleep 0.2
-            echo -ne "\b\b\bOOo"
+            echo -ne "\b\b\b\b\b\bOOo   "
             sleep 0.2
-            echo -ne "\b\b\bOoO"
+            echo -ne "\b\b\b\b\b\bOoO   "
             sleep 0.2
-            echo -ne "\b\b\boOO"
+            echo -ne "\b\b\b\b\b\boOO   "
             sleep 0.2
 
             newestFile=$(ls -t "$trajName/images/" | head -n 1)
@@ -41,17 +64,17 @@ for trajFile in traj*.xyz; do
         avconv -i "$imgPath" "$trajName/$trajName.mp4" &> /dev/null &
         pid=$!
         trap "kill $pid 2> /dev/null" EXIT
-        echo -ne "|"
+        echo -ne "oOO   "
         while kill -0 $pid 2> /dev/null; do
-            echo -ne "\b\r/"
+            echo -ne "\b\b\b\b\b\bOoO   "
             sleep 0.2
-            echo -ne "\b\r--"
+            echo -ne "\b\b\b\b\b\bOOo   "
             sleep 0.2
-            echo -ne "\b\r\\ "
+            echo -ne "\b\b\b\b\b\bOoO   "
             sleep 0.2
-            echo -ne "\b\r|"
+            echo -ne "\b\b\b\b\b\boOO   "
             sleep 0.2
         done
         mv "$trajFile" "$trajFile~"
+    fi
 done
-shopt -u nullglob # revert nullglob back to it's normal default status
