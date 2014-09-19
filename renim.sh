@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
 echoed=''
-
+shopt -s nullglob
 while [ TRUE ]; do
 
     # find unprocessed trajectory file
-    trajFile=$(ls -tr traj*.xyz 2> /dev/null | head -n 2> /dev/null)
-    if [ -z $trajFile ]; then
+    trajFile=$(ls -tr traj*.xyz | head -n 1 )
+    ext="${trajFile##*.}"
+    #echo $ext
+    if [ "$ext" != 'xyz' ]; then
         if [ -z $echoed ]; then
             echo "No new trajectories to render..."
             echoed="yes"
         fi
         #break
-        echo -ne "\b\b\b\b\boOO  "
+        echo -ne "\b\b\b\b\b\boOO   "
         sleep 0.4
-        echo -ne "\b\b\b\b\bOoO  "
+        echo -ne "\b\b\b\b\b\bOoO   "
         sleep 0.4
-        echo -ne "\b\b\b\b\bOOo  "
+        echo -ne "\b\b\b\b\b\bOOo   "
         sleep 0.4
-        echo -ne "\b\b\b\b\bOoO  "
+        echo -ne "\b\b\b\b\b\bOoO   "
         sleep 0.4
-        echo -ne "\b\b\b\b\boOO  "
-        sleep 0.4
+        echo -ne "\b\b\b\b\b\boOO   "
+        sleep 0.1
         #sleep 3 
     else
         echoed=''
@@ -77,3 +79,4 @@ while [ TRUE ]; do
         mv "$trajFile" "$trajFile~"
     fi
 done
+shopt -u nullglob
