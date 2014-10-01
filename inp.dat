@@ -1,25 +1,33 @@
 0.04
 0.2
 0.3
-120.0
-0.85
+100.0
+0.50
 1000.0
 2.0
 100.0
 100000
 0.0001
 0
-2000
+1000
 0
 0.6
 1
 10000
-100000
-traj_25_adh085_rep1200.xyz
+0
+traj_25_adh085_rep1200_InvNum.xyz
+1
+5000.0
+2.0
+10.0
+10.0
+10
+20000
+65.0 
 --------------------------
 MASS
 REPULSION RANGE
-ATTRACTION RANGE
+ATTRAnCTION RANGE
 REPULSION STRENGTH
 ATTRACTION STRENGTH
 YOUNGS MOD.
@@ -35,4 +43,12 @@ radFrac (If not between 0.4-0.8 or < 0 , countOnlyInternal = 0 always)
 overWriteMitIndFile
 New cell count interval (Must be < Time_Steps and Time_steps%newCellCountInt == 0)
 No of equillibration time steps 
-Trajectory File name (extension doesn't matter) 
+Trajectory File name (extension does matter)
+Use population modelling (0==No and 1==No)
+Maximum Food for population modelling
+[NOT IMPLEMENTED] Transient food consumption
+Food consumed to create new cell (cells can't divide if this much extra food doesn't exist)
+[NOT IMPLEMENTED] Food released back into the system when a cell dies
+[NOT IMPLEMENTED] Hayflick limit (the max number of times a cell can divide; ignored if 0);
+[NOT IMPLEMENTED] Max amount of time a cell can live 
+Maximum growth pressure (sets max growth rate) 
