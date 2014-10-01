@@ -1,7 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import numpy as np
 import sys
+
+if len(sys.argv) < 3:
+    print "Usage: plot.py {Path to mit-index.dat} {Path to output}"
+    print "Don't put the extension in the output"
+    print "e.g"
+    print "/path/to/plot.py /path/to/mit-index.dat /path/to/image"
+    sys.exit(0)
 
 import matplotlib
 matplotlib.use('Agg')
@@ -16,7 +23,7 @@ def func(x, a, b, c):
     """ function to fit the data to. """
     return a * np.exp(-b * x) + c
 
-    
+
 data = np.loadtxt(sys.argv[1])
 #data = data[data!=0.0]
 x = np.array(range(data.size))
