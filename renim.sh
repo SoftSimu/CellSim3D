@@ -23,10 +23,10 @@ while [ TRUE ]; do
         sleep 0.4
         echo -ne "\b\b\b\b\b\boOO   "
         sleep 0.1
-        #sleep 3 
+        #sleep 3
     else
         echoed=''
-        echo "Found $trajFile"        
+        echo "Found $trajFile"
         # Create directory
         trajName="${trajFile%.*}"
         mkdir -p "$trajName/images" # 'already exists' message shouldn't happen
@@ -52,7 +52,7 @@ while [ TRUE ]; do
             sleep 0.2
 
             newestFile=$(ls -t "$trajName/images/" | head -n 1)
-            
+
             if [ "$tmp" != "$newestFile" -a -n "$newestFile" ]; then
                 echo -e "\b\rCreated $trajName/images/$newestFile"
                 echo -ne "oOO"
@@ -77,6 +77,7 @@ while [ TRUE ]; do
             sleep 0.2
         done
         mv "$trajFile" "$trajFile~"
+        mv "$trajName.log" "$trajName/$trajName.log"
     fi
 done
 shopt -u nullglob
