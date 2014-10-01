@@ -43,7 +43,7 @@ char trajFileName[256];
 float R0  = 0.13517879937327418f;
 
 float L1  = 3.0f;       // the initial fullerenes are placed in
-// an X x Y grid of size L1 x L1
+// an X x Y grid of sizne L1 x L1
 
 
 // the three nearest neighbours of C180 atoms
@@ -68,7 +68,20 @@ int num_cell_div;
 int* cell_div_inds;
 
 
-int No_of_threads;
+// Params related to population modelling
+int doPopModel;
+char* didCellDie;
+float totalFood;
+float* d_totalFood;
+int haylimit;
+int cellLifeTime;
+float cellFoodCons; // baseline food consumption
+float cellFoodConsDiv; // Extra good consumption when cell divides
+float cellFoodRel; // Food released when cell dies (should < total consumed food)
+float maxPressure;
+
+
+int No_of_threads; // ie number of staring cells
 int Side_length;
 int ex, ey;
 
@@ -144,24 +157,24 @@ int main(int argc, char *argv[])
 
   //int min_no_of_cells = 10;
 
-  printf("CellDiv version 0.91\n");
+  printf("CellDiv version 0.9\n");
 
   if ( argc != 2 )
-	{
-	  printf("Usage: CellDiv no_of_threads\n");
-	  return(0);
-	}
+  {
+      printf("Usage: CellDiv no_of_threads\n");
+      return(0);
+  }
 
   No_of_threads = atoi(argv[1]);
 
 
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
   if ( No_of_threads > MaxNoofC180s || Side_length*Side_length != No_of_threads )
-	{
-	  printf("Usage: Celldiv no_of_threads\n");
-	  printf("       no_of_threads should be a square, n^2, < %d\n", MaxNoofC180s);
-	  return(0);
-	}
+  {
+      printf("Usage: Celldiv no_of_threads\n");
+      printf("       no_of_threads should be a square, n^2, < %d\n", MaxNoofC180s);
+      return(0);
+  }
 
 
   No_of_C180s      = No_of_threads;
@@ -188,8 +201,8 @@ int main(int argc, char *argv[])
   fclose(outfile);
 
   /* PM
-	 Allocate memory for the dividingCells array that will be used to
-	 calculate the mitotic index.
+     Allocate memory for the dividingCells array that will be used to
+     calculate the mitotic index.
   */
 
   dividingCells = (int *)calloc((Time_steps/newCellCountInt), sizeof(int));
@@ -199,6 +212,11 @@ int main(int argc, char *argv[])
   CPUMemory += (2L*(long)(Time_steps/newCellCountInt) + 1L + (long)Time_steps) * sizeof(int);
 
 
+
+  // Allocate initializing memory for didCellDie
+
+  didCellDie = (char *)(calloc(MaxNoofC180s, sizeof(char)));
+  CPUMemory += (long)MaxNoofC180s * sizeof(char);
 
   getDevice();
 
@@ -218,8 +236,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_XM , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_YM , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ZM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  GPUMemory += 9L*192L*MaxNoofC180s*sizeof(float);
-
   if ( cudaSuccess != cudaMalloc( (void **)&d_bounding_xyz , MaxNoofC180s*6*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
@@ -235,18 +251,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    32*1024*1024*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
-
-  GPUMemory += MaxNoofC180s*6L*sizeof(float);
-  GPUMemory += MaxNoofC180s*3L*sizeof(float);
-  GPUMemory += MaxNoofC180s*sizeof(float);
-  GPUMemory += 6L*1024L*sizeof(float);
-  GPUMemory += 1024L*1024L*sizeof(int);
-  GPUMemory += 32L*1024L*1024L*sizeof(int);
-  GPUMemory += 92L*7L*sizeof(int);
-  GPUMemory += MaxNoofC180s*sizeof(char);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
-  GPUMemory += 10000L*sizeof(float);
-  GPUMemory += MaxNoofC180s*sizeof(char);
 
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -270,6 +275,18 @@ int main(int argc, char *argv[])
   CPUMemory += 6L*1024L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(char);
   CPUMemory += MaxNoofC180s*sizeof(int);
+
+
+  // Better way to see how much GPU memory is being used.
+  size_t totalGPUMem;
+  size_t freeGPUMem;
+
+  if ( cudaSuccess != cudaMemGetInfo ( &freeGPUMem, &totalGPUMem ) ) {
+      printf("Couldn't read GPU Memory status\nExiting...");
+      exit(1);
+  }
+
+  GPUMemory = totalGPUMem - freeGPUMem;
 
   printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
   printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
@@ -295,15 +312,15 @@ int main(int argc, char *argv[])
   noofblocks      = No_of_C180s;
   threadsperblock = 192;
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
-		 noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
+         noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
   bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
-									 d_bounding_xyz, d_CMx, d_CMy, d_CMz);
+                                     d_bounding_xyz, d_CMx, d_CMy, d_CMz);
 
 
   reductionblocks = (No_of_C180s-1)/1024+1;
   minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-									   d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+                                       d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
   minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
   cudaMemset(d_NoofNNlist, 0, 1024*1024);
   cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
@@ -313,49 +330,68 @@ int main(int argc, char *argv[])
   Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
   Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
   makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
-										 attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
   globalrank = 0;
 
   // open trajectory file
   trajfile = fopen (trajFileName, "w");
   if ( trajfile == NULL)
-	{
-	  printf("Failed to open traj.xyz\n");
-	  return -1;
-	}
+  {
+      printf("Failed to open traj.xyz\n");
+      return -1;
+  }
 
   write_traj(1, trajfile);
 
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
-	{
-	  //     if ( step < Division_step ) PSS=80.0*Temperature;
-	  if ( step < 8000 ) PSS=80.0*Temperature;
-	  Pressure = PSS;
+  {
+      if (doPopModel == 1){
+          // New way of setting pressure follows. Hopefully this will correctly
+          // model population.
+          // The basic idea is that rate of growth should be modulated wrt
+          // the amount of "food" that we have available, and the food will
+          // be reduced whenever a new cell is created. It is assumed that
+          // we have unlimited supply of food for sustenance, but extra
+          // food is needed for division.
+          /*
+          if (totalFood >= cellFoodConsDiv)
+              Pressure = maxPressure * ( 1.0 - (1.0/totalFood));
+          else
+              Pressure = 0;
+          */
 
-	  if ( (step/1000)*1000 == step )
-		{
-		  printf("   time %-8d %d C180s\n",step,No_of_C180s);
-		}
+          PSS = 64.0;
+      }
+      else {
+          if ( step < 8000 ) PSS=80.0*Temperature;
+          Pressure = PSS;
+          Temperature += delta_t;
+      }
 
-	  noofblocks      = No_of_C180s;
-	  if ( prevnoofblocks < noofblocks )
-        {
-		  prevnoofblocks  = noofblocks;
-		  //        printf("             no of thread blocks = %d, threadsperblock = %d, no of threads = %ld\n",
-		  //             noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
-        }
+      if ( (step/1000)*1000 == step )
+      {
+          printf("   time %-8d %d C180s Pressure = %f\n",step,No_of_C180s, Pressure);
+      }
+
+      noofblocks      = No_of_C180s;
+      if ( prevnoofblocks < noofblocks )
+      {
+          prevnoofblocks  = noofblocks;
+          //        printf("             no of thread blocks = %d, threadsperblock = %d, no of threads = %ld\n",
+          //             noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
+      }
 
 
-	  propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-												 d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
-												 d_CMx, d_CMy, d_CMz,
-												 R0, Pressure, Youngs_mod ,
-												 internal_damping, delta_t, d_bounding_xyz,
-												 attraction_strength, attraction_range,
-												 repulsion_strength, repulsion_range,
-												 viscotic_damping, mass,
-												 Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+      propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+                                                 d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
+                                                 d_CMx, d_CMy, d_CMz,
+                                                 R0, Pressure, Youngs_mod ,
+                                                 internal_damping, delta_t, d_bounding_xyz,
+                                                 attraction_strength, attraction_range,
+                                                 repulsion_strength, repulsion_range,
+                                                 viscotic_damping, mass,
+                                                 Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
       if (step > Time_steps+1){
         Pressure = 0;
@@ -399,6 +435,8 @@ int main(int argc, char *argv[])
 
         }
 
+        totalFood -= num_cell_div*cellFoodConsDiv;
+
         if (countOnlyInternal == 1){
           num_cell_div -= num_cells_far();
         }
@@ -410,46 +448,55 @@ int main(int argc, char *argv[])
             newcells += num_new_cells_per_step[countOffset + i];
           }
           dividingCells[(step-1)/newCellCountInt] = newcells;
-          totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells; // Checkout how MIs are even calculated first
+          totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells;
+          // Need to make sure this is how MIs are even calculated
           countOffset += newCellCountInt;
         }
-        // --------------------------------------- End Cell Division -----------------------------------------------------------
+        // --------------------------------------- End Cell Division -----------
       }
 
-	  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
-										 d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
-										 d_bounding_xyz, d_CMx, d_CMy, d_CMz);
+      // ----------------------------------------- Begin Cell Death ------------
 
-	  reductionblocks = (No_of_C180s-1)/1024+1;
-	  minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-										   d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-	  minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-	  cudaMemset(d_NoofNNlist, 0, 1024*1024);
+      // Placeholder************************************************************
 
-	  cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
-	  Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
-	  Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-	  Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
-	  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
-											 attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+      // ----------------------------------------- End Cell Death --------------
 
 
-	  if ( step%trajWriteInt == 0 )
-		{
-		  //printf("   Writing trajectory to traj.xyz...\n");
-		  cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-		  cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-		  cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-		  write_traj(step, trajfile);
-		}
+      bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
+                                         d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
+                                         d_bounding_xyz, d_CMx, d_CMy, d_CMz);
+
+      reductionblocks = (No_of_C180s-1)/1024+1;
+      minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
+                                           d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+      minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+      cudaMemset(d_NoofNNlist, 0, 1024*1024);
+
+      cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
+      Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
+      Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
+      Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
+      makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
+                                             attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+
+
+      if ( step%trajWriteInt == 0 )
+      {
+          //printf("   Writing trajectory to traj.xyz...\n");
+          cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          write_traj(step, trajfile);
+      }
 
 
 
-	  Temperature += delta_t;
-	  myError = cudaGetLastError();
-	  if ( cudaSuccess != myError )
-		{ printf( "4 Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
-	}
+      myError = cudaGetLastError();
+      if ( cudaSuccess != myError )
+      {
+          printf( "4 Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
+      }
+  }
 
 
   // Write postscript file
@@ -462,28 +509,28 @@ int main(int argc, char *argv[])
 
   FILE* MitIndFile;
   if (overWriteMitInd == 0)
-	MitIndFile = fopen("mit-index.dat", "a");
+      MitIndFile = fopen("mit-index.dat", "a");
   else
-	MitIndFile = fopen("mit-index.dat", "w");
+      MitIndFile = fopen("mit-index.dat", "w");
 
   if (MitIndFile == NULL)
-	{
-	  printf("Failed to open mit-index.dat\n");
-	  exit(1);
-	}
+  {
+      printf("Failed to open mit-index.dat\n");
+      exit(1);
+  }
 
 
   for (int i = 0; i < (Time_steps/newCellCountInt) + 1; i++)
-	{
-	  if ( dividingCells[i]!=0 && totalCells[i]!=0 ){
-		fprintf(MitIndFile, "%f\n", (float)dividingCells[i]/totalCells[i]);
+  {
+      if ( dividingCells[i]!=0 && totalCells[i]!=0 ){
+          fprintf(MitIndFile, "%f\n", (float)dividingCells[i]/totalCells[i]);
       }
       else {
-        fprintf(MitIndFile, "%f\n", 0.0);
+          fprintf(MitIndFile, "%f\n", 0.0);
 
       }
 
-	}
+  }
 
   cudaFree( (void *)d_bounding_xyz );
   cudaFree( (void *)d_XP );
@@ -546,29 +593,29 @@ int initialize_C180s(int Orig_No_of_C180s)
   infil = fopen("C180","r");
   if ( infil == NULL ) {printf("Unable to open file C180\n");return(-1);}
   for ( atom = 0 ; atom < 180 ; ++atom)
-	{
+  {
       if ( fscanf(infil,"%f %f %f",&initx[atom], &inity[atom], &initz[atom]) != 3 )
-		{
-		  printf("   Unable to read file C180 on line %d\n",atom+1);
-		  fclose(infil);
-		  return(-1);
-		}
-	}
+      {
+          printf("   Unable to read file C180 on line %d\n",atom+1);
+          fclose(infil);
+          return(-1);
+      }
+  }
   fclose(infil);
 
   ranmar(ran2,Orig_No_of_C180s);
 
   for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
-	{
+  {
       ey=rank%Side_length;
       ex=rank/Side_length;
       for ( atom = 0 ; atom < 180 ; ++atom)
-		{
+      {
           X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1;
           Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1;
           Z[rank*192+atom] = initz[atom] + (ran2[rank]-0.5);
-		}
-	}
+      }
+  }
 
   return(0);
 }
@@ -610,13 +657,13 @@ int read_fullerene_nn(void)
 
   end = 180;
   for ( i = 0; i < 180 ; ++i )
-	{
-	  if ( fscanf(infil,"%d,%d,%d,%d", &N1, &N2, &N3, &Sign) != 4 ) {end = i; break;}
-	  C180_nn[0 + i] = N1-1;
-	  C180_nn[192+i] = N2-1;
-	  C180_nn[384+i] = N3-1;
-	  C180_sign[i] = Sign;
-	}
+  {
+      if ( fscanf(infil,"%d,%d,%d,%d", &N1, &N2, &N3, &Sign) != 4 ) {end = i; break;}
+      C180_nn[0 + i] = N1-1;
+      C180_nn[192+i] = N2-1;
+      C180_nn[384+i] = N3-1;
+      C180_sign[i] = Sign;
+  }
   fclose(infil);
 
   if ( end < 180 ) {printf("Error: Unable to read line %d in file C180NN\n",end);return(-1);}
@@ -628,11 +675,11 @@ int read_fullerene_nn(void)
 
   end = 270;
   for ( i = 0; i < 270 ; ++i )
-	{
-	  if ( fscanf(infil,"%d,%d", &N1, &N2) != 2 ) {end = i; break;}
-	  CCI[0][i] = N1-1;
-	  CCI[1][i] = N2-1;
-	}
+  {
+      if ( fscanf(infil,"%d,%d", &N1, &N2) != 2 ) {end = i; break;}
+      CCI[0][i] = N1-1;
+      CCI[1][i] = N2-1;
+  }
   fclose(infil);
 
   if ( end < 270 ) {printf("Error: Unable to read line %d in file C180C\n",end);return(-1);}
@@ -646,7 +693,7 @@ int read_fullerene_nn(void)
 
   end = 12;
   for ( i = 0; i < 12 ; ++i )
-	{
+  {
       if ( fscanf(infil,"%d %d %d %d %d", &N1, &N2, &N3, &N4, &N5) != 5 ) {end = i; break;}
       C180_56[i*7+0] = N1;
       C180_56[i*7+1] = N2;
@@ -655,11 +702,11 @@ int read_fullerene_nn(void)
       C180_56[i*7+4] = N5;
       C180_56[i*7+5] = N1;
       C180_56[i*7+6] = N1;
-	}
+  }
   if ( end != 12 ) {printf("Error: Unable to read line %d in file C180_pentahexa\n",end);return(-1);}
   end = 80;
   for ( i = 0; i < 80 ; ++i )
-	{
+  {
       if ( fscanf(infil,"%d %d %d %d %d %d", &N1, &N2, &N3, &N4, &N5, &N6) != 6 ) {end = i; break;}
       C180_56[84+i*7+0] = N1;
       C180_56[84+i*7+1] = N2;
@@ -668,7 +715,7 @@ int read_fullerene_nn(void)
       C180_56[84+i*7+4] = N5;
       C180_56[84+i*7+5] = N6;
       C180_56[84+i*7+6] = N1;
-	}
+  }
   if ( end != 80 ) {printf("Error: Unable to read line %d in file C180_pentahexa\n",end);return(-1);}
 
   fclose(infil);
@@ -707,51 +754,85 @@ int read_global_params(void)
   if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 16;}
   if ( fscanf(infil,"%d",&equiStepCount)       != 1 ) {error = 17;}
   if ( fscanf(infil,"%s",trajFileName)         != 1 ) {error = 18;}
+  if ( fscanf(infil,"%d",&doPopModel)          != 1 ) {error = 19;}
+  if ( fscanf(infil,"%f",&totalFood)           != 1 ) {error = 20;}
+  if ( fscanf(infil,"%f",&cellFoodCons)        != 1 ) {error = 21;}
+  if ( fscanf(infil,"%f",&cellFoodConsDiv)     != 1 ) {error = 22;}
+  if ( fscanf(infil,"%f",&cellFoodRel)         != 1 ) {error = 23;}
+  if ( fscanf(infil,"%d",&haylimit)            != 1 ) {error = 24;}
+  if ( fscanf(infil,"%d",&cellLifeTime)        != 1 ) {error = 25;}
+  if ( fscanf(infil,"%f",&maxPressure)         != 1 ) {error = 26;}
+
+
+
 
   fclose(infil);
 
-  if ( error != 0 )
-	{
-	  printf("   Error reading line %d from file inp.dat\n",error);
-	  return(-1);
-	}
+  if ( error != 0 ){
+      printf("   Error reading line %d from file inp.dat\n",error);
+      return(-1);
+  }
 
   if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
-	printf("radFrac not in [0.4, 0.8] setting to 1.\n");
-	countOnlyInternal = 0;
+      printf("radFrac not in [0.4, 0.8] setting to 1.\n");
+      countOnlyInternal = 0;
   }
 
   if (trajWriteInt == 0){
-	trajWriteInt = 1;
+      trajWriteInt = 1;
   }
 
   if (newCellCountInt == 0){
-	newCellCountInt = 1;
+      newCellCountInt = 1;
   }
 
   if ( trajWriteInt > Time_steps){
-	printf ("Trajectory write interval is too large\n");
-	return -1;
+      printf ("Trajectory write interval is too large\n");
+      return -1;
   }
 
   if (Time_steps%trajWriteInt != 0){
-	printf ("Invalid trajectory write interval. Time steps must be divisible by it. \n");
-	return -1;
+      printf ("Invalid trajectory write interval. Time steps must be divisible by it. \n");
+      return -1;
   }
 
   if (newCellCountInt > Time_steps){
-	printf("New cell counting interval is too large. \n");
-	return -1;
-  }
-
-  if (Time_steps%trajWriteInt != 0){
-	printf ("Invalid new cell count interval. Time steps must be divisible by it. \n");
-	return -1;
+      printf("New cell counting interval is too large. \n");
+      return -1;
   }
 
   if (equiStepCount <= 0){
     equiStepCount = 0;
   }
+
+  if (doPopModel != 1){ // This ensures that Pop modelling is only done if this
+                        // var is only 1
+      doPopModel = 0;
+  }
+
+  if (maxPressure < 0){
+      printf("Invalid maximum pressure value of %f\n", maxPressure);
+      printf("Disabling population modelling...");
+      doPopModel = 0;
+  }
+
+
+  /*
+
+  // The if statement below is not a very good one
+  // think about rewriting.
+  if (totalFood < 0.0
+      || No_of_threads*100 < totalFood
+      || cellFoodCons < 0.0
+      || cellFoodCons*No_of_threads*10 < totalFood
+      || cellFoodConsDiv < 0.0
+      || cellFoodConsDiv*No_of_threads*10 < totalFood
+       ){
+      doPopModel = 0;
+      printf("Food parameters invalid. Skipping population modelling.\n");
+  }
+  */
+
 
   printf("      mass                = %f\n",mass);
   printf("      spring equilibrium  = %f\n",R0);
@@ -771,6 +852,12 @@ int read_global_params(void)
   printf("      newCellCountInt     = %d\n", newCellCountInt);
   printf("      equiStepCount       = %d\n", equiStepCount);
   printf("      trajFileName        = %s\n", trajFileName);
+  printf("      doPopModel          = %d\n", doPopModel);
+  printf("      totalFood           = %f\n", totalFood);
+  printf("      cellFoodCons        = %f\n", cellFoodCons);
+  printf("      cellFoodConsDiv     = %f\n ", cellFoodConsDiv);
+  printf("      cellFoodRel         = %f\n ", cellFoodRel);
+
 
 
   return(0);
@@ -784,171 +871,186 @@ int read_global_params(void)
 
 
 __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
-						   float d_XP[], float d_YP[], float d_ZP[],
-						   float d_X[],  float d_Y[],  float d_Z[],
-						   float d_XM[], float d_YM[], float d_ZM[],
-						   float *d_CMx, float *d_CMy, float *d_CMz,
-						   float R0, float Pressure, float Youngs_mod ,
-						   float internal_damping, float delta_t,
-						   float d_bounding_xyz[],
-						   float attraction_strength, float attraction_range,
-						   float repulsion_strength, float repulsion_range,
-						   float viscotic_damping, float mass,
-						   float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-						   int *d_NoofNNlist, int *d_NNlist, float DL)
+                           float d_XP[], float d_YP[], float d_ZP[],
+                           float d_X[],  float d_Y[],  float d_Z[],
+                           float d_XM[], float d_YM[], float d_ZM[],
+                           float *d_CMx, float *d_CMy, float *d_CMz,
+                           float R0, float Pressure, float Youngs_mod ,
+                           float internal_damping, float delta_t,
+                           float d_bounding_xyz[],
+                           float attraction_strength, float attraction_range,
+                           float repulsion_strength, float repulsion_range,
+                           float viscotic_damping, float mass,
+                           float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                           int *d_NoofNNlist, int *d_NNlist, float DL
+                           )
+                           //float* d_didCellDie)
 {
-  int rank, atom, nn_rank, nn_atom;
-  int N1, N2, N3;
-  int NooflocalNN;
-  int localNNs[8];
-  float deltaX, deltaY, deltaZ;
-  float A1, A2, A3;
-  float B1, B2, B3;
-  float TX, TY, TZ;
-  float NORM, R;
-  float NX, NY, NZ;
+    int rank, atom, nn_rank, nn_atom;
+    int N1, N2, N3;
+    int NooflocalNN;
+    int localNNs[8];
+    float deltaX, deltaY, deltaZ;
+    float A1, A2, A3;
+    float B1, B2, B3;
+    float TX, TY, TZ;
+    float NORM, R;
+    float NX, NY, NZ;
+    //float setPress;
 
-  rank = blockIdx.x;
-  atom = threadIdx.x;
+    rank = blockIdx.x;
+    atom = threadIdx.x;
+    /*
+    if (atom == 0){ // Only need to do this once per cell
+        if (d_didCellDie[rank] == 0 and there is enough food to propagate ){
+            setPress = Pressure;
+            // Code to kill this thread (stop propagation)
+        }
+        else {
+            0;
+            // Going to add code here to do with cell death later.
+        }
+    }
+    __syncthreads();
+    */
 
-
-  if ( rank < No_of_C180s && atom < 180 )
-	{
-	  N1 = d_C180_nn[  0+atom];
-	  N2 = d_C180_nn[192+atom];
-	  N3 = d_C180_nn[384+atom];
-	  A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
-	  A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
-	  A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
-	  B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
-	  B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
-	  B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
-	  TX = A2*B3-A3*B2;
-	  TY = A3*B1-A1*B3;
-	  TZ = A1*B2-A2*B1;
-	  NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
-	  NX = d_C180_sign[atom]*TX/NORM;
-	  NY = d_C180_sign[atom]*TY/NORM;
-	  NZ = d_C180_sign[atom]*TZ/NORM;
-
-
-	  float FX = 0.0f;
-	  float FY = 0.0f;
-	  float FZ = 0.0f;
-
-	  float X = d_X[rank*192+atom];
-	  float Y = d_Y[rank*192+atom];
-	  float Z = d_Z[rank*192+atom];
-
-	  //  Spring Force calculation within cell
-	  //  go through three nearest neighbors
-	  for ( int i = 0; i < 3 ; ++i )
-		{
-		  N1 = d_C180_nn[i*192+atom];
-		  deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
-		  deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
-		  deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
-		  R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
-
-		  FX += +Youngs_mod*(R-R0)/R0*deltaX/R+Pressure*NX;
-		  FY += +Youngs_mod*(R-R0)/R0*deltaY/R+Pressure*NY;
-		  FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
-
-		  FX += -(internal_damping/delta_t)*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
-		  FY += -(internal_damping/delta_t)*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
-		  FZ += -(internal_damping/delta_t)*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
-		}
+    if ( rank < No_of_C180s && atom < 180 )
+    {
+        N1 = d_C180_nn[  0+atom];
+        N2 = d_C180_nn[192+atom];
+        N3 = d_C180_nn[384+atom];
+        A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
+        A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
+        A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
+        B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
+        B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
+        B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
+        TX = A2*B3-A3*B2;
+        TY = A3*B1-A1*B3;
+        TZ = A1*B2-A2*B1;
+        NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
+        NX = d_C180_sign[atom]*TX/NORM;
+        NY = d_C180_sign[atom]*TY/NORM;
+        NZ = d_C180_sign[atom]*TZ/NORM;
 
 
-	  NooflocalNN = 0;
+        float FX = 0.0f;
+        float FY = 0.0f;
+        float FZ = 0.0f;
 
-	  int startx = (int)((X -Minx)/DL);
-	  if ( startx < 0 ) startx = 0;
-	  if ( startx >= Xdiv ) startx = Xdiv-1;
+        float X = d_X[rank*192+atom];
+        float Y = d_Y[rank*192+atom];
+        float Z = d_Z[rank*192+atom];
 
-	  int starty = (int)((Y - Miny)/DL);
-	  if ( starty < 0 ) starty = 0;
-	  if ( starty >= Ydiv ) starty = Ydiv-1;
+        //  Spring Force calculation within cell
+        //  go through three nearest neighbors
+        for ( int i = 0; i < 3 ; ++i )
+        {
+            N1 = d_C180_nn[i*192+atom];
+            deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
+            deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
+            deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
+            R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
-	  int startz = (int)((Z - Minz)/DL);
-	  if ( startz < 0 ) startz = 0;
-	  if ( startz >= Zdiv ) startz = Zdiv-1;
+            FX += +Youngs_mod*(R-R0)/R0*deltaX/R+Pressure*NX;
+            FY += +Youngs_mod*(R-R0)/R0*deltaY/R+Pressure*NY;
+            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
 
-	  int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
-
-	  // interfullerene attraction and repulsion
-	  for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
-		{
-		  nn_rank = d_NNlist[32*index+nn_rank1-1];
-		  if ( nn_rank == rank ) continue;
-
-		  deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
-		  deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
-
-		  deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
-		  deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
-
-		  deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
-		  deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
-
-		  if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range ) continue;
-		  ++NooflocalNN;
-		  if ( NooflocalNN > 8 ) {printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);continue;}
-		  localNNs[NooflocalNN-1] = nn_rank;
-		}
-
-	  for ( int i = 0; i < NooflocalNN; ++i )
-		{
-		  nn_rank =localNNs[i];
-
-		  for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
-			{
-
-			  deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
-			  deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
-			  deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
-
-			  R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
-			  if ( R >= attraction_range*attraction_range ) continue;
-			  R = sqrt(R);
-
-			  if ( R < attraction_range )
-				{
-				  FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
-				  FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
-				  FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
-				}
-			  if ( R < repulsion_range )
-				{
-				  FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-				  FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-				  FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
-				  if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
-					   deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
-					   deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
-					printf("fullerene %d inside %d?\n",rank, nn_rank);
-				}
-
-			}
-
-		}
+            FX += -(internal_damping/delta_t)*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
+            FY += -(internal_damping/delta_t)*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
+            FZ += -(internal_damping/delta_t)*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+        }
 
 
+        NooflocalNN = 0;
 
-	  // time propagation
+        int startx = (int)((X -Minx)/DL);
+        if ( startx < 0 ) startx = 0;
+        if ( startx >= Xdiv ) startx = Xdiv-1;
 
-	  d_XP[rank*192+atom] =
-		1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-		((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
-	  d_YP[rank*192+atom] =
-		1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-		((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
-	  d_ZP[rank*192+atom] =
-		1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-		((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+        int starty = (int)((Y - Miny)/DL);
+        if ( starty < 0 ) starty = 0;
+        if ( starty >= Ydiv ) starty = Ydiv-1;
+
+        int startz = (int)((Z - Minz)/DL);
+        if ( startz < 0 ) startz = 0;
+        if ( startz >= Zdiv ) startz = Zdiv-1;
+
+        int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
+
+        // interfullerene attraction and repulsion
+        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
+        {
+            nn_rank = d_NNlist[32*index+nn_rank1-1];
+            if ( nn_rank == rank ) continue;
+
+            deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
+            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
+
+            deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
+            deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+
+            deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
+            deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range ) continue;
+            ++NooflocalNN;
+            if ( NooflocalNN > 8 ) {printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);continue;}
+            localNNs[NooflocalNN-1] = nn_rank;
+        }
+
+        for ( int i = 0; i < NooflocalNN; ++i )
+        {
+            nn_rank =localNNs[i];
+
+            for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            {
+
+                deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
+                deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
+                deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
+
+                R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+                if ( R >= attraction_range*attraction_range ) continue;
+                R = sqrt(R);
+
+                if ( R < attraction_range )
+                {
+                    FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+                    FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+                    FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                }
+                if ( R < repulsion_range )
+                {
+                    FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+                    FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+                    FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                    if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
+                         deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
+                         deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
+                        printf("fullerene %d inside %d?\n",rank, nn_rank);
+                }
+
+            }
+
+        }
 
 
-	}
+
+        // time propagation
+
+        d_XP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
+        d_YP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
+        d_ZP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+
+
+    }
 
 
 
