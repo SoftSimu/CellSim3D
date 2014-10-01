@@ -1,10 +1,10 @@
-compiler = nvcc
+compiler = /usr/local/cuda/bin/nvcc
 flags = -arch=sm_30 -Xptxas="-v" -c -O3 -g
 
 objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o
 
 CellDiv: $(objects)
-	$(compiler) -O3 -arch=sm_30 -o "CellDiv" $(objects) -lm 
+	$(compiler) -O3 -arch=sm_30 -o "CellDiv" $(objects) -lm
 
 GPUbounce.o: GPUbounce.cu postscript.h
 	$(compiler) $(flags) GPUbounce.cu
