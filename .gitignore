@@ -12,6 +12,5 @@ psfil
 images/*
 graphs/*
 *traj*
-.render_queue
-.render_done
-.now_proc
+*.avi
+*.mp4
