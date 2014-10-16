@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <math.h>
 
-__global__ void volumes( int No_of_C180s, int *C180_56, 
-                         float *X,    float *Y,   float *Z, 
+__global__ void volumes( int No_of_C180s, int *C180_56,
+                         float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
-                         char* cell_div)
+                         char* cell_div, float divVol)
 {
 __shared__ float locX[192];
 __shared__ float locY[192];
@@ -15,7 +15,7 @@ __shared__ float volume;
 int fullerene = blockIdx.x;
 int tid       = threadIdx.x;
 
-if ( tid < 180 ) 
+if ( tid < 180 )
    {
    locX[tid] = X[192*fullerene+tid] -CMx[fullerene];
    locY[tid] = Y[192*fullerene+tid] -CMy[fullerene];
@@ -41,7 +41,7 @@ if ( tid < 92 )
        }
 
   float avefactor = 0.166666667f;
-  if ( tid < 12 ) 
+  if ( tid < 12 )
        {
        avefactor = 0.2f;
        }
@@ -76,10 +76,9 @@ __syncthreads();
 
  if ( tid == 0){
    vol[fullerene] = volume/6.0;
-   if ((volume/6.0) > 2.9f){   
+   if ((volume/6.0) > divVol){
      cell_div[fullerene] = 1;
    }
  }
 
 }
-

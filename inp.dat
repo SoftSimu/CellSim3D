@@ -6,24 +6,31 @@
 1000.0
 2.0
 100.0
-100000
+2.9
+200000
 0.0001
 0
 1000
 0
 0.6
 1
-10000
+1000
 0
-traj_25_adh085_rep1200_InvNum.xyz
-1
+traj_wallOn_longer.xyz
+0
 5000.0
 2.0
 10.0
 10.0
 10
 20000
-65.0 
+65.0
+1
+z
+3.0
+10.0
+10.0
+0.01
 --------------------------
 MASS
 REPULSION RANGE
@@ -33,7 +40,7 @@ ATTRACTION STRENGTH
 YOUNGS MOD.
 VISCOTIC DAMPING
 INTERNAL DAMPING
-DIVISION STEP
+division volume
 TIME STEPS
 DT
 RESTART
@@ -44,7 +51,7 @@ overWriteMitIndFile
 New cell count interval (Must be < Time_Steps and Time_steps%newCellCountInt == 0)
 No of equillibration time steps 
 Trajectory File name (extension does matter)
-Use population modelling (0==No and 1==No)
+Use population modelling (0==No and 1==Yes)
 Maximum Food for population modelling
 [NOT IMPLEMENTED] Transient food consumption
 Food consumed to create new cell (cells can't divide if this much extra food doesn't exist)
@@ -52,3 +59,9 @@ Food consumed to create new cell (cells can't divide if this much extra food doe
 [NOT IMPLEMENTED] Hayflick limit (the max number of times a cell can divide; ignored if 0);
 [NOT IMPLEMENTED] Max amount of time a cell can live 
 Maximum growth pressure (sets max growth rate) 
+Use walls in the simulation? (0 = no, 1 = yes)
+Axis the walls are perpendicular to (Z for XY plane, etc)
+Separation between two walls
+length of walls in no. of cell diameters
+width of walls in no. of cell diameters
+threshold distance for repulsion 

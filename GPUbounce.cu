@@ -4,6 +4,7 @@
   #include <time.h>
   #include <math.h>
   #include <locale.h>
+  #include <algorithm>
 #endif
 
 
@@ -24,7 +25,8 @@ float repulsion_range,    attraction_range;        //  LL1, LL2
 float repulsion_strength, attraction_strength;     //  ST1, ST2
 float Youngs_mod;
 float viscotic_damping, internal_damping;          //  C, DMP
-int   Division_step, Time_steps;
+int   Time_steps;
+float divVol;
 float delta_t;
 int   Restart;
 int   trajWriteInt; // trajectory write interval
@@ -80,6 +82,16 @@ float cellFoodConsDiv; // Extra good consumption when cell divides
 float cellFoodRel; // Food released when cell dies (should < total consumed food)
 float maxPressure;
 
+// Params related to having walls in the simulation
+int useWalls;
+char perpAxis[1];
+float threshDist;
+float dAxis;
+float wallLen;
+float wallWidth;
+float wall1, wall2;
+float wallWStart, wallWEnd;
+float wallLStart, wallLEnd;
 
 int No_of_threads; // ie number of staring cells
 int Side_length;
@@ -253,6 +265,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
 
+
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -344,6 +357,56 @@ int main(int argc, char *argv[])
 
   write_traj(1, trajfile);
 
+  // Set up walls if needed
+  if (useWalls == 1){
+      // First we must make sure that the walls surround the
+      // starting system.
+      CenterOfiMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                        d_XP, d_YP, d_ZP,
+                                        d_CMx, d_CMy, d_CMz);
+      cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      float COMx = 0, COMy = 0, COMz = 0;
+
+      for(int cell = 0; cell < No_of_C180s; cell++){
+          COMx += CMx[cell];
+          COMy += CMy[cell];
+          COMz += CMz[cell];
+      }
+
+      COMx = COMx/No_of_C180s;
+      COMy = COMy/No_of_C180s;
+      COMz = COMz/No_of_C180s;
+
+
+      if (perpAxis[0] == 'Z' || perpAxis[0] == 'z' ){
+          // Check that the walls are far enough from the beginning cells
+          float tempZ[No_of_C180s];
+          cudaMemcpy(d_Z, tempZ, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+          std::sort(tempZ, tempZ+No_of_C180s);
+
+          if (dAxis * std::pow(divVol/(1.333f*3.14159f), 1/3.) * 2 < (tempZ[No_of_C180s] - tempZ[0])){
+                  printf("Distance between walls is too small\nExiting...");
+                  printf("Starting system size= %f\nWall gap = %f",
+                         tempZ[No_of_C180s] - tempZ[0], dAxis);
+                  return(-1);
+              }
+          wall1 = COMz - (dAxis/2.0);
+          wall2 = COMz + (dAxis/2.0);
+          wallLStart = COMx - (wallLen/2.0);
+          wallLEnd = COMx + (wallLen/2.0);
+          wallWStart = COMy - (wallWidth/2.0);
+          wallWEnd = COMy + (wallWidth/2.0);
+      }
+      else {
+          printf(" Invalid wall axis selection %s\nExiting...", perpAxis);
+          return(-1);
+      }
+
+  }
+
+
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
       if (doPopModel == 1){
@@ -382,16 +445,31 @@ int main(int argc, char *argv[])
           //             noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
       }
 
-
-      propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                 d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
-                                                 d_CMx, d_CMy, d_CMz,
-                                                 R0, Pressure, Youngs_mod ,
-                                                 internal_damping, delta_t, d_bounding_xyz,
-                                                 attraction_strength, attraction_range,
-                                                 repulsion_strength, repulsion_range,
-                                                 viscotic_damping, mass,
-                                                 Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+      if (useWalls == 1 && (perpAxis[0] == 'z' || perpAxis[0] == 'Z')){
+          propagate_zwall<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+                                                     d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
+                                                     d_CMx, d_CMy, d_CMz,
+                                                     R0, Pressure, Youngs_mod ,
+                                                     internal_damping, delta_t, d_bounding_xyz,
+                                                     attraction_strength, attraction_range,
+                                                     repulsion_strength, repulsion_range,
+                                                     viscotic_damping, mass,
+                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL,
+                                                     wall1, wall2,
+                                                     wallLStart, wallLEnd,
+                                                     wallWStart, wallWEnd,
+                                                     threshDist);
+      } else {
+          propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+                                                     d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
+                                                     d_CMx, d_CMy, d_CMz,
+                                                     R0, Pressure, Youngs_mod ,
+                                                     internal_damping, delta_t, d_bounding_xyz,
+                                                     attraction_strength, attraction_range,
+                                                     repulsion_strength, repulsion_range,
+                                                     viscotic_damping, mass,
+                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+      }
 
       if (step > Time_steps+1){
         Pressure = 0;
@@ -400,10 +478,13 @@ int main(int argc, char *argv[])
 
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
-        CenterOfMass<<<No_of_C180s,256>>>( No_of_C180s,
-                                         d_XP, d_YP, d_ZP, d_CMx, d_CMy, d_CMz);
+        CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                          d_XP, d_YP, d_ZP,
+                                          d_CMx, d_CMy, d_CMz);
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
-                                     d_XP, d_YP, d_ZP, d_CMx , d_CMy, d_CMz, d_volume, d_cell_div);
+                                     d_XP, d_YP, d_ZP,
+                                     d_CMx , d_CMy, d_CMz,
+                                     d_volume, d_cell_div, divVol);
         count_and_get_div();
 
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
@@ -494,7 +575,7 @@ int main(int argc, char *argv[])
       myError = cudaGetLastError();
       if ( cudaSuccess != myError )
       {
-          printf( "4 Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
+          printf( "Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
       }
   }
 
@@ -736,32 +817,40 @@ int read_global_params(void)
   error = 0;
 
 
-  if ( fscanf(infil,"%f",&mass)                != 1 ) {error = 1;}
-  if ( fscanf(infil,"%f",&repulsion_range)     != 1 ) {error = 2;}
-  if ( fscanf(infil,"%f",&attraction_range)    != 1 ) {error = 3;}
-  if ( fscanf(infil,"%f",&repulsion_strength)  != 1 ) {error = 4;}
-  if ( fscanf(infil,"%f",&attraction_strength) != 1 ) {error = 5;}
-  if ( fscanf(infil,"%f",&Youngs_mod)          != 1 ) {error = 6;}
-  if ( fscanf(infil,"%f",&viscotic_damping)    != 1 ) {error = 7;}
-  if ( fscanf(infil,"%f",&internal_damping)    != 1 ) {error = 8;}
-  if ( fscanf(infil,"%d",&Time_steps)          != 1 ) {error = 9;}
-  if ( fscanf(infil,"%f",&delta_t)             != 1 ) {error = 10;}
-  if ( fscanf(infil,"%d",&Restart)             != 1 ) {error = 11;}
-  if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 12;}
-  if ( fscanf(infil,"%d",&countOnlyInternal)   != 1 ) {error = 13;}
-  if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 14;}
-  if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 15;}
-  if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 16;}
-  if ( fscanf(infil,"%d",&equiStepCount)       != 1 ) {error = 17;}
-  if ( fscanf(infil,"%s",trajFileName)         != 1 ) {error = 18;}
-  if ( fscanf(infil,"%d",&doPopModel)          != 1 ) {error = 19;}
-  if ( fscanf(infil,"%f",&totalFood)           != 1 ) {error = 20;}
-  if ( fscanf(infil,"%f",&cellFoodCons)        != 1 ) {error = 21;}
-  if ( fscanf(infil,"%f",&cellFoodConsDiv)     != 1 ) {error = 22;}
-  if ( fscanf(infil,"%f",&cellFoodRel)         != 1 ) {error = 23;}
-  if ( fscanf(infil,"%d",&haylimit)            != 1 ) {error = 24;}
-  if ( fscanf(infil,"%d",&cellLifeTime)        != 1 ) {error = 25;}
-  if ( fscanf(infil,"%f",&maxPressure)         != 1 ) {error = 26;}
+  if ( fscanf(infil,"%f",&mass)                != 1 ) {error =  1 ;}
+  if ( fscanf(infil,"%f",&repulsion_range)     != 1 ) {error =  2 ;}
+  if ( fscanf(infil,"%f",&attraction_range)    != 1 ) {error =  3 ;}
+  if ( fscanf(infil,"%f",&repulsion_strength)  != 1 ) {error =  4 ;}
+  if ( fscanf(infil,"%f",&attraction_strength) != 1 ) {error =  5 ;}
+  if ( fscanf(infil,"%f",&Youngs_mod)          != 1 ) {error =  6 ;}
+  if ( fscanf(infil,"%f",&viscotic_damping)    != 1 ) {error =  7 ;}
+  if ( fscanf(infil,"%f",&internal_damping)    != 1 ) {error =  8 ;}
+  if ( fscanf(infil,"%f",&divVol)              != 1 ) {error =  9 ;}
+  if ( fscanf(infil,"%d",&Time_steps)          != 1 ) {error = 10 ;}
+  if ( fscanf(infil,"%f",&delta_t)             != 1 ) {error = 11 ;}
+  if ( fscanf(infil,"%d",&Restart)             != 1 ) {error = 12 ;}
+  if ( fscanf(infil,"%d",&trajWriteInt)        != 1 ) {error = 13 ;}
+  if ( fscanf(infil,"%d",&countOnlyInternal)   != 1 ) {error = 14 ;}
+  if ( fscanf(infil,"%f",&radFrac)             != 1 ) {error = 15 ;}
+  if ( fscanf(infil,"%d",&overWriteMitInd)     != 1 ) {error = 16 ;}
+  if ( fscanf(infil,"%d",&newCellCountInt)     != 1 ) {error = 17 ;}
+  if ( fscanf(infil,"%d",&equiStepCount)       != 1 ) {error = 18 ;}
+  if ( fscanf(infil,"%s",trajFileName)         != 1 ) {error = 19 ;}
+  if ( fscanf(infil,"%d",&doPopModel)          != 1 ) {error = 20 ;}
+  if ( fscanf(infil,"%f",&totalFood)           != 1 ) {error = 21 ;}
+  if ( fscanf(infil,"%f",&cellFoodCons)        != 1 ) {error = 22 ;}
+  if ( fscanf(infil,"%f",&cellFoodConsDiv)     != 1 ) {error = 23 ;}
+  if ( fscanf(infil,"%f",&cellFoodRel)         != 1 ) {error = 24 ;}
+  if ( fscanf(infil,"%d",&haylimit)            != 1 ) {error = 25 ;}
+  if ( fscanf(infil,"%d",&cellLifeTime)        != 1 ) {error = 26 ;}
+  if ( fscanf(infil,"%f",&maxPressure)         != 1 ) {error = 27 ;}
+  if ( fscanf(infil,"%d",&useWalls)            != 1 ) {error = 28 ;}
+  if ( fscanf(infil,"%s",perpAxis)             != 1 ) {error = 29 ;}
+  if ( fscanf(infil,"%f",&dAxis)               != 1 ) {error = 30 ;}
+  if ( fscanf(infil,"%f",&wallLen)             != 1 ) {error = 31 ;}
+  if ( fscanf(infil,"%f",&wallWidth)           != 1 ) {error = 32 ;}
+  if ( fscanf(infil,"%f",&threshDist)          != 1 ) {error = 33 ;}
+
 
 
 
@@ -843,6 +932,7 @@ int read_global_params(void)
   printf("      Youngs modulus      = %f\n",Youngs_mod);
   printf("      viscotic damping    = %f\n",viscotic_damping);
   printf("      internal damping    = %f\n",internal_damping);
+  printf("      division volume     = %f\n",divVol);
   printf("      Time steps          = %d\n",Time_steps);
   printf("      delta t             = %f\n",delta_t);
   printf("      Restart             = %d\n",Restart);
@@ -855,9 +945,14 @@ int read_global_params(void)
   printf("      doPopModel          = %d\n", doPopModel);
   printf("      totalFood           = %f\n", totalFood);
   printf("      cellFoodCons        = %f\n", cellFoodCons);
-  printf("      cellFoodConsDiv     = %f\n ", cellFoodConsDiv);
-  printf("      cellFoodRel         = %f\n ", cellFoodRel);
-
+  printf("      cellFoodConsDiv     = %f\n", cellFoodConsDiv);
+  printf("      cellFoodRel         = %f\n", cellFoodRel);
+  printf("      useWalls            = %d\n", useWalls);
+  printf("      perpAxis            = %s\n", perpAxis);
+  printf("      dAxis               = %f\n", dAxis);
+  printf("      wallLen             = %f\n", wallLen);
+  printf("      wallWidth           = %f\n", wallWidth);
+  printf("      thresDist           = %f\n", threshDist);
 
 
   return(0);
@@ -884,7 +979,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
                            int *d_NoofNNlist, int *d_NNlist, float DL
                            )
-                           //float* d_didCellDie)
 {
     int rank, atom, nn_rank, nn_atom;
     int N1, N2, N3;
@@ -1035,6 +1129,223 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
         }
 
+
+
+        // time propagation
+
+        d_XP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
+        d_YP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
+        d_ZP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+
+
+    }
+
+
+
+
+}
+
+__global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+                                 float d_XP[], float d_YP[], float d_ZP[],
+                                 float d_X[],  float d_Y[],  float d_Z[],
+                                 float d_XM[], float d_YM[], float d_ZM[],
+                                 float *d_CMx, float *d_CMy, float *d_CMz,
+                                 float R0, float Pressure, float Youngs_mod ,
+                                 float internal_damping, float delta_t,
+                                 float d_bounding_xyz[],
+                                 float attraction_strength, float attraction_range,
+                                 float repulsion_strength, float repulsion_range,
+                                 float viscotic_damping, float mass,
+                                 float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                                 int *d_NoofNNlist, int *d_NNlist, float DL,
+                                 float wall1, float wall2,
+                                 float wallLStart, float wallLEnd,
+                                 float wallWStart, float wallWEnd,
+                                 float threshDist)
+//float* d_didCellDie)
+{
+    int rank, atom, nn_rank, nn_atom;
+    int N1, N2, N3;
+    int NooflocalNN;
+    int localNNs[8];
+    float deltaX, deltaY, deltaZ;
+    float A1, A2, A3;
+    float B1, B2, B3;
+    float TX, TY, TZ;
+    float NORM, R;
+    float NX, NY, NZ;
+    //float setPress;
+
+    rank = blockIdx.x;
+    atom = threadIdx.x;
+    /*
+    if (atom == 0){ // Only need to do this once per cell
+        if (d_didCellDie[rank] == 0 and there is enough food to propagate ){
+            setPress = Pressure;
+            // Code to kill this thread (stop propagation)
+        }
+        else {
+            0;
+            // Going to add code here to do with cell death later.
+        }
+    }
+    __syncthreads();
+    */
+
+    if ( rank < No_of_C180s && atom < 180 )
+    {
+        N1 = d_C180_nn[  0+atom];
+        N2 = d_C180_nn[192+atom];
+        N3 = d_C180_nn[384+atom];
+        A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
+        A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
+        A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
+        B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
+        B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
+        B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
+        TX = A2*B3-A3*B2;
+        TY = A3*B1-A1*B3;
+        TZ = A1*B2-A2*B1;
+        NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
+        NX = d_C180_sign[atom]*TX/NORM;
+        NY = d_C180_sign[atom]*TY/NORM;
+        NZ = d_C180_sign[atom]*TZ/NORM;
+
+
+        float FX = 0.0f;
+        float FY = 0.0f;
+        float FZ = 0.0f;
+
+        float X = d_X[rank*192+atom];
+        float Y = d_Y[rank*192+atom];
+        float Z = d_Z[rank*192+atom];
+
+        //  Spring Force calculation within cell
+        //  go through three nearest neighbors
+        for ( int i = 0; i < 3 ; ++i )
+        {
+            N1 = d_C180_nn[i*192+atom];
+            deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
+            deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
+            deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
+            R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
+
+            FX += +Youngs_mod*(R-R0)/R0*deltaX/R+Pressure*NX;
+            FY += +Youngs_mod*(R-R0)/R0*deltaY/R+Pressure*NY;
+            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
+
+            FX += -(internal_damping/delta_t)*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
+            FY += -(internal_damping/delta_t)*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
+            FZ += -(internal_damping/delta_t)*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+        }
+
+
+        NooflocalNN = 0;
+
+        int startx = (int)((X -Minx)/DL);
+        if ( startx < 0 ) startx = 0;
+        if ( startx >= Xdiv ) startx = Xdiv-1;
+
+        int starty = (int)((Y - Miny)/DL);
+        if ( starty < 0 ) starty = 0;
+        if ( starty >= Ydiv ) starty = Ydiv-1;
+
+        int startz = (int)((Z - Minz)/DL);
+        if ( startz < 0 ) startz = 0;
+        if ( startz >= Zdiv ) startz = Zdiv-1;
+
+        int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
+
+        // interfullerene attraction and repulsion
+        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
+        {
+            nn_rank = d_NNlist[32*index+nn_rank1-1];
+            if ( nn_rank == rank ) continue;
+
+            deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
+            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
+
+            deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
+            deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+
+            deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
+            deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range ) continue;
+            ++NooflocalNN;
+            if ( NooflocalNN > 8 ) {printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);continue;}
+            localNNs[NooflocalNN-1] = nn_rank;
+        }
+
+        for ( int i = 0; i < NooflocalNN; ++i )
+        {
+            nn_rank =localNNs[i];
+
+            for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            {
+
+                deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
+                deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
+                deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
+
+                R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+                if ( R >= attraction_range*attraction_range ) continue;
+                R = sqrt(R);
+
+                if ( R < attraction_range )
+                {
+                    FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+                    FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+                    FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                }
+                if ( R < repulsion_range )
+                {
+                    FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+                    FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+                    FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                    if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
+                         deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
+                         deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
+                        printf("fullerene %d inside %d?\n",rank, nn_rank);
+                }
+
+            }
+
+        }
+
+        // Wall repulsion
+
+        float wallDist = d_Z[rank*192+atom] - wall1;
+        if (abs(wallDist) <= threshDist /*&&
+            d_X[rank*192+atom] > wallLStart &&
+            d_X[rank*192+atom] < wallLEnd   &&
+            d_Y[rank*192+atom] > wallWStart &&
+            d_Y[rank*192+atom] < wallWEnd */ ){
+            //repulse
+            if (wallDist * FZ < 0)
+                FZ = -FZ;
+
+        }
+
+        wallDist = d_Z[rank*192+atom] - wall2;
+        if (abs(wallDist) <= threshDist /*&&
+                                          d_X[rank*192+atom] > wallLStart &&
+                                          d_X[rank*192+atom] < wallLEnd   &&
+                                          d_Y[rank*192+atom] > wallWStart &&
+                                          d_Y[rank*192+atom] < wallWEnd */ ){
+            //repulse
+            if (wallDist * FZ < 0)
+                FZ = -FZ;
+
+        }
+
+        __syncthreads();
 
 
         // time propagation
