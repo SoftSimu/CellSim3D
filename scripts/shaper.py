@@ -11,6 +11,7 @@ matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 import numpy as np
+from math import ceil
 
 
 numArgs = 3
@@ -76,7 +77,7 @@ with open(trajName) as trajFile:
     step = int(line[6:])
     #outFile.write("%d\n" % nAtoms)
     #outFile.write("Step: %d\n" % step)
-    print "We have %d cells in the system" % (nAtoms/192)
+    print "We have %d cells in the system" % (nCells)
     for n in xrange(nCells):
         for m in xrange(192):
             line = trajFile.readline().strip()
@@ -123,11 +124,21 @@ X = X[X != 0.0]
 Y = Y[Y != 0.0]
 Z = Z[Z != 0.0]
 
+#Get rid of nans
+def getNonNans(a):
+    nans = np.isnan(a)
+    notnans = np.invert(nans)
+    return a[notnans]
+
+X = getNonNans(X)
+Y = getNonNans(Y)
+Z = getNonNans(Z)
+
+CMx = getNonNans(CMx)
+CMy = getNonNans(CMy)
+CMz = getNonNans(CMz)
 
 # Normalize
-
-
-
 CMX = CMx.sum() / CMx.size
 CMY = CMy.sum() / CMy.size
 CMZ = CMz.sum() / CMz.size
@@ -141,7 +152,7 @@ CMx = CMx - CMX
 CMy = CMy - CMY
 CMz = CMz - CMZ
 
-inc = 0.3
+inc = 0.1
 thresh = 0.1
 
 def MakeImages(X, Y, Z, Xstr, Ystr, Zstr):
@@ -151,19 +162,20 @@ def MakeImages(X, Y, Z, Xstr, Ystr, Zstr):
         nearMask = np.abs(Z - dz) < thresh
         nearX = X[nearMask]
         nearY = Y[nearMask]
-        if nearX.size > 20:
-            c += 1
-            print "Making frame %s%s %d" % (Xstr, Ystr, c)
-            # Start plotting
-            plt.plot(nearX, nearY, 'k.', lw=0.5)
-            plt.title("%s=%f" % (Zstr, dz))
-            plt.xlabel("%s" % Xstr)
-            plt.ylabel("%s" % Ystr)
-            plt.xlim([X.min(), X.max()])
-            plt.ylim([Y.min(), Y.max()])
-            plt.savefig("pics/shapes_%s%s_%d_%d.jpg"
-                        % (Xstr, Ystr, startTime, c))
-            plt.close()
+        c += 1
+        print "Making frame %s%s %d" % (Xstr, Ystr, c)
+        # Start plotting
+        plt.plot(nearX, nearY, 'k.', lw=0.5, )
+        # The two lines below stop distortion
+        plt.axis('equal')
+        plt.axis([X.min(), X.max(),
+                  Y.min(), Y.max()])
+        plt.title("%s=%f" % (Zstr, dz))
+        plt.xlabel("%s" % Xstr)
+        plt.ylabel("%s" % Ystr)
+        plt.savefig("pics/%d_shapes_%s%s_%d.jpg"
+                    % (startTime, Xstr, Ystr, c))
+        plt.close()
 
 
 # do YZ plane, vary X
