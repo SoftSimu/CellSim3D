@@ -7,7 +7,7 @@
 import sys
 import matplotlib
 import os
-matplotlib.use('Agg')
+matplotlib.use('agg')
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,14 +29,22 @@ if len(sys.argv) < numArgs:
     print errorMessage
     sys.exit(1)
 
-os.system('rm pics/*.png')
 
-
-trajName = sys.argv[1]
+trajPath = os.path.abspath(sys.argv[1])
+storPath, fileName = os.path.split(trajPath)
+fileName = os.path.splitext(fileName)[0]
+storPath += "/" + fileName + '/cross_sections/'
 outputName = sys.argv[2]
 startTime = int(sys.argv[3])
 doneSeek = False
 step = 0
+
+
+# Make directory to store images
+try:
+    os.makedirs(storPath)
+except:
+    0
 
 X = []
 Y = []
@@ -51,7 +59,7 @@ CM_y = 0
 CM_z = 0
 outFile = open(outputName, 'w')
 
-with open(trajName) as trajFile:
+with open(trajPath) as trajFile:
     # First seek the time step to begin processing
     print "Moving to time step %d..." % startTime
     while step < startTime:
@@ -155,26 +163,41 @@ CMz = CMz - CMZ
 inc = 0.1
 thresh = 0.1
 
-def MakeImages(X, Y, Z, Xstr, Ystr, Zstr):
+def MakeImages(newX, newY, newZ, Xstr, Ystr, Zstr):
+    """
+    This function generates and saves cross section slices of the system.
+    X, Y are the axes of the plane of intersection
+    Z is the perpendicular to the name.
+    Any combination of cartesian plane and normal may be given.
+    e.g. MakeImages(X, Z, Y, "X", "Z", "Y") will generate XZ planes moving
+    along the Y axis.
+    """
+    xMin, xMax = newX.min(), newX.max()
+    yMin, yMax = newY.min(), newY.max()
     c = 0
-    for dz in np.arange(Z.min(), Z.max(), inc):
+    for dz in np.arange(newZ.min(), newZ.max(), inc):
         # Get the points within a threshold distance of the plane
-        nearMask = np.abs(Z - dz) < thresh
-        nearX = X[nearMask]
-        nearY = Y[nearMask]
+        nearMask = np.abs(newZ - dz) < thresh
+        nearX = newX[nearMask]
+        nearY = newY[nearMask]
         c += 1
         print "Making frame %s%s %d" % (Xstr, Ystr, c)
         # Start plotting
         plt.plot(nearX, nearY, 'k.', lw=0.5, )
         # The two lines below stop distortion
-        plt.axis('equal')
-        plt.axis([X.min(), X.max(),
-                  Y.min(), Y.max()])
+        #plt.axis('equal')
+        plt.axis('scaled')
+        plt.xlim(xMin, xMax)
+        plt.ylim(yMin, yMax)
+        #plt.axis([X.min(), X.max(),
+        #          Y.min(), Y.max()])
         plt.title("%s=%f" % (Zstr, dz))
         plt.xlabel("%s" % Xstr)
         plt.ylabel("%s" % Ystr)
-        plt.savefig("pics/%d_shapes_%s%s_%d.jpg"
-                    % (startTime, Xstr, Ystr, c))
+        name = "%d_shapes_%s%s_%d.jpg" % (startTime, Xstr, Ystr, c)
+        name = storPath + name
+        #print "saving to %s ..." % name
+        plt.savefig(name)
         plt.close()
 
 
