@@ -1,7 +1,7 @@
 compiler = /usr/local/cuda/bin/nvcc
-flags = -arch=sm_30 -Xptxas="-v" -c -O3 -g
+flags = -arch=sm_30 -Xptxas="-v" -c -O3 -g -I inc
 
-objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o
+objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o
 
 CellDiv: $(objects)
 	$(compiler) -O3 -arch=sm_30 -o "CellDiv" $(objects) -lm
@@ -20,6 +20,9 @@ centermass.o: centermass.cu postscript.h
 
 volume.o: volume.cu postscript.h
 	$(compiler) $(flags) volume.cu
+
+jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
+	$(compiler) $(flags) src/utils/jsoncpp.cpp
 
 .PHONY: clean
 clean:

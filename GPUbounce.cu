@@ -1,21 +1,16 @@
-#ifndef STD_INC
-  #include <stdio.h>
-  #include <stdlib.h>
-  #include <time.h>
-  #include <math.h>
-  #include <locale.h>
-  #include <algorithm>
-#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+#include <locale.h>
+#include <algorithm>
 
+#include <cuda.h>
 
-#ifndef CUDA_INC
-  #include <cuda.h>
-#endif
+#include "postscript.h"
+#include "marsaglia.h"
 
-#ifndef CELLDIV_INC
-  #include "postscript.h"
-  #include "marsaglia.h"
-#endif
+#include "inc/json/json.h"
 
 
 #define MaxNoofC180s 250000
@@ -361,7 +356,7 @@ int main(int argc, char *argv[])
   if (useWalls == 1){
       // First we must make sure that the walls surround the
       // starting system.
-      CenterOfiMass<<<No_of_C180s,256>>>(No_of_C180s,
+      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
                                         d_CMx, d_CMy, d_CMz);
       cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
