@@ -62,13 +62,15 @@ outFile = open(outputName, 'w')
 with open(trajPath) as trajFile:
     # First seek the time step to begin processing
     print "Moving to time step %d..." % startTime
-    while step < startTime:
+    while True:
         line = trajFile.readline().strip()
         # First line is always no. of atoms
         nAtoms = int(line)
         # Second line is always a comment with the time step no.
         line = trajFile.readline().strip()
         step = int(line[6:])
+        if (step >= startTime):
+            break
         print "Skipping time step %d" % step
 
         # Start skipping lines with coordinates
@@ -78,13 +80,7 @@ with open(trajPath) as trajFile:
     # Should be at the correct time step now
     # Begin processipng
     # For now only do one time step
-    line = trajFile.readline().strip()
-    nAtoms = int(line)
     nCells = nAtoms/192
-    line = trajFile.readline().strip()
-    step = int(line[6:])
-    #outFile.write("%d\n" % nAtoms)
-    #outFile.write("Step: %d\n" % step)
     print "We have %d cells in the system" % (nCells)
     for n in xrange(nCells):
         for m in xrange(192):
@@ -103,7 +99,7 @@ with open(trajPath) as trajFile:
             CM_y += y
             CM_z += z
 
-            #outFile.write("C    %f    %f    %f\n" % (x, y, z))
+            outFile.write("C    %f    %f    %f\n" % (x, y, z))
 
 
 
@@ -197,6 +193,7 @@ def MakeImages(newX, newY, newZ, Xstr, Ystr, Zstr):
         name = "%d_shapes_%s%s_%d.jpg" % (startTime, Xstr, Ystr, c)
         name = storPath + name
         #print "saving to %s ..." % name
+        plt.gcf().set_size_inches(10, 10)
         plt.savefig(name)
         plt.close()
 
