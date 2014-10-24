@@ -64,7 +64,7 @@ while [ TRUE ]; do
 
         # Make the video
         imgPath="$trajName/images/CellDiv_%d.png"
-        avconv -y -i "$imgPath" "$trajName/$trajName.mp4"
+        avconv -y -i "$imgPath" -r 60 -b 20k -vf scale=1920:1080 "$trajName/$trajName.mp4"
         pid=$!
         trap "kill $pid 2> /dev/null" EXIT
         echo -ne "oOO   "
