@@ -30,7 +30,7 @@ int initialize_C180s(int Orig_No_of_C180s);
 int generate_random(int no_of_ran1_vectors);
 int read_fullerene_nn(void);
 int read_global_params(void);
-int read_json_params(void);
+int read_json_params(const char* inpFile);
 int PSSETUP(FILE *outfile);
 int PSLINE(float X1, float Y1, float X2, float Y2, FILE *outfile);
 int PSCIRCLE(float X,float Y,FILE *outfile);

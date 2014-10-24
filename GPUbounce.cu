@@ -173,9 +173,9 @@ int main(int argc, char *argv[])
 
   printf("CellDiv version 0.9\n");
 
-  if ( argc != 2 )
+  if ( argc != 3 )
   {
-      printf("Usage: CellDiv no_of_threads\n");
+      printf("Usage: CellDiv no_of_threads inpFile.json\n");
       return(0);
   }
 
@@ -196,8 +196,11 @@ int main(int argc, char *argv[])
   GPUMemory = 0L;
   CPUMemory = 0L;
 
+  char inpFile[256];
+  strcpy(inpFile, argv[2]);
+
   //if ( read_global_params()               != 0 ) return(-1);
-  if ( read_json_params()               != 0 ) return(-1);
+  if ( read_json_params(inpFile)          != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   if ( generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
@@ -817,27 +820,27 @@ int read_fullerene_nn(void)
 }
 
 
-int read_json_params(void){
+int read_json_params(const char* inpFile){
     // Function to parse a json input file using the jsoncpp library
 
     // variable to hold the root of the json input
     Json::Value inpRoot;
     Json::Reader inpReader;
 
-    std::ifstream inpStream("inp.json");
+    std::ifstream inpStream(inpFile);
     std::string inpString((std::istreambuf_iterator<char>(inpStream)),
                           std::istreambuf_iterator<char>());
 
     bool parsingSuccess = inpReader.parse(inpString, inpRoot);
     if (!parsingSuccess){
-        printf("Failed to parse inp.json\n");
+        printf("Failed to parse %s\n", inpFile);
         // There must be a way to keep from converting from string to char*
         // Maybe by making inpString a char*
         printf("%s", inpReader.getFormattedErrorMessages().c_str());
         return -1;
     }
     else
-        printf("inp.dat parsed successfully\n");
+        printf("%s parsed successfully\n", inpFile);
 
     // begin detailed parameter extraction
 
