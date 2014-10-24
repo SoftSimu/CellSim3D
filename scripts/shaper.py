@@ -52,11 +52,69 @@ except:
 
 
 
+
+
+
+
 def getNonNans(a):
     nans = np.isnan(a)
     notnans = np.invert(nans)
     return a[notnans]
 
+
+# First get the maxima
+
+def reverse_readline(filename, buf_size=8192):
+    """a generator that returns the lines of a file in reverse order"""
+    """http://stackoverflow.com/a/23646049/1186564"""
+    with open(filename) as fh:
+        segment = None
+        offset = 0
+        fh.seek(0, os.SEEK_END)
+        total_size = remaining_size = fh.tell()
+        while remaining_size > 0:
+            offset = min(total_size, offset + buf_size)
+            fh.seek(-offset, os.SEEK_END)
+            buffer = fh.read(min(remaining_size, buf_size))
+            remaining_size -= buf_size
+            lines = buffer.split('\n')
+            # the first line of the buffer is probably not a complete line so
+            # we'll save it and append it to the last line of the next buffer
+            # we read
+            if segment is not None:
+                lines[-1] += segment
+            segment = lines[0]
+            for index in range(len(lines) - 1, 0, -1):
+                yield lines[index]
+        yield segment
+
+
+
+tX = []; tY = []; tZ = [];
+for line in reverse_readline(trajPath):
+    if "Step" in line:
+        print line
+        break
+    if line == '':
+        continue
+
+    line = line.split(",  ")
+
+    x = float(line[0])
+    y = float(line[1])
+    z = float(line[2])
+
+    tX.append(x)
+    tY.append(y)
+    tZ.append(z)
+
+
+tX = np.array(tX)
+tY = np.array(tY)
+tZ = np.array(tZ)
+
+xMax = tX.max(); yMax = tY.max(); zMax = tZ.max();
+xMin = tX.min(); yMin = tY.min(); zMin = tZ.min();
 
 
 def Normalize (X, Y, Z, CMx, CMy, CMz):
