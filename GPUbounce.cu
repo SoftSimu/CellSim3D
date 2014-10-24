@@ -388,8 +388,8 @@ int main(int argc, char *argv[])
 
       if (perpAxis[0] == 'Z' || perpAxis[0] == 'z' ){
           // Check that the walls are far enough from the beginning cells
-          float tempZ[No_of_C180s];
-          cudaMemcpy(d_Z, tempZ, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+          float tempZ[192*No_of_C180s];
+          cudaMemcpy(tempZ, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
           std::sort(tempZ, tempZ+No_of_C180s);
           float radius = 3.0 * divVol / 4.0;
           radius = radius/3.14159;
