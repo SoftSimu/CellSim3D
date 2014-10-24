@@ -4,6 +4,10 @@
 #include <math.h>
 #include <locale.h>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <streambuf>
+#include <cstring>
 
 #include <cuda.h>
 
@@ -20,6 +24,8 @@ float repulsion_range,    attraction_range;        //  LL1, LL2
 float repulsion_strength, attraction_strength;     //  ST1, ST2
 float Youngs_mod;
 float viscotic_damping, internal_damping;          //  C, DMP
+float zOffset; // Offset from Z = 0 for starting positions.
+int ranZOffset;
 int   Time_steps;
 float divVol;
 float delta_t;
@@ -34,6 +40,7 @@ int   overWriteMitInd; // 0 No, 1 yes
 
 int newCellCountInt; // Interval at which to count the divided cells
 int equiStepCount;
+const char* ptrajFileName;
 char trajFileName[256];
 
 // equilibrium length of springs between fullerene atoms
@@ -79,7 +86,7 @@ float maxPressure;
 
 // Params related to having walls in the simulation
 int useWalls;
-char perpAxis[1];
+char perpAxis[2];
 float threshDist;
 float dAxis;
 float wallLen;
@@ -189,7 +196,8 @@ int main(int argc, char *argv[])
   GPUMemory = 0L;
   CPUMemory = 0L;
 
-  if ( read_global_params()               != 0 ) return(-1);
+  //if ( read_global_params()               != 0 ) return(-1);
+  if ( read_json_params()               != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   if ( generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
@@ -380,13 +388,18 @@ int main(int argc, char *argv[])
           float tempZ[No_of_C180s];
           cudaMemcpy(d_Z, tempZ, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
           std::sort(tempZ, tempZ+No_of_C180s);
+          float radius = 3.0 * divVol / 4.0;
+          radius = radius/3.14159;
+          radius = std::pow(radius, 0.33333333333);
+          dAxis = dAxis * 2 * radius;
 
-          if (dAxis * std::pow(divVol/(1.333f*3.14159f), 1/3.) * 2 < (tempZ[No_of_C180s] - tempZ[0])){
+          if (dAxis < (tempZ[No_of_C180s] - tempZ[0])){
                   printf("Distance between walls is too small\nExiting...");
                   printf("Starting system size= %f\nWall gap = %f",
                          tempZ[No_of_C180s] - tempZ[0], dAxis);
                   return(-1);
               }
+
           wall1 = COMz - (dAxis/2.0);
           wall2 = COMz + (dAxis/2.0);
           wallLStart = COMx - (wallLen/2.0);
@@ -685,11 +698,15 @@ int initialize_C180s(int Orig_No_of_C180s)
   {
       ey=rank%Side_length;
       ex=rank/Side_length;
+
+      if (ranZOffset) // Branch prediction should kick in
+          zOffset += ran2[rank]-0.5;
+
       for ( atom = 0 ; atom < 180 ; ++atom)
       {
           X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1;
           Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1;
-          Z[rank*192+atom] = initz[atom] + (ran2[rank]-0.5);
+          Z[rank*192+atom] = initz[atom] + zOffset;
       }
   }
 
@@ -798,6 +815,210 @@ int read_fullerene_nn(void)
 
   return(0);
 }
+
+
+int read_json_params(void){
+    // Function to parse a json input file using the jsoncpp library
+
+    // variable to hold the root of the json input
+    Json::Value inpRoot;
+    Json::Reader inpReader;
+
+    std::ifstream inpStream("inp.json");
+    std::string inpString((std::istreambuf_iterator<char>(inpStream)),
+                          std::istreambuf_iterator<char>());
+
+    bool parsingSuccess = inpReader.parse(inpString, inpRoot);
+    if (!parsingSuccess){
+        printf("Failed to parse inp.json\n");
+        // There must be a way to keep from converting from string to char*
+        // Maybe by making inpString a char*
+        printf("%s", inpReader.getFormattedErrorMessages().c_str());
+        return -1;
+    }
+    else
+        printf("inp.dat parsed successfully\n");
+
+    // begin detailed parameter extraction
+
+    Json::Value coreParams = inpRoot.get("core", Json::nullValue);
+
+    // load core simulation parameters
+    if (coreParams == Json::nullValue){
+        printf("ERROR: Cannot load core simulation parameters\nExiting");
+        return -1;
+    }
+    else {
+        mass = coreParams["particle_mass"].asFloat();
+        repulsion_range = coreParams["repulsion_range"].asFloat();
+        attraction_range = coreParams["attraction_range"].asFloat();
+        repulsion_strength = coreParams["repulsion_strength"].asFloat();
+        attraction_strength = coreParams["attraction_strength"].asFloat();
+        Youngs_mod = coreParams["Youngs_mod"].asFloat();
+        viscotic_damping = coreParams["viscotic_damping"].asFloat();
+        internal_damping = coreParams["internal_damping"].asFloat();
+        divVol = coreParams["division_Vol"].asFloat();
+        ranZOffset = coreParams["random_z_offset?"].asInt();
+        zOffset = coreParams["z_offset"].asFloat();
+        Time_steps = coreParams["div_time_steps"].asFloat();
+        delta_t = coreParams["time_interval"].asFloat();
+        Restart = coreParams["Restart"].asInt();
+        trajWriteInt = coreParams["trajWriteInt"].asInt();
+        equiStepCount = coreParams["non_div_time_steps"].asInt();
+
+        std::strcpy (trajFileName, coreParams["trajFileName"].asString().c_str());
+
+        maxPressure = coreParams["maxPressure"].asFloat();
+    }
+
+    Json::Value countParams = inpRoot.get("counting", Json::nullValue);
+    if (countParams == Json::nullValue){
+        // countCells = FALSE;
+        printf("ERROR: Cannot load counting parameters\nExiting");
+        return -1;
+    }
+    else {
+        // countCells = countParams["countcells"].asBool();
+        //mitIndFileName = countParams["mit-index_file_name"].asString.c_str();
+        countOnlyInternal = countParams["count_only_internal_cells?"].asBool();
+        radFrac = countParams["radius_cutoff"].asFloat();
+        overWriteMitInd = countParams["overwrite_mit_ind_file?"].asBool();
+        newCellCountInt = countParams["cell_count_int"].asInt();
+    }
+
+    Json::Value popParams = inpRoot.get("population", Json::nullValue);
+    if (popParams == Json::nullValue){
+        printf("ERROR: Cannot load population parameters\nExiting");
+        return -1;
+    }
+    else{
+        doPopModel = popParams["doPopModel"].asInt();
+        totalFood = popParams["totalFood"].asFloat();
+        cellFoodCons = popParams["regular_consumption"].asFloat();
+        cellFoodConsDiv = popParams["division_consumption"].asFloat();
+        cellFoodRel = popParams["death_release_food"].asFloat();
+        cellLifeTime = popParams["cellLifeTime"].asInt();
+    }
+
+    Json::Value wallParams = inpRoot.get("walls", Json::nullValue);
+
+    if (wallParams == Json::nullValue){
+        printf("ERROR: Cannot load wall parameters\nExiting");
+        return -1;
+    }
+    else{
+        useWalls = wallParams["useWalls"].asInt();
+        std::strcpy(perpAxis, wallParams["perpAxis"].asString().c_str());
+        dAxis = wallParams["dAxis"].asFloat();
+        wallLen = wallParams["wallLen"].asFloat();
+        wallWidth = wallParams["wallWidth"].asFloat();
+        threshDist = wallParams["threshDist"].asFloat();
+    }
+
+
+    if (ranZOffset == 0)
+        zOffset = 0.0;
+
+
+    printf("      mass                = %f\n",mass);
+    printf("      spring equilibrium  = %f\n",R0);
+    printf("      repulsion range     = %f\n",repulsion_range);
+    printf("      attraction range    = %f\n",attraction_range);
+    printf("      repulsion strength  = %f\n",repulsion_strength);
+    printf("      attraction strength = %f\n",attraction_strength);
+    printf("      Youngs modulus      = %f\n",Youngs_mod);
+    printf("      viscotic damping    = %f\n",viscotic_damping);
+    printf("      internal damping    = %f\n",internal_damping);
+    printf("      division volume     = %f\n",divVol);
+    printf("      ran_z_offset?       = %d\n", ranZOffset);
+    printf("      z_offset            = %f\n", zOffset);
+    printf("      Time steps          = %d\n",Time_steps);
+    printf("      delta t             = %f\n",delta_t);
+    printf("      Restart             = %d\n",Restart);
+    printf("      trajWriteInterval   = %d\n",trajWriteInt);
+    printf("      countOnlyInternal   = %d\n", countOnlyInternal);
+    printf("      radFrac             = %f\n", radFrac);
+    printf("      newCellCountInt     = %d\n", newCellCountInt);
+    printf("      equiStepCount       = %d\n", equiStepCount);
+    printf("      trajFileName        = %s\n", trajFileName);
+    printf("      doPopModel          = %d\n", doPopModel);
+    printf("      totalFood           = %f\n", totalFood);
+    printf("      cellFoodCons        = %f\n", cellFoodCons);
+    printf("      cellFoodConsDiv     = %f\n", cellFoodConsDiv);
+    printf("      cellFoodRel         = %f\n", cellFoodRel);
+    printf("      useWalls            = %d\n", useWalls);
+    printf("      perpAxis            = %s\n", perpAxis);
+    printf("      dAxis               = %f\n", dAxis);
+    printf("      wallLen             = %f\n", wallLen);
+    printf("      wallWidth           = %f\n", wallWidth);
+    printf("      thresDist           = %f\n", threshDist);
+
+
+    if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
+        printf("radFrac not in [0.4, 0.8] setting to 1.\n");
+        countOnlyInternal = 0;
+    }
+
+    if (trajWriteInt == 0){
+        trajWriteInt = 1;
+    }
+
+    if (newCellCountInt == 0){
+        newCellCountInt = 1;
+    }
+
+    if ( trajWriteInt > Time_steps){
+        printf ("Trajectory write interval is too large\n");
+        return -1;
+    }
+
+    if (Time_steps%trajWriteInt != 0){
+        printf ("Invalid trajectory write interval. Time steps must be divisible by it. \n");
+        return -1;
+    }
+
+    if (newCellCountInt > Time_steps){
+        printf("New cell counting interval is too large. \n");
+        return -1;
+    }
+
+    if (equiStepCount <= 0){
+        equiStepCount = 0;
+    }
+
+    if (doPopModel != 1){ // This ensures that Pop modelling is only done if this
+        // var is only 1
+        doPopModel = 0;
+    }
+
+    if (maxPressure < 0){
+        printf("Invalid maximum pressure value of %f\n", maxPressure);
+        printf("Disabling population modelling...");
+        doPopModel = 0;
+    }
+
+
+    /*
+
+    // The if statement below is not a very good one
+    // think about rewriting.
+    if (totalFood < 0.0
+    || No_of_threads*100 < totalFood
+    || cellFoodCons < 0.0
+    || cellFoodCons*No_of_threads*10 < totalFood
+    || cellFoodConsDiv < 0.0
+    || cellFoodConsDiv*No_of_threads*10 < totalFood
+    ){
+    doPopModel = 0;
+    printf("Food parameters invalid. Skipping population modelling.\n");
+    }
+    */
+
+
+
+    return 0;
+}
+
 
 int read_global_params(void)
 {
