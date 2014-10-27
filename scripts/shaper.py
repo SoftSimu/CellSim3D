@@ -91,9 +91,9 @@ def reverse_readline(filename, buf_size=8192):
 
 
 tX = []; tY = []; tZ = [];
+tCMx = 0; tCMy = 0; tCMz = 0
 for line in reverse_readline(trajPath):
     if "Step" in line:
-        print line
         break
     if line == '':
         continue
@@ -104,6 +104,8 @@ for line in reverse_readline(trajPath):
     y = float(line[1])
     z = float(line[2])
 
+    tCMx += x; tCMy += y; tCMz += z;
+
     tX.append(x)
     tY.append(y)
     tZ.append(z)
@@ -112,9 +114,15 @@ for line in reverse_readline(trajPath):
 tX = np.array(tX)
 tY = np.array(tY)
 tZ = np.array(tZ)
+num = tX.size
+tCMx = tCMx/num
+tCMy = tCMy/num
+tCMz = tCMz/num
 
-xMax = tX.max(); yMax = tY.max(); zMax = tZ.max();
-xMin = tX.min(); yMin = tY.min(); zMin = tZ.min();
+xMax = tX.max() - tCMx; yMax = tY.max() - tCMy; zMax = tZ.max() - tCMz;
+xMin = tX.min() - tCMx; yMin = tY.min() - tCMy; zMin = tZ.min() - tCMz;
+
+maxes = {"X":[xMax, xMin], "Y": [yMax, yMin], "Z":[zMax, zMin]}
 
 
 def Normalize (X, Y, Z, CMx, CMy, CMz):
@@ -177,8 +185,8 @@ def CrossSections(newX, newY, newZ, Xstr, Ystr, Zstr, ts, inc=0.1, thresh=0.1):
     e.g. MakeImages(X, Z, Y, "X", "Z", "Y", ts) will generate XZ planes moving
     along the Y axis.
     """
-    xMin, xMax = newX.min(), newX.max()
-    yMin, yMax = newY.min(), newY.max()
+    xMax, xMin = maxes[Xstr]
+    yMax, yMin = maxes[Ystr]
     c = 0
     print "Making %s%s cross-sections at %d..." % (Xstr, Ystr, ts)
     for dz in np.arange(newZ.min(), newZ.max(), inc):
