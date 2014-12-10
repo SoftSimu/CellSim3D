@@ -5,34 +5,41 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 
-if len(sys.argv) < 3:
-    print "Usage: pop.py {Path to trajectory.xyz} {Path to output}"
-    print "Don't put extension in output path."
-    print "e.g."
-    print "pop.py /path/to/trajec.xyz /path/to/image"
-    sys.exit(0)
-
+files = sys.argv[2:]
 
 pop=[]
+P = [65, 70, 75, 80, 85]
+c = 0
+hs=[]
 
-with open(sys.argv[1], 'r') as file:
-    line = file.readline()
-    while ( line != ""):
-        #print line
-        nAtoms = int(line.strip())
-        nCells = nAtoms/192
-        step = file.readline().strip()[6:]
-        print "nCells = %d Step = %s" % (nCells, step)
-        pop.append(nCells)
-        for n in xrange(nAtoms): # skip coords + Step line
+for filea in files:
+    with open(filea, 'r') as file:
+        while True:
+            #print line
             line = file.readline()
-        line = file.readline()
+
+            if line == "":
+                break
+
+            nAtoms = int(line.strip())
+            nCells = nAtoms/192
+            pop.append(nCells)
+            line = file.readline()
+            for n in xrange(nAtoms): # skip coords + Step line
+                line = file.readline()
 
 
-x=np.array(range(len(pop)))
-y=np.array(pop);
+    x=np.array(range(len(pop)))
+    y=np.array(pop);
+    h, = plt.plot(x,y, '.', label="P_max = %d" % P[c])
+    hs.append(h)
+    c+=1
+    pop = []
 
-plt.plot(x, y, 'k.')
+
 plt.ylabel('Population')
 plt.xlabel('t')
-plt.savefig(sys.argv[2] + '.png')
+plt.legend(loc=2, prop={'size':10})
+
+
+plt.savefig(sys.argv[1] + '.png')
