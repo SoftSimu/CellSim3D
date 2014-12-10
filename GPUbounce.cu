@@ -1,3 +1,4 @@
+#define FORCE_DEBUG
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -429,21 +430,21 @@ int main(int argc, char *argv[])
           // we have unlimited supply of food for sustenance, but extra
           // food is needed for division.
           /*
-          if (totalFood >= cellFoodConsDiv)
+          ifp (totalFood >= cellFoodConsDiv)
               Pressure = maxPressure * ( 1.0 - (1.0/totalFood));
           else
               Pressure = 0;
           */
 
-          PSS = 64.0;
+          Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
       }
       else {
-          if ( step < 8000 ) PSS=80.0*Temperature;
+          if ( step < 8000 ) PSS=0;
           Pressure = PSS;
           Temperature += delta_t;
       }
 
-      if ( (step/1000)*1000 == step )
+      if ( (step-1)%1000 == 0 && step!=1)
       {
           printf("   time %-8d %d C180s Pressure = %f\n",step,No_of_C180s, Pressure);
       }
@@ -471,6 +472,9 @@ int main(int argc, char *argv[])
                                                      wallWStart, wallWEnd,
                                                      threshDist);
       } else {
+#ifdef FORCE_DEBUG
+          printf("time %d  pressure = %f\n", step, Pressure);
+#endif
           propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                      d_CMx, d_CMy, d_CMz,
@@ -483,8 +487,9 @@ int main(int argc, char *argv[])
       }
 
       if (step > Time_steps+1){
-        Pressure = 0;
+          Pressure = 50.0;
       }
+
       else {
 
         // ------------------------------ Begin Cell Division ------------------------------------------------
@@ -496,6 +501,14 @@ int main(int argc, char *argv[])
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol);
+
+#ifdef FORCE_DEBUG
+        cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+        for (int i = 0; i < No_of_C180s; i++){
+            printf ("Cell: %d, volume= %f\n", i+1, volume[i]);
+        }
+#endif
+
         count_and_get_div();
 
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
@@ -970,7 +983,7 @@ int read_json_params(const char* inpFile){
         newCellCountInt = 1;
     }
 
-    if ( trajWriteInt > Time_steps){
+    if ( trajWriteInt > Time_steps + equiStepCount){
         printf ("Trajectory write interval is too large\n");
         return -1;
     }
@@ -1199,6 +1212,20 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            int *d_NoofNNlist, int *d_NNlist, float DL
                            )
 {
+#ifdef FORCE_DEBUG
+        __shared__ float FX_sum;
+        __shared__ float FY_sum;
+        __shared__ float FZ_sum;
+        if (threadIdx.x == 0){
+            FX_sum = 0;
+            FY_sum = 0;
+            FZ_sum = 0;
+        }
+
+        __syncthreads();
+
+#endif
+
     int rank, atom, nn_rank, nn_atom;
     int N1, N2, N3;
     int NooflocalNN;
@@ -1255,8 +1282,12 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         float Y = d_Y[rank*192+atom];
         float Z = d_Z[rank*192+atom];
 
+
         //  Spring Force calculation within cell
         //  go through three nearest neighbors
+
+        float damp_const = internal_damping/delta_t;
+        float bondX, bondY, bondZ; // bond vector
         for ( int i = 0; i < 3 ; ++i )
         {
             N1 = d_C180_nn[i*192+atom];
@@ -1265,14 +1296,34 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
-            FX += +Youngs_mod*(R-R0)/R0*deltaX/R+Pressure*NX;
-            FY += +Youngs_mod*(R-R0)/R0*deltaY/R+Pressure*NY;
-            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R+Pressure*NZ;
-
-            FX += -(internal_damping/delta_t)*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
-            FY += -(internal_damping/delta_t)*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
-            FZ += -(internal_damping/delta_t)*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+            // spring forces
+            FX += +Youngs_mod*(R-R0)/R0*deltaX/R;
+            FY += +Youngs_mod*(R-R0)/R0*deltaY/R;
+            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R;
+            // pressure forces
+            FX += Pressure*NX;
+            FY += Pressure*NY;
+            FZ += Pressure*NZ;
+            // internal damping
+            FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
+            FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
+            FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
         }
+
+#ifdef FORCE_DEBUG
+
+        atomicAdd(&FX_sum, FX);
+        __syncthreads();
+        atomicAdd(&FY_sum, FY);
+        __syncthreads();
+        atomicAdd(&FZ_sum, FZ);
+        __syncthreads();
+        if (threadIdx.x == 0){
+            printf("Spring, pressure, internal\n");
+            printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
+        }
+
+#endif
 
 
         NooflocalNN = 0;
@@ -1348,7 +1399,37 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
         }
 
+#ifdef FORCE_DEBUG
 
+        if (threadIdx.x == 0){
+            FX_sum = 0;
+            FY_sum = 0;
+            FZ_sum = 0;
+        }
+        __syncthreads();
+
+        atomicAdd(&FX_sum, FX);
+        __syncthreads();
+        atomicAdd(&FY_sum, FY);
+        __syncthreads();
+        atomicAdd(&FZ_sum, FZ);
+        __syncthreads();
+        if (threadIdx.x == 0){
+            printf("neighbours\n");
+            printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
+        }
+
+        // add friction
+
+        float velX = d_X[rank*192+atom] - d_XM[rank*192+atom];
+        float velY = d_Y[rank*192+atom] - d_YM[rank*192+atom];
+        float velZ = d_Z[rank*192+atom] - d_ZM[rank*192+atom];
+
+        FX += -10 * velX;
+        FY += -10 * velY;
+        FZ += -10 * velZ;
+
+#endif
 
         // time propagation
 
@@ -1360,11 +1441,11 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
         d_ZP[rank*192+atom] =
             1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+    ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+
 
 
     }
-
 
 
 
@@ -1594,9 +1675,9 @@ void write_traj(int t_step, FILE* trajfile)
   fprintf(trajfile, "Step: %d\n", t_step);
 
   for (int p = 0; p < No_of_C180s*192; p++)
-	{
-	  fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[p], Y[p], Z[p]);
-	}
+  {
+      fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[p], Y[p], Z[p]);
+  }
 }
 
 
