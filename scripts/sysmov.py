@@ -1,6 +1,7 @@
 #!/usr/bin/ipython
 
 import matplotlib
+
 matplotlib.use('Agg')
 
 
@@ -8,6 +9,7 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
 
 trajFileName = sys.argv[1]
 
@@ -23,7 +25,7 @@ line = 0
 CoMxt = []
 CoMyt = []
 CoMzt = []
-
+c = 0
 with open(trajFileName, "r") as trajFile:
     line = trajFile.readline()
     while(line != ""):
@@ -31,7 +33,7 @@ with open(trajFileName, "r") as trajFile:
         nAtoms = int(line)
         step = trajFile.readline().strip()[6:]
 
-        print "Processing %s ..." % msg
+        print "Processing %s ..." % step
 
         for atom in xrange(nAtoms):
             line = trajFile.readline()
@@ -41,17 +43,20 @@ with open(trajFileName, "r") as trajFile:
             CoMy += float(line[1])
             CoMz += float(line[2])
 
-        CoMxt.append(CoMx/nAtoms)
-        CoMyt.append(CoMy/nAtoms)
-        CoMzt.append(CoMz/nAtoms)
-        
+        CoMx = CoMx / nAtoms
+        CoMy = CoMy / nAtoms
+        CoMz = CoMz / nAtoms
+        CoMxt.append(CoMx)
+        CoMyt.append(CoMy)
+        CoMzt.append(CoMz)
+
         CoMx = 0.0
         CoMy = 0.0
-        CoMz = 0.0 
+        CoMz = 0.0
 
         line = trajFile.readline()
 
-        
+
 plt.subplot(2, 2, 1)
 plt.plot(CoMxt, CoMyt, '.')
 plt.xlabel("X")
@@ -69,5 +74,48 @@ plt.ylabel("Z")
 
 plt.tight_layout()
 plt.savefig("COM.png")
+plt.clf()
+
+CoMxt = np.array(CoMxt)
+CoMyt = np.array(CoMyt)
+CoMzt = np.array(CoMzt)
 
 
+fig = plt.figure()
+
+for i in range(CoMxt.size):
+
+    ax = fig.add_subplot(1, 1, 1, projection='3d')
+
+    ax.scatter(CoMxt[i], CoMyt[i], CoMzt[i], '.')
+
+    ax.set_xlim3d([np.floor(CoMxt.min()), np.ceil(CoMxt.max())])
+    ax.set_ylim3d([np.floor(CoMyt.min()), np.ceil(CoMyt.max())])
+    ax.set_zlim([CoMzt.min(), CoMzt.max()])
+    plt.savefig("testing/3d%d.png" % i)
+    plt.clf()
+
+    plt.plot(CoMxt[i], CoMyt[i], '.')
+    plt.ylim([CoMyt.min(), CoMyt.max()])
+    plt.xlim([CoMxt.min(), CoMxt.max()])
+    plt.savefig("testing/XY%d.png" % i)
+    plt.clf()
+
+    plt.plot(CoMxt[i], CoMzt[i], '.')
+    plt.xlim([CoMxt.min(), CoMxt.max()])
+    plt.ylim([CoMzt.min(), CoMzt.max()])
+    plt.savefig("testing/XZ%d.png" % i)
+    plt.clf()
+
+    plt.plot(CoMyt[i], CoMzt[i], '.')
+    plt.xlim([CoMyt.min(), CoMyt.max()])
+    plt.ylim([CoMzt.min(), CoMzt.max()])
+    plt.savefig("testing/YZ%d.png" % i)
+    plt.clf()
+
+#plt.plot(CoMx, CoMz, '.')
+#plt.savefig("testing/ZX%d.png" % c)
+#plt.clf()
+#plt.plot(CoMy, CoMz, '.')
+#plt.savefig("testing/ZY%d.png" % c)
+#plt.clf()

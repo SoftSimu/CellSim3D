@@ -20,23 +20,19 @@ step  = 0
 
 with open(trajFileName, "r") as trajFile:
     line = trajFile.readline()
-    
+
     while (line != ""):
         line = line.strip
         nAtoms = int(line)
         line = trajFile.readline().strip()
         step = int(line[6:])
         print "Processing step no.: %d" % step
-        
-        if nAtoms < cellNo * 192:            
+
+        if nAtoms < cellNo * 192:
             for i in xrange(nAtoms):
-                next(trajFile)                
-        else:            
+                next(trajFile)
+        else:
             for i in xrange(cellNo*192):
                 next(trajFile)
-                
+
             for i in xrange(192):
-                
-                
-                
-                

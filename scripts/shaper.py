@@ -3,7 +3,7 @@
 
 # This Script will do shape analysis on the trajectory
 # and produce the polygons of the different cells.
-
+import argparse
 import sys
 import matplotlib
 import os
@@ -15,32 +15,45 @@ from math import ceil
 from time import sleep
 
 
-minNumArgs = 2
-
-errorMessage = """
-Usage: shaper input timeStep1 timeStep2 ...
-
-input:      Path to the trajectory output by the simulation.
-output:     Path to save a xyz file of the time step requested for viewing in vmd,
-            etc.
-timeStep1, timeStep2, ...:  list of time stemps, use any number of them you like
-                            Unknown behaviour if greater than simulation time.
+desc ="""
+Creates graphs of an arbitrary number of timestamps relating to cell shape.
+This includes voronoi diagrams, and cross-sections.
 """
 
-if len(sys.argv) < minNumArgs:
-    print errorMessage
-    sys.exit(1)
+parser = argparse.ArgumentParser(description=desc)
+parser.add_argument("trajPath", nargs=1 ,
+                     help="Path to the trajectory file.")
+parser.add_argument("timeStamps", nargs='+', type=int,
+                     help="Space separated timestamps")
 
+args = parser.parse_args()
+#print (args.trajPath)
 
-trajPath = os.path.abspath(sys.argv[1])
+#minNumArgs = 2
+#
+#errorMessage = """
+#Usage: shaper input timeStep1 timeStep2 ...
+#
+#input:      Path to the trajectory output by the simulation.
+#output:     Path to save a xyz file of the time step requested for viewing in vmd,
+#            etc.
+#timeStep1, timeStep2, ...:  list of time stemps, use any number of them you like
+#                            Unknown behaviour if greater than simulation time.
+#"""
+#
+#if len(sys.argv) < minNumArgs:
+#    print errorMessage
+#    sys.exit(1)
+#
+#
+trajPath = args.trajPath[0]
 storPath, fileName = os.path.split(trajPath)
 fileName = os.path.splitext(fileName)[0]
 storPath += "/" + fileName + '/cross_sections/'
-timeStamps = sys.argv[2:]
 doneSeek = False
 step = 0
 
-timeStamps = [int(ts) for ts in timeStamps]
+timeStamps = [int(ts) for ts in args.timeStamps]
 timeStamps.sort()
 
 # Make directory to store images
