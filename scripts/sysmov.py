@@ -27,7 +27,7 @@ parser.add_argument("--fps",
 
 parser.add_argument("--s",
                     help="Optionally set the scaling factor of the axes in the output video",
-                    default=2,
+                    default=1,
                     type=float)
 
 parser.add_argument("--d",
@@ -37,6 +37,10 @@ parser.add_argument("--d",
 parser.add_argument("--out",
                     help="Output file name and format",
                     default="3d_CoM.mp4",
+                    type=str)
+parser.add_argument("--res",
+                    help="16:9 resolution. E.g 720p for 1280x720, 1080p for 1920:1080",
+                    default="1080p",
                     type=str)
 
 args = parser.parse_args()
