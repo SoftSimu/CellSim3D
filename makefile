@@ -1,4 +1,4 @@
-compiler = /usr/local/cuda/bin/nvcc
+compiler = $(shell which nvcc)
 flags = -arch=sm_30 -Xptxas="-v" -c -O3 -g -G -I inc
 
 objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o
