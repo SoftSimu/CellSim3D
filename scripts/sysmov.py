@@ -13,6 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from subprocess import call
 from moviepy.video.io.bindings import mplfig_to_npimage
 import moviepy.editor as mpy
+import matplotlib.animation
 
 desc="""
 Creates snapshots of the movement  of the center of mass of the system of cells.
@@ -146,54 +147,39 @@ tPerFrame = 1.0/fps
 dur = (nFrames-1)*tPerFrame
 s = args.s
 
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+xMax = s*max(np.ceil(max(max(CoMxt_cell))),
+             abs(np.floor(min(min(CoMxt_cell)))))
+xMin = -1 * xMax
+
+yMax = s*max(np.ceil(max(max(CoMyt_cell))),
+             abs(np.floor(min(min(CoMyt_cell)))))
+yMin = -1 * yMax
+
+zMax = s*max(np.ceil(max(max(CoMzt_cell))),
+             abs(np.floor(min(min(CoMzt_cell)))))
+zMin = -1 * zMax
+
+ax.set_xlim3d([xMax, xMin])
+ax.set_ylim3d([yMax, yMin])
+ax.set_zlim3d([zMax, zMin])
+
 def make3DFrame(i):
     i = np.floor(i/tPerFrame)
-    ax = fig.add_subplot(1, 1, 1, projection='3d')
-    ax.scatter(CoMxt[i], CoMyt[i], CoMzt[i], '.')
 
-    xMax = s*max(np.ceil(max(max(CoMxt_cell))),
-                 abs(np.floor(min(min(CoMxt_cell)))))
-    xMin = -1 * xMax
-
-    yMax = s*max(np.ceil(max(max(CoMyt_cell))),
-                 abs(np.floor(min(min(CoMyt_cell)))))
-    yMin = -1 * yMax
-
-    zMax = s*max(np.ceil(max(max(CoMzt_cell))),
-                 abs(np.floor(min(min(CoMzt_cell)))))
-    zMin = -1 * zMax
-
-    ax.set_xlim3d([xMax, xMin])
-    ax.set_ylim3d([yMax, yMin])
-    ax.set_zlim3d([zMax, zMin])
-
-
+    ax.scatter3D(CoMxt[i], CoMyt[i], CoMzt[i], '.')
     return mplfig_to_npimage(fig)
 
 def make3DFrameWithCells(i):
     i = int(np.floor(i/tPerFrame))
-    ax = fig.add_subplot(1, 1, 1, projection='3d')
-
-    ax.scatter(CoMxt[i], CoMyt[i], CoMzt[i], '.')
-    ax.scatter(CoMxt_cell[i], CoMyt_cell[i], CoMzt_cell[i], c='red', alpha=0.5,
+    ax.cla()
+    ax.scatter3D(CoMxt[i], CoMyt[i], CoMzt[i], '.')
+    ax.scatter3D(CoMxt_cell[i], CoMyt_cell[i], CoMzt_cell[i], c='red', alpha=0.5,
                marker='.')
-
-    xMax = s*max(np.ceil(max(max(CoMxt_cell))),
-                 abs(np.floor(min(min(CoMxt_cell)))))
-    xMin = -1 * xMax
-
-    yMax = s*max(np.ceil(max(max(CoMyt_cell))),
-                 abs(np.floor(min(min(CoMyt_cell)))))
-    yMin = -1 * yMax
-
-    zMax = s*max(np.ceil(max(max(CoMzt_cell))),
-                 abs(np.floor(min(min(CoMzt_cell)))))
-    zMin = -1 * zMax
 
     ax.set_xlim3d([xMax, xMin])
     ax.set_ylim3d([yMax, yMin])
     ax.set_zlim3d([zMax, zMin])
-
     return mplfig_to_npimage(fig)
 
 
