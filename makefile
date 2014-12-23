@@ -1,28 +1,36 @@
 compiler = $(shell which nvcc)
-flags = -arch=sm_30 -Xptxas="-v" -c -O3 -g -G -I inc
+debug = -g -G
+arch = -arch=sm_30
+oflags = $(arch) -Xptxas="-v" -c -O3 -I inc
 
 objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o
 
+eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm
+
+debug: oflags += $(debug)
+debug: eflags += $(debug)
+debug: CellDiv
+
 CellDiv: $(objects)
-	$(compiler) -O3 -arch=sm_30 -o "CellDiv" $(objects) -lm
+	$(compiler) $(eflags)
 
 GPUbounce.o: GPUbounce.cu postscript.h
-	$(compiler) $(flags) GPUbounce.cu
+	$(compiler) $(oflags) GPUbounce.cu
 
 postscriptinit.o: postscriptinit.cu postscript.h
-	$(compiler) $(flags) postscriptinit.cu
+	$(compiler) $(oflags) postscriptinit.cu
 
 propagatebound.o: propagatebound.cu postscript.h
-	$(compiler) $(flags) propagatebound.cu
+	$(compiler) $(oflags) propagatebound.cu
 
 centermass.o: centermass.cu postscript.h
-	$(compiler) $(flags) centermass.cu
+	$(compiler) $(oflags) centermass.cu
 
 volume.o: volume.cu postscript.h
-	$(compiler) $(flags) volume.cu
+	$(compiler) $(oflags) volume.cu
 
 jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
-	$(compiler) $(flags) src/utils/jsoncpp.cpp
+	$(compiler) $(oflags) src/utils/jsoncpp.cpp
 
 .PHONY: clean
 clean:
