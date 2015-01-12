@@ -1,7 +1,7 @@
 compiler = $(shell which nvcc)
 debug = -g -G
 arch = -arch=sm_30
-oflags = $(arch) -Xptxas="-v" -c -O3 -I inc
+oflags = $(arch) -Xptxas="-v" -c -O3 -I inc -I /home/pmadhika/cuda-samples/common/inc
 
 objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o
 
