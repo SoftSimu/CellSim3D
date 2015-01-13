@@ -1,4 +1,4 @@
-#define FORCE_DEBUG
+//#define FORCE_DEBUG
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -11,14 +11,14 @@
 #include <cstring>
 
 #include <cuda.h>
-
+//#include "helper_cuda.h"
 #include "postscript.h"
 #include "marsaglia.h"
 
 #include "inc/json/json.h"
 
 
-#define MaxNoofC180s 20000
+#define MaxNoofC180s 250000
 
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
@@ -109,13 +109,7 @@ float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
 float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
 
 // host: minimal bounding box for fullerene
-float *bounding_xyz;     // minx = bounding_xyz[fullerene_no*6+0]
-// maxx = bounding_xyz[fullerene_no*6+1]
-// miny = bounding_xyz[fullerene_no*6+2]
-// maxy = bounding_xyz[fullerene_no*6+3]
-// minz = bounding_xyz[fullerene_no*6+4]
-// maxz = bounding_xyz[fullerene_no*6+5]
-
+float *bounding_xyz;     
 float *d_bounding_xyz;   // device:  bounding_xyz
 
 // global minimum and maximum of x and y, preprocessfirst
@@ -440,14 +434,15 @@ int main(int argc, char *argv[])
           Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
       }
       else {
-          if ( step < 8000 ) PSS=80.0 * Temperature;
-          //if ( step < 8000 ) PSS=0;
-          if ( step > Time_steps + 1) PSS = 0; 
-          Pressure = PSS;
-          Temperature += delta_t;
+          if ( step < 8000 )
+              PSS=80.0 * Temperature;
+          else if ( step > Time_steps + 1) {
+              PSS -= minPressure/50;
+          }
       }
-
-      if ( (step-1)%1000 == 0 && step!=1)
+      Pressure = PSS;
+      Temperature += delta_t;
+      if ( (step)%1000 == 0)
       {
           printf("   time %-8d %d C180s Pressure = %f\n",step,No_of_C180s, Pressure);
       }
@@ -479,27 +474,22 @@ int main(int argc, char *argv[])
           printf("time %d  pressure = %f\n", step, Pressure);
 #endif
           propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
-                                                     d_CMx, d_CMy, d_CMz,
-                                                     R0, Pressure, Youngs_mod ,
-                                                     internal_damping, delta_t, d_bounding_xyz,
-                                                     attraction_strength, attraction_range,
-                                                     repulsion_strength, repulsion_range,
-                                                     viscotic_damping, mass,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+                                                                     d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
+                                                                     d_CMx, d_CMy, d_CMz,
+                                                                     R0, Pressure, Youngs_mod ,
+                                                                     internal_damping, delta_t, d_bounding_xyz,
+                                                                     attraction_strength, attraction_range,
+                                                                     repulsion_strength, repulsion_range,
+                                                                     viscotic_damping, mass,
+                                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
       }
-
-      if (step > Time_steps+1){
-          Pressure = minPressure; 
-      }
-
-      else {
-
+              
+      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                        d_XP, d_YP, d_ZP,
+                                        d_CMx, d_CMy, d_CMz);
+      if (step <= Time_steps){
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
-        CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                          d_XP, d_YP, d_ZP,
-                                          d_CMx, d_CMy, d_CMz);
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
@@ -584,6 +574,7 @@ int main(int argc, char *argv[])
       Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
       Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
       Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
+      
       makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
                                              attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
 
@@ -608,10 +599,10 @@ int main(int argc, char *argv[])
 
 
   // Write postscript file
-  cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-  cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-  cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-  PSNET(No_of_C180s*270,Side_length,L1,X,Y,Z,CCI);
+  //cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+  //cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+  //cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+  //PSNET(No_of_C180s*270,Side_length,L1,X,Y,Z,CCI);
 
   printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
 
@@ -1233,7 +1224,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     int rank, atom, nn_rank, nn_atom;
     int N1, N2, N3;
     int NooflocalNN;
-    int localNNs[8];
+    int localNNs[10];
     float deltaX, deltaY, deltaZ;
     float A1, A2, A3;
     float B1, B2, B3;
@@ -1388,7 +1379,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             if ( nn_rank == rank ) continue;
 
             deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
-            deltaX += (d_bounding_xyz[nn_rank*6+0]-currPosX>0.0f)*(d_bounding_xyz[nn_rank*6+0]-currPosX);
+            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
 
             deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
             deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
@@ -1401,7 +1392,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             
             ++NooflocalNN;
             
-            if ( NooflocalNN > 8 ){
+            if ( NooflocalNN > 10 ){
                 printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
                 continue;
             }
@@ -1448,7 +1439,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                     if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
                          deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                          deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
-                        printf("fullerene %d inside %d?\n",rank, nn_rank);
+                        //printf("fullerene %d inside %d?\n",rank, nn_rank);
+                        0; 
                 }
 
             }
@@ -1475,17 +1467,19 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
         }
 
+
+
+#endif
+
         // add friction
 
         float velX = (currPosX - oldPosX)/delta_t; 
         float velY = (currPosY - oldPosY)/delta_t;
         float velZ = (currPosZ - oldPosZ)/delta_t;
         
-        //FX += -10 * velX;
-        //FY += -10 * velY;
-        //FZ += -10 * velZ;
-
-#endif
+        FX += -10 * velX;
+        FY += -10 * velY;
+        FZ += -10 * velZ;
 
         // time propagation
         float k1 = 1.0/(1.0 + viscotic_damping * delta_t/(2*mass));
@@ -1502,6 +1496,10 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         d_ZP[rank*192+atom] =
             1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
             ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+
+        //d_XP[rank*192+atom] = 2*d_X[rank*192+atom] - d_XM[rank*192+atom] + (FX/m)*delta_t*delta_t;
+        //d_YP[rank*192+atom] = 2*d_Y[rank*192+atom] - d_YM[rank*192+atom] + (FY/m)*delta_t*delta_t;
+        //d_ZP[rank*192+atom] = 2*d_Z[rank*192+atom] - d_ZM[rank*192+atom] + (FZ/m)*delta_t*delta_t; 
 
         newPosX = (k2 * FX) + 2*currPosX;  
         newPosY = (k2 * FY) + 2*currPosY;
@@ -1542,6 +1540,365 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float wallLStart, float wallLEnd,
                                  float wallWStart, float wallWEnd,
                                  float threshDist)
+{
+#ifdef FORCE_DEBUG
+        __shared__ float FX_sum;
+        __shared__ float FY_sum;
+        __shared__ float FZ_sum;
+        if (threadIdx.x == 0){
+            FX_sum = 0;
+            FY_sum = 0;
+            FZ_sum = 0;
+        }
+
+        __syncthreads();
+
+#endif
+
+    int rank, atom, nn_rank, nn_atom;
+    int N1, N2, N3;
+    int NooflocalNN;
+    int localNNs[10];
+    float deltaX, deltaY, deltaZ;
+    float A1, A2, A3;
+    float B1, B2, B3;
+    float TX, TY, TZ;
+    float NORM, R;
+    float NX, NY, NZ;
+    //float setPress;
+
+    rank = blockIdx.x;
+    atom = threadIdx.x;
+    /*
+    if (atom == 0){ // Only need to do this once per cell
+        if (d_didCellDie[rank] == 0 and there is enough food to propagate ){
+            setPress = Pressure;
+            // Code to kill this thread (stop propagation)
+        }
+        else {
+            0;
+            // Going to add code here to do with cell death later.
+        }
+    }
+    __syncthreads();
+    */
+    int cellOffset = rank*192; 
+    int atomInd = cellOffset + atom;
+
+    float newPosX = 0; 
+    float newPosY = 0;
+    float newPosZ = 0;
+
+    float currPosX = 0;
+    float currPosY = 0;
+    float currPosZ = 0;
+
+    float oldPosX = 0;
+    float oldPosY = 0;
+    float oldPosZ = 0;
+    
+    if ( rank < No_of_C180s && atom < 180 )
+    {
+        N1 = d_C180_nn[  0+atom];
+        N2 = d_C180_nn[192+atom];
+        N3 = d_C180_nn[384+atom];
+        
+        A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
+        A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
+        A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
+        
+        B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
+        B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
+        B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
+        
+        TX = A2*B3-A3*B2;
+        TY = A3*B1-A1*B3;
+        TZ = A1*B2-A2*B1;
+        
+        NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
+        
+        NX = d_C180_sign[atom]*TX/NORM;
+        NY = d_C180_sign[atom]*TY/NORM;
+        NZ = d_C180_sign[atom]*TZ/NORM;
+
+        float X = d_X[rank*192+atom];
+        float Y = d_Y[rank*192+atom];
+        float Z = d_Z[rank*192+atom];
+
+        float FX = 0.0f;
+        float FY = 0.0f;
+        float FZ = 0.0f;
+
+        int nnAtomInd;
+
+        currPosX = d_X[atomInd]; 
+        currPosY = d_Y[atomInd];
+        currPosZ = d_Z[atomInd];
+
+        oldPosX = d_XM[atomInd];
+        oldPosY = d_YM[atomInd];
+        oldPosZ = d_ZM[atomInd];
+        
+        //  Spring Force calculation within cell
+        //  go through three nearest neighbors
+
+        float damp_const = internal_damping/delta_t;
+
+        for ( int i = 0; i < 3 ; ++i ) // Better to open this loop 
+        {
+            N1 = d_C180_nn[i*192+atom];
+            
+            deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
+            deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
+            deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
+            
+            //deltaX = d_X[rank*192 + N1] - currPosX;
+            //deltaY = d_Y[rank*192 + N1] - currPosY;
+            //deltaZ = d_Z[rank*192 + N1] - currPosZ;
+            
+            R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
+
+            // spring forces
+            FX += +Youngs_mod*(R-R0)/R0*deltaX/R;
+            FY += +Youngs_mod*(R-R0)/R0*deltaY/R;
+            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R;
+            
+            // pressure forces
+            FX += Pressure*NX;
+            FY += Pressure*NY;
+            FZ += Pressure*NZ;
+            
+            // internal damping
+            FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
+            FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
+            FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+        }
+
+#ifdef FORCE_DEBUG
+
+        atomicAdd(&FX_sum, FX);
+        __syncthreads();
+        atomicAdd(&FY_sum, FY);
+        __syncthreads();
+        atomicAdd(&FZ_sum, FZ);
+        __syncthreads();
+        if (threadIdx.x == 0){
+            printf("Spring, pressure, internal\n");
+            printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
+        }
+
+#endif
+
+
+        NooflocalNN = 0;
+
+        int startx = (int)((X -Minx)/DL);
+        if ( startx < 0 ) startx = 0;
+        if ( startx >= Xdiv ) startx = Xdiv-1;
+
+        int starty = (int)((Y - Miny)/DL);
+        if ( starty < 0 ) starty = 0;
+        if ( starty >= Ydiv ) starty = Ydiv-1;
+
+        int startz = (int)((Z - Minz)/DL);
+        if ( startz < 0 ) startz = 0;
+        if ( startz >= Zdiv ) startz = Zdiv-1;
+
+        int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
+
+        // interfullerene attraction and repulsion
+        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
+        {
+            nn_rank = d_NNlist[32*index+nn_rank1-1];
+            if ( nn_rank == rank ) continue;
+
+            deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
+            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
+
+            deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
+            deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+
+            deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
+            deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range )
+                continue;
+            
+            ++NooflocalNN;
+            
+            if ( NooflocalNN > 10 ){
+                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                continue;
+            }
+            
+            localNNs[NooflocalNN-1] = nn_rank;
+        }
+
+        for ( int i = 0; i < NooflocalNN; ++i )
+        {
+            nn_rank =localNNs[i];
+            nnAtomInd = nn_rank*192;
+            
+            for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            {
+                nnAtomInd += nn_atom;
+                
+                deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
+                deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
+                deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
+                
+                //deltaX = currPosX - d_X[nnAtomInd]; 
+                //deltaY = currPosY - d_Y[nnAtomInd]; 
+                //deltaZ = currPosZ - d_Z[nnAtomInd]; 
+
+                R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+                
+                if ( R >= attraction_range*attraction_range )
+                    continue;
+                
+                R = sqrt(R);
+
+                if ( R < attraction_range )
+                {
+                    FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+                    FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+                    FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                }
+                if ( R < repulsion_range )
+                {
+                    FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+                    FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+                    FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                    
+                    if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
+                         deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
+                         deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
+                        //printf("fullerene %d inside %d?\n",rank, nn_rank);
+                        0; 
+                }
+
+            }
+
+        }
+
+#ifdef FORCE_DEBUG
+
+        if (threadIdx.x == 0){
+            FX_sum = 0;
+            FY_sum = 0;
+            FZ_sum = 0;
+        }
+        __syncthreads();
+
+        atomicAdd(&FX_sum, FX);
+        __syncthreads();
+        atomicAdd(&FY_sum, FY);
+        __syncthreads();
+        atomicAdd(&FZ_sum, FZ);
+        __syncthreads();
+        if (threadIdx.x == 0){
+            printf("neighbours\n");
+            printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
+        }
+
+
+
+#endif
+
+        // add friction
+
+        float velX = (currPosX - oldPosX)/delta_t; 
+        float velY = (currPosY - oldPosY)/delta_t;
+        float velZ = (currPosZ - oldPosZ)/delta_t;
+        
+        //FX += -10 * velX;
+        //FY += -10 * velY;
+        //FZ += -10 * velZ;
+
+        // Wall repulsion
+
+        float wallDist = d_Z[rank*192+atom] - wall1;
+        if (abs(wallDist) <= threshDist /*&&
+            d_X[rank*192+atom] > wallLStart &&
+            d_X[rank*192+atom] < wallLEnd   &&
+            d_Y[rank*192+atom] > wallWStart &&
+            d_Y[rank*192+atom] < wallWEnd */ ){
+            //repulse
+            if (wallDist * FZ < 0)
+                FZ = -FZ;
+
+        }
+
+        wallDist = d_Z[rank*192+atom] - wall2;
+        if (abs(wallDist) <= threshDist /*&&
+                                          d_X[rank*192+atom] > wallLStart &&
+                                          d_X[rank*192+atom] < wallLEnd   &&
+                                          d_Y[rank*192+atom] > wallWStart &&
+                                          d_Y[rank*192+atom] < wallWEnd */ ){
+            //repulse
+            if (wallDist * FZ < 0)
+                FZ = -FZ;
+
+        }
+
+        __syncthreads();
+
+
+        // time propagation
+        float k1 = 1.0/(1.0 + viscotic_damping * delta_t/(2*mass));
+        float k2 = delta_t*delta_t/mass;
+        float k3 = viscotic_damping*delta_t/2*mass - 1.0; 
+            
+
+        d_XP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
+        d_YP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
+        d_ZP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+
+        newPosX = (k2 * FX) + 2*currPosX;  
+        newPosY = (k2 * FY) + 2*currPosY;
+        newPosZ = (k2 * FZ) + 2*currPosZ;
+
+        newPosX += k3 * oldPosX;
+        newPosY += k3 * oldPosY;
+        newPosZ += k3 * oldPosZ;
+
+        newPosX *= k1;
+        newPosY *= k1; 
+        newPosZ *= k1;
+
+        //d_XP[atomInd] = newPosX;
+        //d_YP[atomInd] = newPosY;
+        //d_ZP[atomInd] = newPosZ; 
+
+    }
+
+
+
+}
+
+__global__ void propagation_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+                                   float d_XP[], float d_YP[], float d_ZP[],
+                                   float d_X[],  float d_Y[],  float d_Z[],
+                                   float d_XM[], float d_YM[], float d_ZM[],
+                                   float *d_CMx, float *d_CMy, float *d_CMz,
+                                   float R0, float Pressure, float Youngs_mod ,
+                                   float internal_damping, float delta_t,
+                                   float d_bounding_xyz[],
+                                   float attraction_strength, float attraction_range,
+                                   float repulsion_strength, float repulsion_range,
+                                   float viscotic_damping, float mass,
+                                   float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                                   int *d_NoofNNlist, int *d_NNlist, float DL,
+                                   float wall1, float wall2,
+                                   float wallLStart, float wallLEnd,
+                                   float wallWStart, float wallWEnd,
+                                   float threshDist)
 //float* d_didCellDie)
 {
     int rank, atom, nn_rank, nn_atom;
