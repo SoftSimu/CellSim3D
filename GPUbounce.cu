@@ -72,6 +72,9 @@ char* d_cell_div;
 int num_cell_div;
 int* cell_div_inds;
 
+float *d_pressList; 
+float *pressList; 
+
 
 // Params related to population modelling
 int doPopModel;
@@ -266,6 +269,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    32*1024*1024*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1); 
 
 
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
@@ -283,8 +287,9 @@ int main(int argc, char *argv[])
   Maxz  = (float *)calloc(1024, sizeof(float));
   NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
+  pressList = (float *)calloc(MaxNoofC180s, sizeof(float)); 
 
-  CPUMemory += MaxNoofC180s*6L*sizeof(float);
+  CPUMemory += MaxNoofC180s*7L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(float);
   CPUMemory += 3L*MaxNoofC180s*sizeof(float);
   CPUMemory += 6L*1024L*sizeof(float);
@@ -434,10 +439,11 @@ int main(int argc, char *argv[])
           Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
       }
       else {
-          if ( step < 8000 )
+          if ( PSS < maxPressure && step < 8000)
               PSS=80.0 * Temperature;
-          else if ( step > Time_steps + 1) {
-              PSS -= minPressure/50;
+          else if ((step > Time_steps + 1) && PSS > minPressure)  {
+              PSS -= minPressure * 1e-5;
+              //printf("%f \n", minPressure/50); 
           }
       }
       Pressure = PSS;
@@ -662,6 +668,7 @@ int main(int argc, char *argv[])
   free(ran2);
   free(num_new_cells_per_step);
   free(cell_div_inds);
+  free(pressList); 
 
   fclose(trajfile);
   fclose(MitIndFile);
@@ -963,6 +970,9 @@ int read_json_params(const char* inpFile){
     printf("      wallLen             = %f\n", wallLen);
     printf("      wallWidth           = %f\n", wallWidth);
     printf("      thresDist           = %f\n", threshDist);
+    printf("      maxPressure         = %f\n", maxPressure);
+    printf("      minPressure         = %f\n", minPressure);
+
 
 
     if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
