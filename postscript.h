@@ -49,7 +49,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
                            float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-                           int *d_NoofNNlist, int *d_NNlist, float DL
+                           int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc
                            );
 
 __global__ void bounding_boxes( int No_of_C180s,
@@ -92,7 +92,7 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float repulsion_strength, float repulsion_range,
                                  float viscotic_damping, float mass,
                                  float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-                                 int *d_NoofNNlist, int *d_NNlist, float DL,
+                                 int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                                  float wall1, float wall2,
                                  float wallLStart, float wallLEnd,
                                  float wallWStart, float wallWEnd,
