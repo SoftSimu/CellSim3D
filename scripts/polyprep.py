@@ -21,6 +21,12 @@ b = [list(t) for t in zip(*a)]
 
 storePaths = b[0]
 
+for p in storePaths:
+    try:
+        os.makedirs(p)
+    except:
+        pass
+
 def flatten(trajPath, storePath, name=None):
     if name == None:
         storePath += "/flattened.xvg"
