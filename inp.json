@@ -13,6 +13,7 @@
         "Youngs_mod": 1000.0,
         "viscotic_damping": 2.0,
         "internal_damping": 100.0,
+        "gamma_visc": 10,
         "division_Vol": 2.9,
         "random_z_offset?": 0,
         "z_offset": 0.0, // added to a random value if random_z_offset == 1
