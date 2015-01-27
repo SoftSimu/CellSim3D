@@ -35,6 +35,10 @@ def flatten(trajPath, storePath, name=None):
 
     print "writing to %s" % storePath
 
+    if os.path.isfile(storePath):
+        print "Skipping %s" % storePath
+        return
+
     CMxList = []
     CMyList = []
     #CMzList = []
