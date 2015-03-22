@@ -504,7 +504,7 @@ int main(int argc, char *argv[])
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol);
 
-#ifdef FORCE_DEBUG
+#if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
         cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
         for (int i = 0; i < No_of_C180s; i++){
             printf ("Cell: %d, volume= %f\n", i+1, volume[i]);
