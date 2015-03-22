@@ -346,7 +346,8 @@ int main(int argc, char *argv[])
   cudaMemset(d_NoofNNlist, 0, 1024*1024);
   cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
   //  DL = 3.8f;
-  DL = 2.9f;
+  //DL = 2.9f;
+   DL = divVol; 
   Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
   Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
   Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
