@@ -1,4 +1,5 @@
 //#define FORCE_DEBUG
+#define PRINT_VOLUMES
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
