@@ -113,14 +113,14 @@ int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271])
 
 
 
-int getDevice(void)
+cudaDeviceProp getDevice(void)
 {
 
   int deviceCount;
   cudaGetDeviceCount(&deviceCount);
   int device;
+  cudaDeviceProp deviceProp;
   for (device = 0; device < deviceCount; ++device) {
-       cudaDeviceProp deviceProp;
        cudaGetDeviceProperties(&deviceProp, device);
        printf("   Device %s\n", deviceProp.name);
        printf("      compute capability           =         %d.%d\n", deviceProp.major, deviceProp.minor);
@@ -138,7 +138,7 @@ int getDevice(void)
 //       if(deviceProp.concurrentKernels==1) printf("   yes\n"); else printf("   no\n");
        }
 
-return(0);
+  return deviceProp; 
 }
 
 

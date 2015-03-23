@@ -1,4 +1,6 @@
-int getDevice(void);
+#include<cuda.h>
+#include<stdio.h>
+cudaDeviceProp getDevice(void);
 
 __global__ void  cell_division(int rank,
                                float *d_XP, float *d_YP, float *d_ZP,
@@ -31,7 +33,7 @@ int generate_random(int no_of_ran1_vectors);
 int read_fullerene_nn(void);
 int read_global_params(void);
 int read_json_params(const char* inpFile);
-int PSSETUP(FILE *outfile);
+int PSSETUP(FILE* outfile);
 int PSLINE(float X1, float Y1, float X2, float Y2, FILE *outfile);
 int PSCIRCLE(float X,float Y,FILE *outfile);
 int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271]);
@@ -42,7 +44,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float Pressure, float Youngs_mod ,
+                           float R0, float* d_pressList, float Youngs_mod ,
                            float internal_damping, float delta_t,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
@@ -85,7 +87,7 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float d_X[],  float d_Y[],  float d_Z[],
                                  float d_XM[], float d_YM[], float d_ZM[],
                                  float *d_CMx, float *d_CMy, float *d_CMz,
-                                 float R0, float Pressure, float Youngs_mod ,
+                                 float R0, float* d_pressList, float Youngs_mod ,
                                  float internal_damping, float delta_t,
                                  float d_bounding_xyz[],
                                  float attraction_strength, float attraction_range,
@@ -97,3 +99,9 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float wallLStart, float wallLEnd,
                                  float wallWStart, float wallWEnd,
                                  float threshDist);
+
+__global__ void PressureUpdate (float* d_pressList, float maxPressure,
+                                float minPressure, float inc);
+
+__global__ void PressureReset (int* d_resetIndices, float* d_pressList,
+                               float minPressure, int numResetCells);

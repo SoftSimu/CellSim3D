@@ -10,6 +10,7 @@
 #include <fstream>
 #include <streambuf>
 #include <cstring>
+#include <string>
 
 #include <cuda.h>
 //#include "helper_cuda.h"
@@ -76,6 +77,8 @@ int* cell_div_inds;
 
 float *d_pressList;
 float *pressList;
+int* d_resetIndices;
+int* resetIndices; 
 
 
 // Params related to population modelling
@@ -135,8 +138,8 @@ float *CMx, *CMy, *CMz;
 float sysCMx = 1.0, sysCMy = 1.0, sysCMz = 1.0;
 float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0;
 
-float Pressure;          // pressure
-float Temperature;       // equation of state relates Pressure and Temperature
+//float Pressure;          // pressure
+//float Temperature;       // equation of state relates Pressure and Temperature
 
 int  No_of_C180s;        // the global number of C180 fullerenes
 int  No_of_C180s_in;     // the number of C180s near the center of mass of the system
@@ -157,7 +160,7 @@ int main(int argc, char *argv[])
   int noofblocks, threadsperblock, prevnoofblocks;
   int Orig_No_of_C180s, newcells;
   int reductionblocks;
-  float PSS;
+  //float PSS;
   float s, theta, phi;
   FILE *outfile;
   FILE *trajfile; // pointer to xyz file
@@ -210,10 +213,6 @@ int main(int argc, char *argv[])
   for ( i = 0; i < No_of_threads; ++i ) NDIV[i] = 1;
   for ( i = No_of_threads; i < MaxNoofC180s; ++i ) NDIV[i] = 0;
 
-  PSS         = 0.0f;
-  Pressure    = 0.0f;
-  Temperature = 0.0f;
-
   // empty the psfil from previous results
   outfile = fopen("psfil","w");
   if ( outfile == NULL ) {printf("Unable to open file psfil\n");return(-1);}
@@ -237,7 +236,7 @@ int main(int argc, char *argv[])
   didCellDie = (char *)(calloc(MaxNoofC180s, sizeof(char)));
   CPUMemory += (long)MaxNoofC180s * sizeof(char);
 
-  getDevice();
+  cudaDeviceProp deviceProp = getDevice();
 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
@@ -272,6 +271,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
 
 
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
@@ -290,6 +290,7 @@ int main(int argc, char *argv[])
   NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
   pressList = (float *)calloc(MaxNoofC180s, sizeof(float));
+  resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int)); 
 
   CPUMemory += MaxNoofC180s*7L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(float);
@@ -297,8 +298,12 @@ int main(int argc, char *argv[])
   CPUMemory += 6L*1024L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(char);
   CPUMemory += MaxNoofC180s*sizeof(int);
+  CPUMemory += MaxNoofC180s*sizeof(int); 
 
 
+  cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  
+  
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
   size_t freeGPUMem;
@@ -361,7 +366,7 @@ int main(int argc, char *argv[])
   trajfile = fopen (trajFileName, "w");
   if ( trajfile == NULL)
   {
-      printf("Failed to open traj.xyz\n");
+      printf("Failed to open %s \n", trajFileName);
       return -1;
   }
 
@@ -422,6 +427,14 @@ int main(int argc, char *argv[])
   }
 
 
+  // Initialize pressures
+
+  for (int cell = 0; cell < No_of_C180s; cell++){
+      pressList[cell] = minPressure;
+  }
+
+  cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice); 
+  
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
       if (doPopModel == 1){
@@ -433,27 +446,21 @@ int main(int argc, char *argv[])
           // we have unlimited supply of food for sustenance, but extra
           // food is needed for division.
           /*
-          ifp (totalFood >= cellFoodConsDiv)
+          if (totalFood >= cellFoodConsDiv)
               Pressure = maxPressure * ( 1.0 - (1.0/totalFood));
           else
               Pressure = 0;
           */
 
-          Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
+          //          Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
+          printf("Population modelling is not supported in this version\n");
+          exit(1); 
       }
-      else {
-          if ( PSS < maxPressure && step < 8000)
-              PSS=80.0 * Temperature;
-          else if ((step > Time_steps + 1) && PSS > minPressure)  {
-              PSS -= minPressure * 1e-5;
-              //printf("%f \n", minPressure/50);
-          }
-      }
-      Pressure = PSS;
-      Temperature += delta_t;
+      PressureUpdate <<<1, No_of_C180s>>> (d_pressList, minPressure, maxPressure, 80.0* delta_t);
+      
       if ( (step)%1000 == 0)
       {
-          printf("   time %-8d %d C180s Pressure = %f\n",step,No_of_C180s, Pressure);
+          printf("   time %-8d %d cells\n",step,No_of_C180s);
       }
 
       noofblocks      = No_of_C180s;
@@ -468,7 +475,7 @@ int main(int argc, char *argv[])
           propagate_zwall<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                      d_CMx, d_CMy, d_CMz,
-                                                     R0, Pressure, Youngs_mod ,
+                                                     R0, d_pressList, Youngs_mod ,
                                                      internal_damping, delta_t, d_bounding_xyz,
                                                      attraction_strength, attraction_range,
                                                      repulsion_strength, repulsion_range,
@@ -485,7 +492,7 @@ int main(int argc, char *argv[])
           propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                                      d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                                      d_CMx, d_CMy, d_CMz,
-                                                                     R0, Pressure, Youngs_mod ,
+                                                                     R0, d_pressList, Youngs_mod ,
                                                                      internal_damping, delta_t, d_bounding_xyz,
                                                                      attraction_strength, attraction_range,
                                                                      repulsion_strength, repulsion_range,
@@ -498,6 +505,7 @@ int main(int argc, char *argv[])
                                         d_CMx, d_CMy, d_CMz);
       if (step <= Time_steps){
         // ------------------------------ Begin Cell Division ------------------------------------------------
+
 
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_XP, d_YP, d_ZP,
@@ -538,9 +546,15 @@ int main(int argc, char *argv[])
                                    d_X, d_Y, d_Z,
                                    d_CMx, d_CMy, d_CMz,
                                    No_of_C180s, d_ran2, repulsion_range);
+          resetIndices[divCell] = globalrank;
+          resetIndices[divCell + num_cell_div] = No_of_C180s; 
           ++No_of_C180s;
-
         }
+
+        cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int),
+                   cudaMemcpyHostToDevice); 
+
+        PressureReset <<<1, No_of_C180s>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
 
         totalFood -= num_cell_div*cellFoodConsDiv;
 
@@ -616,11 +630,18 @@ int main(int argc, char *argv[])
   printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
 
   FILE* MitIndFile;
-  if (overWriteMitInd == 0)
+  std::fstream MitIndFile2;
+  std::string datFileName = inpFile; 
+  
+  if (overWriteMitInd == 0){
+      
       MitIndFile = fopen("mit-index.dat", "a");
-  else
+      //MitIndFile2.open(datFileName, "a"); 
+  }
+  else{
       MitIndFile = fopen("mit-index.dat", "w");
-
+      //MitIndFile2.open(datFileName, "w"); 
+  }
   if (MitIndFile == NULL)
   {
       printf("Failed to open mit-index.dat\n");
@@ -1214,7 +1235,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float Pressure, float Youngs_mod ,
+                           float R0, float* d_pressList, float Youngs_mod ,
                            float internal_damping, float delta_t,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
@@ -1265,6 +1286,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     }
     __syncthreads();
     */
+    float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
 
@@ -1456,8 +1478,10 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                     if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
                          deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                          deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
-                        //printf("fullerene %d inside %d?\n",rank, nn_rank);
-                        0;
+{
+#ifdef IGNORE_INSIDE_FULLERENE
+                        printf("fullerene %d inside %d?\n",rank, nn_rank);
+ }
                 }
 
             }
@@ -1523,7 +1547,7 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float d_X[],  float d_Y[],  float d_Z[],
                                  float d_XM[], float d_YM[], float d_ZM[],
                                  float *d_CMx, float *d_CMy, float *d_CMz,
-                                 float R0, float Pressure, float Youngs_mod ,
+                                 float R0, float* d_pressList, float Youngs_mod ,
                                  float internal_damping, float delta_t,
                                  float d_bounding_xyz[],
                                  float attraction_strength, float attraction_range,
@@ -1577,6 +1601,7 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
     }
     __syncthreads();
     */
+    float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
 
@@ -1768,8 +1793,7 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                     if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
                          deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                          deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
-                        //printf("fullerene %d inside %d?\n",rank, nn_rank);
-                        0;
+                        printf("fullerene %d inside %d?\n",rank, nn_rank);
                 }
 
             }

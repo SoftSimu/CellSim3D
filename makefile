@@ -3,7 +3,7 @@ debug = -g -G
 arch = -arch=sm_30
 oflags = $(arch) -Xptxas="-v" -c -O3 -I inc -I /home/pmadhika/cuda-samples/common/inc
 
-objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o
+objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o PressureKernels.o
 
 eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm
 
@@ -31,6 +31,9 @@ volume.o: volume.cu postscript.h
 
 jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
 	$(compiler) $(oflags) src/utils/jsoncpp.cpp
+
+PressureKernels.o: PressureKernels.cu postscript.h
+	$(compiler) $(oflags) PressureKernels.cu
 
 .PHONY: clean
 clean:
