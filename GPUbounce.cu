@@ -1502,36 +1502,11 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         float k1 = 1.0/(1.0 + viscotic_damping * delta_t/(2*mass));
         float k2 = delta_t*delta_t/mass;
         float k3 = viscotic_damping*delta_t/(2*mass) - 1.0;
-
-
-        // d_XP[rank*192+atom] =
-        //     1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-        //     ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
-        // d_YP[rank*192+atom] =
-        //     1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-        //     ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
-        // d_ZP[rank*192+atom] =
-        //     1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-        //     ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
         
         newPosX = k1*(k2*FX + 2*currPosX + k3*oldPosX);
         newPosY = k1*(k2*FY + 2*currPosY + k3*oldPosY);
         newPosZ = k1*(k2*FZ + 2*currPosZ + k3*oldPosZ);
-        
-        // if (atom == 0){
-            
-        //     if (abs(newPosX - d_XP[rank*192+atom]) > 1e-4 ||
-        //         abs(newPosY - d_YP[rank*192+atom]) > 1e-4 ||
-        //         abs(newPosZ - d_ZP[rank*192+atom]) > 1e-4){
-                
-        //         printf("NooOOOOooOOooOOooOOOOO!\n"); 
-        //         printf("%f %f\n", newPosX, d_XP[rank*192+atom]); 
-        //         printf("%f %f\n", newPosY, d_YP[rank*192+atom]); 
-        //         printf("%f %f\n", newPosZ, d_ZP[rank*192+atom]); 
-        //     }
-        // }
-
-
+       
 
         d_XP[atomInd] = newPosX;
         d_YP[atomInd] = newPosY;
