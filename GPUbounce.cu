@@ -1842,34 +1842,16 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
         // time propagation
         float k1 = 1.0/(1.0 + viscotic_damping * delta_t/(2*mass));
         float k2 = delta_t*delta_t/mass;
-        float k3 = viscotic_damping*delta_t/2*mass - 1.0;
+        float k3 = viscotic_damping*delta_t/(2*mass) - 1.0;
+        
+        newPosX = k1*(k2*FX + 2*currPosX + k3*oldPosX);
+        newPosY = k1*(k2*FY + 2*currPosY + k3*oldPosY);
+        newPosZ = k1*(k2*FZ + 2*currPosZ + k3*oldPosZ);
+       
 
-
-        d_XP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
-        d_YP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
-        d_ZP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
-
-        newPosX = (k2 * FX) + 2*currPosX;
-        newPosY = (k2 * FY) + 2*currPosY;
-        newPosZ = (k2 * FZ) + 2*currPosZ;
-
-        newPosX += k3 * oldPosX;
-        newPosY += k3 * oldPosY;
-        newPosZ += k3 * oldPosZ;
-
-        newPosX *= k1;
-        newPosY *= k1;
-        newPosZ *= k1;
-
-        //d_XP[atomInd] = newPosX;
-        //d_YP[atomInd] = newPosY;
-        //d_ZP[atomInd] = newPosZ;
+        d_XP[atomInd] = newPosX;
+        d_YP[atomInd] = newPosY;
+        d_ZP[atomInd] = newPosZ;
 
     }
 
