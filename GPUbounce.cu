@@ -20,7 +20,7 @@
 #include "inc/json/json.h"
 
 
-#define MaxNoofC180s 250000
+#define MaxNoofC180s 1000
 
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
