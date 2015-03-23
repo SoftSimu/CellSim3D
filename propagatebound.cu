@@ -246,10 +246,12 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
 			  if ( index > 32 )
 				{
 				  printf("Fullerene %d, NN-list too short\n", fullerene);
-				  //                   printf("Full %d, NN-list too short: ", fullerene);
-				  //                   for ( int k = 0; k < 32; ++k )
-				  //                        printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
-				  //                   printf("\n");
+                                  printf("Full %d, NN-list too short: ", fullerene);
+                                  
+                                  for ( int k = 0; k < 32; ++k )
+                                      printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
+                                  
+                                  printf("\n");
 				  continue;
 				}
 			  d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
