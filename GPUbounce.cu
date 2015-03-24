@@ -20,7 +20,7 @@
 #include "inc/json/json.h"
 
 
-#define MaxNoofC180s 1000
+#define MaxNoofC180s 250000
 
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
@@ -456,7 +456,7 @@ int main(int argc, char *argv[])
           printf("Population modelling is not supported in this version\n");
           exit(1); 
       }
-      PressureUpdate <<<1, No_of_C180s>>> (d_pressList, minPressure, maxPressure, 80.0* delta_t);
+      PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, 80.0*delta_t, No_of_C180s);
       
       if ( (step)%1000 == 0)
       {
@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
         cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int),
                    cudaMemcpyHostToDevice); 
 
-        PressureReset <<<1, No_of_C180s>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
+        PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
 
         totalFood -= num_cell_div*cellFoodConsDiv;
 

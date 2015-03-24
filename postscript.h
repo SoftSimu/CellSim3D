@@ -101,7 +101,7 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float threshDist);
 
 __global__ void PressureUpdate (float* d_pressList, float maxPressure,
-                                float minPressure, float inc);
+                                float minPressure, float inc, int No_of_C180s);
 
 __global__ void PressureReset (int* d_resetIndices, float* d_pressList,
                                float minPressure, int numResetCells);
