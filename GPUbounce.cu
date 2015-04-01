@@ -1479,7 +1479,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                          deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                          deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
 {
-                        printf("fullerene %d inside %d?\n",rank, nn_rank);
+    //printf("fullerene %d inside %d?\n",rank, nn_rank);
+    0; 
  }
                 }
 
