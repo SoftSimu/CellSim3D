@@ -75,6 +75,8 @@ char* d_cell_div;
 int num_cell_div;
 int* cell_div_inds;
 
+char mitIndFileName[256]; 
+
 float *d_pressList;
 float *pressList;
 int* d_resetIndices;
@@ -650,11 +652,11 @@ int main(int argc, char *argv[])
   
   if (overWriteMitInd == 0){
       
-      MitIndFile = fopen("mit-index.dat", "a");
+      MitIndFile = fopen(mitIndFileName, "a");
       //MitIndFile2.open(datFileName, "a"); 
   }
   else{
-      MitIndFile = fopen("mit-index.dat", "w");
+      MitIndFile = fopen(mitIndFileName, "w");
       //MitIndFile2.open(datFileName, "w"); 
   }
   if (MitIndFile == NULL)
@@ -938,7 +940,7 @@ int read_json_params(const char* inpFile){
     }
     else {
         // countCells = countParams["countcells"].asBool();
-        //mitIndFileName = countParams["mit-index_file_name"].asString.c_str();
+        std::strcpy(mitIndFileName, countParams["mit-index_file_name"].asString().c_str()); 
         countOnlyInternal = countParams["count_only_internal_cells?"].asBool();
         radFrac = countParams["radius_cutoff"].asFloat();
         overWriteMitInd = countParams["overwrite_mit_ind_file?"].asBool();
