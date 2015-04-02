@@ -1306,18 +1306,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
 
-    float newPosX = 0;
-    float newPosY = 0;
-    float newPosZ = 0;
-
-    float currPosX = 0;
-    float currPosY = 0;
-    float currPosZ = 0;
-
-    float oldPosX = 0;
-    float oldPosY = 0;
-    float oldPosZ = 0;
-
     if ( rank < No_of_C180s && atom < 180 )
     {
         N1 = d_C180_nn[  0+atom];
@@ -1352,17 +1340,10 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
         int nnAtomInd;
 
-        currPosX = d_X[atomInd];
-        currPosY = d_Y[atomInd];
-        currPosZ = d_Z[atomInd];
 
-        oldPosX = d_XM[atomInd];
-        oldPosY = d_YM[atomInd];
-        oldPosZ = d_ZM[atomInd];
-
-        float velX = d_velListX[rank*192+atom];
-        float velY = d_velListY[rank*192+atom];
-        float velZ = d_velListZ[rank*192+atom];
+        float velX = d_velListX[atomInd];
+        float velY = d_velListY[atomInd];
+        float velZ = d_velListZ[atomInd];
 
 
         //  Spring Force calculation within cell
@@ -1377,10 +1358,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
             deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
             deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
-
-            //deltaX = d_X[rank*192 + N1] - currPosX;
-            //deltaY = d_Y[rank*192 + N1] - currPosY;
-            //deltaZ = d_Z[rank*192 + N1] - currPosZ;
 
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
@@ -1473,10 +1450,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                 deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
                 deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
 
-                //deltaX = currPosX - d_X[nnAtomInd];
-                //deltaY = currPosY - d_Y[nnAtomInd];
-                //deltaZ = currPosZ - d_Z[nnAtomInd];
-
                 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
 
                 if ( R >= attraction_range*attraction_range )
@@ -1503,6 +1476,10 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     //printf("fullerene %d inside %d?\n",rank, nn_rank);
     0; 
  }
+                    // hinder rearrangements
+                    FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
+                    FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
+                    FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]); 
                 }
 
             }
@@ -1535,28 +1512,12 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
         // add friction
 
-        // float velX = (currPosX - oldPosX)/delta_t;
-        // float velY = (currPosY - oldPosY)/delta_t;
-        // float velZ = (currPosZ - oldPosZ)/delta_t;
-
         FX += -1 * gamma_visc * velX;
         FY += -1 * gamma_visc * velY;
         FZ += -1 * gamma_visc * velZ;
 
         // time propagation
-        float k1 = 1.0/(1.0 + viscotic_damping * delta_t/(2*mass));
-        float k2 = delta_t*delta_t/mass;
-        float k3 = viscotic_damping*delta_t/(2*mass) - 1.0;
         
-        newPosX = k1*(k2*FX + 2*currPosX + k3*oldPosX);
-        newPosY = k1*(k2*FY + 2*currPosY + k3*oldPosY);
-        newPosZ = k1*(k2*FZ + 2*currPosZ + k3*oldPosZ);
-       
-
-        // d_XP[atomInd] = newPosX;
-        // d_YP[atomInd] = newPosY;
-        // d_ZP[atomInd] = newPosZ;
-
         d_XP[rank*192+atom] =
             1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
             ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
@@ -1568,9 +1529,9 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
 
 
-        d_velListX[rank*192+atom] = (d_XP[rank*192+atom] - d_XM[rank*192+atom])/(2*delta_t); 
-        d_velListY[rank*192+atom] = (d_YP[rank*192+atom] - d_YM[rank*192+atom])/(2*delta_t); 
-        d_velListZ[rank*192+atom] = (d_ZP[rank*192+atom] - d_ZM[rank*192+atom])/(2*delta_t); 
+        d_velListX[rank*192+atom] = (d_XP[atomInd] - d_X[atomInd])/(delta_t); 
+        d_velListY[rank*192+atom] = (d_YP[atomInd] - d_Y[atomInd])/(delta_t); 
+        d_velListZ[rank*192+atom] = (d_ZP[atomInd] - d_Z[atomInd])/(delta_t); 
     }
 }
 
@@ -1638,18 +1599,10 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
 
-    float newPosX = 0;
-    float newPosY = 0;
-    float newPosZ = 0;
-
-    float currPosX = 0;
-    float currPosY = 0;
-    float currPosZ = 0;
-
-    float oldPosX = 0;
-    float oldPosY = 0;
-    float oldPosZ = 0;
-
+    float velX = d_velListX[atomInd];
+    float velY = d_velListY[atomInd];
+    float velZ = d_velListZ[atomInd];
+    
     if ( rank < No_of_C180s && atom < 180 )
     {
         N1 = d_C180_nn[  0+atom];
@@ -1683,14 +1636,6 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
         float FZ = 0.0f;
 
         int nnAtomInd;
-
-        currPosX = d_X[atomInd];
-        currPosY = d_Y[atomInd];
-        currPosZ = d_Z[atomInd];
-
-        oldPosX = d_XM[atomInd];
-        oldPosY = d_YM[atomInd];
-        oldPosZ = d_ZM[atomInd];
 
         //  Spring Force calculation within cell
         //  go through three nearest neighbors
@@ -1826,7 +1771,8 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                     if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
                          deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                          deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
-                        printf("fullerene %d inside %d?\n",rank, nn_rank);
+                        //printf("fullerene %d inside %d?\n",rank, nn_rank);
+                        0; 
                 }
 
             }
@@ -1858,10 +1804,6 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
 #endif
 
         // add friction
-
-        float velX = (currPosX - oldPosX)/delta_t;
-        float velY = (currPosY - oldPosY)/delta_t;
-        float velZ = (currPosZ - oldPosZ)/delta_t;
 
         FX += -1 * gamma_visc * velX;
         FY += -1 * gamma_visc * velY;
@@ -1897,18 +1839,21 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
 
 
         // time propagation
-        float k1 = 1.0/(1.0 + viscotic_damping * delta_t/(2*mass));
-        float k2 = delta_t*delta_t/mass;
-        float k3 = viscotic_damping*delta_t/(2*mass) - 1.0;
-        
-        newPosX = k1*(k2*FX + 2*currPosX + k3*oldPosX);
-        newPosY = k1*(k2*FY + 2*currPosY + k3*oldPosY);
-        newPosZ = k1*(k2*FZ + 2*currPosZ + k3*oldPosZ);
-       
+    
+        d_XP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
+        d_YP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
+        d_ZP[rank*192+atom] =
+            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
 
-        d_XP[atomInd] = newPosX;
-        d_YP[atomInd] = newPosY;
-        d_ZP[atomInd] = newPosZ;
+
+        d_velListX[atomInd] = (d_XP[atomInd] - d_X[atomInd])/(delta_t); 
+        d_velListY[atomInd] = (d_YP[atomInd] - d_Y[atomInd])/(delta_t); 
+        d_velListZ[atomInd] = (d_ZP[atomInd] - d_Z[atomInd])/(delta_t); 
 
     }
 
