@@ -51,8 +51,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
                            float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-                           int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc
-                           );
+                           int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
+                           float* d_velListX, float* d_velListY, float* d_velListZ);
 
 __global__ void bounding_boxes( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
@@ -98,7 +98,8 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float wall1, float wall2,
                                  float wallLStart, float wallLEnd,
                                  float wallWStart, float wallWEnd,
-                                 float threshDist);
+                                 float threshDist,
+                                 float* d_velListX, float* d_velListY, float* d_velListZ);
 
 __global__ void PressureUpdate (float* d_pressList, float maxPressure,
                                 float minPressure, float inc, int No_of_C180s);

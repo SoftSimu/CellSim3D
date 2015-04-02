@@ -81,6 +81,10 @@ int* d_resetIndices;
 int* resetIndices; 
 
 
+float* d_velListX; 
+float* d_velListY; 
+float* d_velListZ; 
+
 // Params related to population modelling
 int doPopModel;
 char* didCellDie;
@@ -271,6 +275,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
 
 
@@ -302,6 +309,10 @@ int main(int argc, char *argv[])
 
 
   cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+
+  cudaMemset(d_velListX, 0.0f, 192*MaxNoofC180s); 
+  cudaMemset(d_velListY, 0.0f, 192*MaxNoofC180s); 
+  cudaMemset(d_velListZ, 0.0f, 192*MaxNoofC180s); 
   
   
   // Better way to see how much GPU memory is being used.
@@ -484,11 +495,13 @@ int main(int argc, char *argv[])
                                                      wall1, wall2,
                                                      wallLStart, wallLEnd,
                                                      wallWStart, wallWEnd,
-                                                     threshDist);
+                                                           threshDist,
+                                                           d_velListX, d_velListY, d_velListZ);
       } else {
 #ifdef FORCE_DEBUG
           printf("time %d  pressure = %f\n", step, Pressure);
 #endif
+          //printf("\n new step \n"); 
           propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                                      d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                                      d_CMx, d_CMy, d_CMz,
@@ -497,7 +510,9 @@ int main(int argc, char *argv[])
                                                                      attraction_strength, attraction_range,
                                                                      repulsion_strength, repulsion_range,
                                                                      viscotic_damping, mass,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc);
+                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                     d_velListX, d_velListY, d_velListZ);
+
       }
 
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
@@ -1242,8 +1257,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
                            float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-                           int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc
-                           )
+                           int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
+                           float* d_velListX, float* d_velListY, float* d_velListZ)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
@@ -1273,6 +1288,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
     rank = blockIdx.x;
     atom = threadIdx.x;
+    //printf("Cell = %d, Vx = %f, Vy = %f, Vz = %f\n", rank, d_velListX[rank*192+atom], d_velListZ[rank*192+atom], d_velListZ[rank*192+atom]); 
     /*
     if (atom == 0){ // Only need to do this once per cell
         if (d_didCellDie[rank] == 0 and there is enough food to propagate ){
@@ -1343,6 +1359,11 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         oldPosX = d_XM[atomInd];
         oldPosY = d_YM[atomInd];
         oldPosZ = d_ZM[atomInd];
+
+        float velX = d_velListX[rank*192+atom];
+        float velY = d_velListY[rank*192+atom];
+        float velZ = d_velListZ[rank*192+atom];
+
 
         //  Spring Force calculation within cell
         //  go through three nearest neighbors
@@ -1514,9 +1535,9 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
         // add friction
 
-        float velX = (currPosX - oldPosX)/delta_t;
-        float velY = (currPosY - oldPosY)/delta_t;
-        float velZ = (currPosZ - oldPosZ)/delta_t;
+        // float velX = (currPosX - oldPosX)/delta_t;
+        // float velY = (currPosY - oldPosY)/delta_t;
+        // float velZ = (currPosZ - oldPosZ)/delta_t;
 
         FX += -1 * gamma_visc * velX;
         FY += -1 * gamma_visc * velY;
@@ -1545,12 +1566,12 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         d_ZP[rank*192+atom] =
             1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
             ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
-        
 
+
+        d_velListX[rank*192+atom] = (d_XP[rank*192+atom] - d_XM[rank*192+atom])/(2*delta_t); 
+        d_velListY[rank*192+atom] = (d_YP[rank*192+atom] - d_YM[rank*192+atom])/(2*delta_t); 
+        d_velListZ[rank*192+atom] = (d_ZP[rank*192+atom] - d_ZM[rank*192+atom])/(2*delta_t); 
     }
-
-
-
 }
 
 __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -1569,7 +1590,8 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float wall1, float wall2,
                                  float wallLStart, float wallLEnd,
                                  float wallWStart, float wallWEnd,
-                                 float threshDist)
+                                 float threshDist,
+                                 float* d_velListX, float* d_velListY, float* d_velListZ)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
