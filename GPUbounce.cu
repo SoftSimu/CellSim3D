@@ -1464,6 +1464,11 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                     FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
                     FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
                     FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+
+                    // hinder rearrangements
+                    FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
+                    FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
+                    FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]); 
                 }
                 if ( R < repulsion_range )
                 {
@@ -1478,10 +1483,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     //printf("fullerene %d inside %d?\n",rank, nn_rank);
     0; 
  }
-                    // hinder rearrangements
-                    FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
-                    FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
-                    FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]); 
                 }
 
             }
@@ -1763,6 +1764,11 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                     FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
                     FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
                     FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                    
+                    // hinder rearrangements
+                    FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
+                    FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
+                    FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]); 
                 }
                 if ( R < repulsion_range )
                 {
@@ -1774,8 +1780,10 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                          deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                          deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
                         //printf("fullerene %d inside %d?\n",rank, nn_rank);
-                        0; 
+                        0;
                 }
+
+                
 
             }
 
@@ -1843,14 +1851,14 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
         // time propagation
     
         d_XP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
         d_YP[rank*192+atom] =
             1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
+            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
         d_ZP[rank*192+atom] =
             1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
 
 
         d_velListX[atomInd] = (d_XP[atomInd] - d_X[atomInd])/(delta_t); 
