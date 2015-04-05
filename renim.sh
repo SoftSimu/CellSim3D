@@ -53,7 +53,7 @@ while [ TRUE ]; do
             echo -ne "\roOO   "
             sleep 0.2
 
-            newestFile=$(ls -t "$trajName/images/" | head -n 1)
+            newestFile=$(ls -At "$trajName/images/" | head -n 1)
 
             if [ "$tmp" != "$newestFile" -a -n "$newestFile" ]; then
                 echo -e "\rCreated $trajName/images/$newestFile"
