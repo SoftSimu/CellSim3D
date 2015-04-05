@@ -1536,14 +1536,14 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         // time propagation
         
         d_XP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
         d_YP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
         d_ZP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(viscotic_damping*delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
 
 
         d_velListX[rank*192+atom] = (d_XP[atomInd] - d_X[atomInd])/(delta_t); 
