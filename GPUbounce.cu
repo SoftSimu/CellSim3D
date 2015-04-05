@@ -1611,9 +1611,6 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
 
-    float velX = d_velListX[atomInd];
-    float velY = d_velListY[atomInd];
-    float velZ = d_velListZ[atomInd];
     
     if ( rank < No_of_C180s && atom < 180 )
     {
@@ -1649,6 +1646,11 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
 
         int nnAtomInd;
 
+        
+        float velX = d_velListX[atomInd];
+        float velY = d_velListY[atomInd];
+        float velZ = d_velListZ[atomInd];
+        
         //  Spring Force calculation within cell
         //  go through three nearest neighbors
 
