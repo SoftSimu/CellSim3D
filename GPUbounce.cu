@@ -529,13 +529,6 @@ int main(int argc, char *argv[])
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol);
 
-#if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
-        cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-        for (int i = 0; i < No_of_C180s; i++){
-            printf ("Cell: %d, volume= %f\n", i, volume[i]);
-        }
-#endif
-
         count_and_get_div();
 
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
@@ -627,6 +620,18 @@ int main(int argc, char *argv[])
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           write_traj(step, trajfile);
       }
+
+#if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
+      volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+                                     d_XP, d_YP, d_ZP,
+                                     d_CMx , d_CMy, d_CMz,
+                                     d_volume, d_cell_div, divVol);
+      
+      cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      for (int i = 0; i < No_of_C180s; i++){
+          printf ("Cell: %d, volume= %f\n", i, volume[i]);
+      }
+#endif
 
 
 
