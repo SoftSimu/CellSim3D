@@ -451,20 +451,6 @@ int main(int argc, char *argv[])
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
       if (doPopModel == 1){
-          // New way of setting pressure follows. Hopefully this will correctly
-          // model population.
-          // The basic idea is that rate of growth should be modulated wrt
-          // the amount of "food" that we have available, and the food will
-          // be reduced whenever a new cell is created. It is assumed that
-          // we have unlimited supply of food for sustenance, but extra
-          // food is needed for division.
-          /*
-          if (totalFood >= cellFoodConsDiv)
-              Pressure = maxPressure * ( 1.0 - (1.0/totalFood));
-          else
-              Pressure = 0;
-          */
-
           //          Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
           printf("Population modelling is not supported in this version\n");
           exit(1); 
