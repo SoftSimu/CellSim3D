@@ -1368,15 +1368,24 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             FY += +Youngs_mod*(R-R0)/R0*deltaY/R;
             FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R;
 
+
             // pressure forces
             FX += Pressure*NX;
             FY += Pressure*NY;
             FZ += Pressure*NZ;
 
             // internal damping
-            FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
-            FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
-            FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+            // FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
+            // FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
+            // FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+
+            FX += -internal_damping*(d_velListX[atomInd] - d_velListX[rank*192+N1]);
+            FY += -internal_damping*(d_velListY[atomInd] - d_velListY[rank*192+N1]);
+            FZ += -internal_damping*(d_velListZ[atomInd] - d_velListZ[rank*192+N1]);
+
+            // printf("old= %f, new=%f\n",
+            //        -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1])),
+            //        -internal_damping*(d_velListX[atomInd] - d_velListX[rank*192+N1]));
         }
 
 #ifdef FORCE_DEBUG
@@ -1670,9 +1679,13 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
             FZ += Pressure*NZ;
 
             // internal damping
-            FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
-            FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
-            FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+            // FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
+            // FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
+            // FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
+
+            FX += -internal_damping*(d_velListX[atomInd] - d_velListX[rank*192+N1]);
+            FY += -internal_damping*(d_velListY[atomInd] - d_velListY[rank*192+N1]);
+            FZ += -internal_damping*(d_velListZ[atomInd] - d_velListZ[rank*192+N1]);
         }
 
 #ifdef FORCE_DEBUG
