@@ -99,6 +99,8 @@ float cellFoodConsDiv; // Extra good consumption when cell divides
 float cellFoodRel; // Food released when cell dies (should < total consumed food)
 float maxPressure;
 float minPressure;
+float rMax;
+float maxPop; 
 
 // Params related to having walls in the simulation
 int useWalls;
@@ -446,20 +448,25 @@ int main(int argc, char *argv[])
       pressList[cell] = minPressure;
   }
 
-  cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice); 
-  
+  cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+
+  float rGrowth = 0;
+
+  // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
       if (doPopModel == 1){
-          //          Pressure = maxPressure + ((63.3-maxPressure)/100.0) * No_of_C180s;
-          printf("Population modelling is not supported in this version\n");
-          exit(1); 
+            rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
+            if (rGrowth < 0) rGrowth =0; 
       }
-      PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, 80.0*delta_t, No_of_C180s);
+      else {
+      rGrowth = rMax;
+      }
+      PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s);
       
       if ( (step)%1000 == 0)
       {
-          printf("   time %-8d %d cells\n",step,No_of_C180s);
+            printf("   time %-8d %d cells, rGrowth %f\n",step,No_of_C180s, rGrowth);
       }
 
       noofblocks      = No_of_C180s;
@@ -920,6 +927,7 @@ int read_json_params(const char* inpFile){
         maxPressure = coreParams["maxPressure"].asFloat();
         minPressure = coreParams["minPressure"].asFloat();
         gamma_visc = coreParams["gamma_visc"].asFloat();
+        rMax = coreParams["growth_rate"].asFloat();     
 
     }
 
@@ -950,6 +958,7 @@ int read_json_params(const char* inpFile){
         cellFoodConsDiv = popParams["division_consumption"].asFloat();
         cellFoodRel = popParams["death_release_food"].asFloat();
         cellLifeTime = popParams["cellLifeTime"].asInt();
+        maxPop = popParams["max_pop"].asFloat(); 
     }
 
     Json::Value wallParams = inpRoot.get("walls", Json::nullValue);
