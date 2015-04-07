@@ -46,7 +46,7 @@ args = parser.parse_args()
 #    sys.exit(1)
 #
 #
-trajPath = args.trajPath[0]
+trajPath = os.path.abspath(args.trajPath[0])
 storPath, fileName = os.path.split(trajPath)
 fileName = os.path.splitext(fileName)[0]
 storPath += "/" + fileName + '/cross_sections/'
@@ -65,7 +65,7 @@ except:
 
 
 
-
+ax=[]
 
 
 
@@ -210,7 +210,7 @@ def CrossSections(newX, newY, newZ, Xstr, Ystr, Zstr, ts, inc=0.1, thresh=0.1):
         c += 1
 
         # Start plotting
-        plt.plot(nearX, nearY, 'k.', lw=0.5, )
+        plt.plot(nearX, nearY, '.', lw=0.5, color="#AAAAAA")
         # The two lines below stop distortion
         #plt.axis('equal')
         plt.axis('scaled')
@@ -221,6 +221,8 @@ def CrossSections(newX, newY, newZ, Xstr, Ystr, Zstr, ts, inc=0.1, thresh=0.1):
         plt.title("%s=%f" % (Zstr, dz))
         plt.xlabel("%s" % Xstr)
         plt.ylabel("%s" % Ystr)
+        ax=plt.gca()
+        ax.set_axis_bgcolor("#404040")
         name = "%d_shapes_%s%s_%d.jpg" % (ts, Xstr, Ystr, c)
         name = storPath + name
         #print "saving to %s ..." % name
