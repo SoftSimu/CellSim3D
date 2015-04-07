@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "postscript.h"
-
+//#define PRINT_TOO_SHORT_ERROR
 
 __global__ void bounding_boxes( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
@@ -243,6 +243,7 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
 		  for ( int j3 = startz; j3 <= endz; ++j3 )
 			{
 			  int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
 			  if ( index > 32 )
 				{
 				  printf("Fullerene %d, NN-list too short\n", fullerene);
@@ -254,6 +255,7 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
                                   printf("\n");
 				  continue;
 				}
+#endif
 			  d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 			}
 	}
