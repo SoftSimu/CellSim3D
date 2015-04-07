@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 import sys, os, argparse
 
 
-print "JELLLO PORL"
-
 desc= """
 Plots the population of a simulation versus time.
 """
