@@ -367,8 +367,8 @@ int main(int argc, char *argv[])
   cudaMemset(d_NoofNNlist, 0, 1024*1024);
   cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
   //  DL = 3.8f;
-  //DL = 2.9f;
-   DL = divVol; 
+  DL = 2.9f;
+  //DL = divVol; 
   Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
   Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
   Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
@@ -477,38 +477,22 @@ int main(int argc, char *argv[])
           //             noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
       }
 
-      if (useWalls == 1 && (perpAxis[0] == 'z' || perpAxis[0] == 'Z')){
-          propagate_zwall<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
-                                                     d_CMx, d_CMy, d_CMz,
-                                                     R0, d_pressList, Youngs_mod ,
-                                                     internal_damping, delta_t, d_bounding_xyz,
-                                                     attraction_strength, attraction_range,
-                                                     repulsion_strength, repulsion_range,
-                                                     viscotic_damping, mass,
-                                                           Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                     wall1, wall2,
-                                                     wallLStart, wallLEnd,
-                                                     wallWStart, wallWEnd,
-                                                           threshDist,
-                                                           d_velListX, d_velListY, d_velListZ);
-      } else {
 #ifdef FORCE_DEBUG
-          printf("time %d  pressure = %f\n", step, Pressure);
+      printf("time %d  pressure = %f\n", step, Pressure);
 #endif
           //printf("\n new step \n"); 
-          propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                                     d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
-                                                                     d_CMx, d_CMy, d_CMz,
-                                                                     R0, d_pressList, Youngs_mod ,
-                                                                     internal_damping, delta_t, d_bounding_xyz,
-                                                                     attraction_strength, attraction_range,
-                                                                     repulsion_strength, repulsion_range,
-                                                                     viscotic_damping, mass,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                     d_velListX, d_velListY, d_velListZ);
-
-      }
+      propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+                                                 d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
+                                                 d_CMx, d_CMy, d_CMz,
+                                                 R0, d_pressList, Youngs_mod ,
+                                                 internal_damping, delta_t, d_bounding_xyz,
+                                                 attraction_strength, attraction_range,
+                                                 repulsion_strength, repulsion_range,
+                                                 viscotic_damping, mass,
+                                                 Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                 wall1, wall2,
+                                                 threshDist, useWalls,
+                                                 d_velListX, d_velListY, d_velListZ);
 
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
@@ -668,6 +652,8 @@ int main(int argc, char *argv[])
   {
       if ( dividingCells[i]!=0 && totalCells[i]!=0 ){
           fprintf(MitIndFile, "%f\n", (float)dividingCells[i]/totalCells[i]);
+          // totalCells is number of non-dividing cells
+          
       }
       else {
           fprintf(MitIndFile, "%f\n", 0.0);
@@ -1260,6 +1246,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float viscotic_damping, float mass,
                            float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
+                           float wall1, float wall2,
+                           float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ)
 {
 #ifdef FORCE_DEBUG
@@ -1528,6 +1516,26 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         FY += -1 * gamma_visc * velY;
         FZ += -1 * gamma_visc * velZ;
 
+        if (useWalls == 1){
+            // Wall repulsion
+
+            float wallDist = d_Z[rank*192+atom] - wall1;
+            
+            if (abs(wallDist) <= threshDist){
+            //repulse
+                if (wallDist * FZ < 0) FZ = -FZ;
+            }
+
+            wallDist = d_Z[rank*192+atom] - wall2;
+            if (abs(wallDist) <= threshDist){
+                
+                if (wallDist * FZ < 0) FZ = -FZ;
+
+            }
+
+            __syncthreads();
+        }
+
         // time propagation
         
         d_XP[rank*192+atom] =
@@ -1546,346 +1554,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         d_velListZ[rank*192+atom] = (d_ZP[atomInd] - d_Z[atomInd])/(delta_t); 
     }
 }
-
-__global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
-                                 float d_XP[], float d_YP[], float d_ZP[],
-                                 float d_X[],  float d_Y[],  float d_Z[],
-                                 float d_XM[], float d_YM[], float d_ZM[],
-                                 float *d_CMx, float *d_CMy, float *d_CMz,
-                                 float R0, float* d_pressList, float Youngs_mod ,
-                                 float internal_damping, float delta_t,
-                                 float d_bounding_xyz[],
-                                 float attraction_strength, float attraction_range,
-                                 float repulsion_strength, float repulsion_range,
-                                 float viscotic_damping, float mass,
-                                 float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-                                 int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
-                                 float wall1, float wall2,
-                                 float wallLStart, float wallLEnd,
-                                 float wallWStart, float wallWEnd,
-                                 float threshDist,
-                                 float* d_velListX, float* d_velListY, float* d_velListZ)
-{
-#ifdef FORCE_DEBUG
-        __shared__ float FX_sum;
-        __shared__ float FY_sum;
-        __shared__ float FZ_sum;
-        if (threadIdx.x == 0){
-            FX_sum = 0;
-            FY_sum = 0;
-            FZ_sum = 0;
-        }
-
-        __syncthreads();
-
-#endif
-
-    int rank, atom, nn_rank, nn_atom;
-    int N1, N2, N3;
-    int NooflocalNN;
-    int localNNs[10];
-    float deltaX, deltaY, deltaZ;
-    float A1, A2, A3;
-    float B1, B2, B3;
-    float TX, TY, TZ;
-    float NORM, R;
-    float NX, NY, NZ;
-    //float setPress;
-
-    rank = blockIdx.x;
-    atom = threadIdx.x;
-    /*
-    if (atom == 0){ // Only need to do this once per cell
-        if (d_didCellDie[rank] == 0 and there is enough food to propagate ){
-            setPress = Pressure;
-            // Code to kill this thread (stop propagation)
-        }
-        else {
-            0;
-            // Going to add code here to do with cell death later.
-        }
-    }
-    __syncthreads();
-    */
-    float Pressure = d_pressList[rank]; 
-    int cellOffset = rank*192;
-    int atomInd = cellOffset + atom;
-
-    
-    if ( rank < No_of_C180s && atom < 180 )
-    {
-        N1 = d_C180_nn[  0+atom];
-        N2 = d_C180_nn[192+atom];
-        N3 = d_C180_nn[384+atom];
-
-        A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
-        A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
-        A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
-
-        B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
-        B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
-        B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
-
-        TX = A2*B3-A3*B2;
-        TY = A3*B1-A1*B3;
-        TZ = A1*B2-A2*B1;
-
-        NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
-
-        NX = d_C180_sign[atom]*TX/NORM;
-        NY = d_C180_sign[atom]*TY/NORM;
-        NZ = d_C180_sign[atom]*TZ/NORM;
-
-        float X = d_X[rank*192+atom];
-        float Y = d_Y[rank*192+atom];
-        float Z = d_Z[rank*192+atom];
-
-        float FX = 0.0f;
-        float FY = 0.0f;
-        float FZ = 0.0f;
-
-        int nnAtomInd;
-
-        
-        float velX = d_velListX[atomInd];
-        float velY = d_velListY[atomInd];
-        float velZ = d_velListZ[atomInd];
-        
-        //  Spring Force calculation within cell
-        //  go through three nearest neighbors
-
-        float damp_const = internal_damping/delta_t;
-
-        for ( int i = 0; i < 3 ; ++i ) // Better to open this loop
-        {
-            N1 = d_C180_nn[i*192+atom];
-
-            deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
-            deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
-            deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
-
-            //deltaX = d_X[rank*192 + N1] - currPosX;
-            //deltaY = d_Y[rank*192 + N1] - currPosY;
-            //deltaZ = d_Z[rank*192 + N1] - currPosZ;
-
-            R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
-
-            // spring forces
-            FX += +Youngs_mod*(R-R0)/R0*deltaX/R;
-            FY += +Youngs_mod*(R-R0)/R0*deltaY/R;
-            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R;
-
-            // pressure forces
-            FX += Pressure*NX;
-            FY += Pressure*NY;
-            FZ += Pressure*NZ;
-
-            // internal damping
-            // FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
-            // FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
-            // FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
-
-            FX += -internal_damping*(d_velListX[atomInd] - d_velListX[rank*192+N1]);
-            FY += -internal_damping*(d_velListY[atomInd] - d_velListY[rank*192+N1]);
-            FZ += -internal_damping*(d_velListZ[atomInd] - d_velListZ[rank*192+N1]);
-        }
-
-#ifdef FORCE_DEBUG
-
-        atomicAdd(&FX_sum, FX);
-        __syncthreads();
-        atomicAdd(&FY_sum, FY);
-        __syncthreads();
-        atomicAdd(&FZ_sum, FZ);
-        __syncthreads();
-        if (threadIdx.x == 0){
-            printf("Spring, pressure, internal\n");
-            printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
-        }
-
-#endif
-
-
-        NooflocalNN = 0;
-
-        int startx = (int)((X -Minx)/DL);
-        if ( startx < 0 ) startx = 0;
-        if ( startx >= Xdiv ) startx = Xdiv-1;
-
-        int starty = (int)((Y - Miny)/DL);
-        if ( starty < 0 ) starty = 0;
-        if ( starty >= Ydiv ) starty = Ydiv-1;
-
-        int startz = (int)((Z - Minz)/DL);
-        if ( startz < 0 ) startz = 0;
-        if ( startz >= Zdiv ) startz = Zdiv-1;
-
-        int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
-
-        // interfullerene attraction and repulsion
-        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
-        {
-            nn_rank = d_NNlist[32*index+nn_rank1-1];
-            if ( nn_rank == rank ) continue;
-
-            deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
-            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
-
-            deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
-            deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
-
-            deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
-            deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
-
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range )
-                continue;
-
-            ++NooflocalNN;
-
-            if ( NooflocalNN > 10 ){
-                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
-                continue;
-            }
-
-            localNNs[NooflocalNN-1] = nn_rank;
-        }
-
-        for ( int i = 0; i < NooflocalNN; ++i )
-        {
-            nn_rank =localNNs[i];
-            nnAtomInd = nn_rank*192;
-
-            for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
-            {
-                nnAtomInd += nn_atom;
-
-                deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
-                deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
-                deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
-
-                //deltaX = currPosX - d_X[nnAtomInd];
-                //deltaY = currPosY - d_Y[nnAtomInd];
-                //deltaZ = currPosZ - d_Z[nnAtomInd];
-
-                R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
-
-                if ( R >= attraction_range*attraction_range )
-                    continue;
-
-                R = sqrt(R);
-
-                if ( R < attraction_range )
-                {
-                    FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
-                    FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
-                    FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
-                    
-                    // hinder rearrangements
-                    FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
-                    FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
-                    FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]); 
-                }
-                if ( R < repulsion_range )
-                {
-                    FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-                    FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-                    FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
-
-                    if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
-                         deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
-                         deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
-                        //printf("fullerene %d inside %d?\n",rank, nn_rank);
-                        0;
-                }
-
-                
-
-            }
-
-        }
-
-#ifdef FORCE_DEBUG
-
-        if (threadIdx.x == 0){
-            FX_sum = 0;
-            FY_sum = 0;
-            FZ_sum = 0;
-        }
-        __syncthreads();
-
-        atomicAdd(&FX_sum, FX);
-        __syncthreads();
-        atomicAdd(&FY_sum, FY);
-        __syncthreads();
-        atomicAdd(&FZ_sum, FZ);
-        __syncthreads();
-        if (threadIdx.x == 0){
-            printf("neighbours\n");
-            printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
-        }
-
-
-
-#endif
-
-        // add friction
-
-        FX += -1 * gamma_visc * velX;
-        FY += -1 * gamma_visc * velY;
-        FZ += -1 * gamma_visc * velZ;
-
-        // Wall repulsion
-
-        float wallDist = d_Z[rank*192+atom] - wall1;
-        if (abs(wallDist) <= threshDist /*&&
-            d_X[rank*192+atom] > wallLStart &&
-            d_X[rank*192+atom] < wallLEnd   &&
-            d_Y[rank*192+atom] > wallWStart &&
-            d_Y[rank*192+atom] < wallWEnd */ ){
-            //repulse
-            if (wallDist * FZ < 0)
-                FZ = -FZ;
-
-        }
-
-        wallDist = d_Z[rank*192+atom] - wall2;
-        if (abs(wallDist) <= threshDist /*&&
-                                          d_X[rank*192+atom] > wallLStart &&
-                                          d_X[rank*192+atom] < wallLEnd   &&
-                                          d_Y[rank*192+atom] > wallWStart &&
-                                          d_Y[rank*192+atom] < wallWEnd */ ){
-            //repulse
-            if (wallDist * FZ < 0)
-                FZ = -FZ;
-
-        }
-
-        __syncthreads();
-
-
-        // time propagation
-    
-        d_XP[rank*192+atom] =
-            1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FX+2*d_X[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_XM[rank*192+atom]);
-        d_YP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FY+2*d_Y[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_YM[rank*192+atom]);
-        d_ZP[rank*192+atom] =
-            1.0/(1.0+viscotic_damping*delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
-
-
-        d_velListX[atomInd] = (d_XP[atomInd] - d_X[atomInd])/(delta_t); 
-        d_velListY[atomInd] = (d_YP[atomInd] - d_Y[atomInd])/(delta_t); 
-        d_velListZ[atomInd] = (d_ZP[atomInd] - d_Z[atomInd])/(delta_t); 
-
-    }
-
-
-
-}
-
 
 void write_traj(int t_step, FILE* trajfile)
 {

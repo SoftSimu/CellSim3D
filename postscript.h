@@ -52,6 +52,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float viscotic_damping, float mass,
                            float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
+                           float wall1, float wall2,
+                           float threshDist, bool useWalls,
                            float* d_velListX, float* d_velListY, float* d_velListZ);
 
 __global__ void bounding_boxes( int No_of_C180s,
@@ -96,8 +98,6 @@ __global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_si
                                  float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
                                  int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                                  float wall1, float wall2,
-                                 float wallLStart, float wallLEnd,
-                                 float wallWStart, float wallWEnd,
                                  float threshDist,
                                  float* d_velListX, float* d_velListY, float* d_velListZ);
 
