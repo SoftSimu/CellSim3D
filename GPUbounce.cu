@@ -466,7 +466,7 @@ int main(int argc, char *argv[])
       
       if ( (step)%1000 == 0)
       {
-            printf("   time %-8d %d cells, rGrowth %f\n",step,No_of_C180s, rGrowth);
+          printf("   time %-8d %d cells, rGrowth %f, maxPop %f\n",step,No_of_C180s, rGrowth, maxPop);
       }
 
       noofblocks      = No_of_C180s;
@@ -497,7 +497,7 @@ int main(int argc, char *argv[])
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
                                         d_CMx, d_CMy, d_CMz);
-      if (step <= Time_steps){
+      if (step <= Time_steps && rGrowth > 0){
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
 
