@@ -1463,9 +1463,30 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                     FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
 
                     // hinder rearrangements
-                    FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
-                    FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
-                    FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]); 
+
+                    // First calculate relative velocity
+                    float v_ijx = d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom];
+                    float v_ijy = d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom];
+                    float v_ijz = d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom];
+
+                    // Dot product between relative and normal to surface
+                    float vijDotn = v_ijx*NX + v_ijy*NY + v_ijz*NZ; 
+
+                    // Tangential component
+                    float vTauX = v_ijx - vijDotn*NX;
+                    float vTauY = v_ijy - vijDotn*NY;
+                    float vTauZ = v_ijz - vijDotn*NZ; 
+
+                    // printf("vel vx = %f vy = %f vz = %f\ntan tx = %f ty = %f tz= %f\n\n", v_ijx, v_ijy, v_ijz,
+                    //        vTauX, vTauY, vTauZ); 
+                    
+                    // FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
+                    // FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
+                    // FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]);
+
+                    FX -= viscotic_damping*vTauX;
+                    FY -= viscotic_damping*vTauY;
+                    FZ -= viscotic_damping*vTauZ;
                 }
                 if ( R < repulsion_range )
                 {
