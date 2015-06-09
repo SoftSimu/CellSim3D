@@ -9,9 +9,10 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import Voronoi
-from scipy.spatial.qhull import QhullError as voroError
+from scipy.spatial import Delaunay, delaunay_plot_2d
+from scipy.spatial.qhull import QhullError
 import os, sys, argparse
+from mpl_toolkits.mplot3d import Axes3D
 
 desc="""
 This script will measure the polygonal packing of a 3D system of cells with
@@ -67,12 +68,8 @@ def analyze(filePath, storePath, name=None):
             for i in xrange(nCells):
                 CoM = np.zeros(3)
                 for j in xrange(192):
-                    line = trajFile.readline().strip().split(', ')
-                    CoM += np.array([float(line[0]),
-                                     float(line[1]),
-                                     float(line[2])])
-                    print CoM
-                    print "------------"
+                    line = trajFile.readline().strip().split(',  ')
+                    CoM += np.array([float(p) for p in line])
                 CoMs.append(CoM/192)
 
             CoMs = np.array(CoMs)
@@ -87,33 +84,42 @@ def analyze(filePath, storePath, name=None):
             nearCoMs = CoMs[(dists/dists.max() <= 0.8)] # Make the 0.8 variable
 
             try:
-                voro = Voronoi(nearCoMs)
-            except voroError:
-                print "Probably too few cells for meaningful Voroni, skipping"
+                delaunay = Delaunay(CoMs)
+            except QhullError:
+                print "Probably too few cells for meaningful triangulation, skipping"
                 continue
 
             cellList = []
-            for region in voro.regions:
-                if -1 not in region and len(region) != 0: #regions with -1 have a neighbour at infinity
-                    #reg = [n for n in region if n!= -1]
-                    cellList.append(region)
-                #else:
-                    #reg = region
-                #cellList.append(reg)
+
+            # If you are wondering why below is "weirdTuple":
+            # The way that scipy organizes nearest neighbours in
+            # Delaunay.vertex_neighbor_vertices is fucked up.
+            # See http://goo.gl/ZeBdgj to understand what
+            # we need to do to get nearest neighbour indices
+            weirdTuple =  delaunay.vertex_neighbor_vertices
+
+            neighborRange, neighborInds = weirdTuple
 
 
             #Count the number of neighbours for each cell
+            numNeigh = []
+            for cellInd in xrange(nCells):
+                #numNeigh.append(len(neighborInds[neighborRange[cellInd]:
+                                                 #neighborRange[cellInd+1]]))
+                neighList = neighborInds[neighborRange[cellInd]:neighborRange[cellInd+1]]
+                neighCoords = np.array([CoMs[i] for i in neighList])
+                neighVecs = neighCoords - CoMs[cellInd]
+                neighDists = np.linalg.norm(neighVecs, axis=1)
+                closeNeighMask = neighDists<1*np.ceil(neighDists.min())
+                neighCoords = neighCoords[closeNeighMask]
 
-            #print cellList
-
-            numNeigh = [len(r) for r in cellList]
-            #print numNeigh
+                numNeigh.append(closeNeighMask.sum())
+            # Yeah, I know!
 
             # Now lets calculate percentage of cells with different number of
             # neighbours
 
-            numCells = len(cellList)
-            inc = 1.0/numCells * 100
+            inc = 1.0/nCells * 100
             polyDict = {}
             colorDict = {}
             for n in numNeigh:
@@ -133,11 +139,18 @@ def analyze(filePath, storePath, name=None):
             plt.ylabel('Percent')
             plt.savefig(storePath + '%d_barcharts.png' % step)
             plt.close()
-
-            c0NeighInds = cellList[0]
-            print c0NeighInds
-            c0NeighCoords = [nearCoMs[i] for i in c0NeighInds]
-            print c0NeighCoords
+            fig = plt.figure()
+            SampleNeigh = neighborInds[neighborRange[0]:neighborRange[1]]
+            neighCoords = np.array([CoMs[i] for i in SampleNeigh])
+            neighDists = np.linalg.norm(neighCoords - CoMs[0], axis=1)
+            #print neighDists.max(), np.mean(neighDists), neighDists.min()
+            closeNeighMask = neighDists < 2*np.ceil(neighDists.min())
+            neighCoords = neighCoords[closeNeighMask]
+            ax = fig.add_subplot(1,1,1, projection='3d')
+            ax.scatter3D(neighCoords[:, 0], neighCoords[:, 1], neighCoords[:,2], c=u'red')
+            ax.scatter3D(CoMs[0][0], CoMs[0][1], CoMs[0][2], c=u'blue')
+            plt.savefig(storePath + '%d_del.png' % step)
+            plt.close()
 
 
 for i in xrange(len(trajPaths)):
