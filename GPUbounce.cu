@@ -18,7 +18,7 @@
 #include "marsaglia.h"
 
 #include "inc/json/json.h"
-
+//#include "BinaryOutput.h"
 
 #define MaxNoofC180s 250000
 
@@ -385,7 +385,12 @@ int main(int argc, char *argv[])
       return -1;
   }
 
-  write_traj(1, trajfile);
+  BinFileAttrStruct bFA;
+  OpenBinaryFile("binFile.hist", &bFA);
+
+  write_traj(0, trajfile);
+  WriteToBinaryFile(X, Y, Z,
+                    No_of_C180s, 0, &bFA);
 
   // Set up walls if needed
   if (useWalls == 1){
@@ -457,6 +462,11 @@ int main(int argc, char *argv[])
   {
       if (doPopModel == 1){
             rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
+            // dr = -rGrowth(a + b*rGrowth)
+            // rGrowth += dr * delta_t ;
+            // dN/dT = N*R
+            // dR/dT = -R(a+bR)
+            // 
             if (rGrowth < 0) rGrowth =0; 
       }
       else {
@@ -596,6 +606,9 @@ int main(int argc, char *argv[])
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           write_traj(step, trajfile);
+          WriteToBinaryFile(X, Y, Z,
+                            No_of_C180s, step, &bFA);
+          printf("%d\n", No_of_C180s); 
       }
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
@@ -697,6 +710,7 @@ int main(int argc, char *argv[])
 
   fclose(trajfile);
   fclose(MitIndFile);
+  CloseBinaryFile(&bFA);
   return(0);
 
 }
