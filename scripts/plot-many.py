@@ -1,4 +1,4 @@
-#!/usr/bin/ipython
+#!/usr/bin/env python
 
 
 
