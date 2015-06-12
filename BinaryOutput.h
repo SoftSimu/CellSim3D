@@ -8,12 +8,14 @@ inline void NetcdfErrCheck(int funcReturn);
 struct BinFileAttrStruct{
     int fileId;
     int XId, YId, ZId;
-    int timeId, indId;
+    int timeId, indId, scalDimId;
+    int trajWriteIntId;
 };
 
 
 // Opens and sets up netcdf file
-void OpenBinaryFile(char* FileName, BinFileAttrStruct* bFA);
+void OpenBinaryFile(char* FileName, BinFileAttrStruct* bFA,
+                    int trajWriteInt);
 // Writes data at time = timeStep
 void WriteToBinaryFile(float* posX, float* posY, float* posZ,
                       // Add the variables below iff needed
