@@ -386,11 +386,11 @@ int main(int argc, char *argv[])
   }
 
   BinFileAttrStruct bFA;
-  OpenBinaryFile("binFile.hist", &bFA, trajWriteInt);
+  //OpenBinaryFile("binFile.hist", &bFA, trajWriteInt);
 
   write_traj(0, trajfile);
-  WriteToBinaryFile(X, Y, Z,
-                    No_of_C180s, 0, &bFA);
+ // WriteToBinaryFile(X, Y, Z,
+ //                    No_of_C180s, 0, &bFA);
 
   // Set up walls if needed
   if (useWalls == 1){
@@ -606,8 +606,8 @@ int main(int argc, char *argv[])
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           write_traj(step, trajfile);
-          WriteToBinaryFile(X, Y, Z,
-                            No_of_C180s, step, &bFA);
+          // WriteToBinaryFile(X, Y, Z,
+          //                   No_of_C180s, step, &bFA);
       }
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
@@ -709,7 +709,7 @@ int main(int argc, char *argv[])
 
   fclose(trajfile);
   fclose(MitIndFile);
-  CloseBinaryFile(&bFA);
+  // CloseBinaryFile(&bFA);
   return(0);
 
 }
