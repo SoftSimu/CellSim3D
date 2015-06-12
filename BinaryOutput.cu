@@ -54,8 +54,6 @@ void OpenBinaryFile(char* fileName, BinFileAttrStruct* bFA,
 void WriteToBinaryFile(float* posX, float* posY, float* posZ,
                        int numCells, int timeStep, BinFileAttrStruct* bFA){
 
-    printf("Testing the binary data output...\n");
-
     const size_t start[2] = {timeStep/1000, 0};
     const size_t count[2] = {1, numCells*192};
     NetcdfErrCheck(nc_put_vara_float(bFA->fileId, bFA->XId, start, count,

@@ -608,7 +608,6 @@ int main(int argc, char *argv[])
           write_traj(step, trajfile);
           WriteToBinaryFile(X, Y, Z,
                             No_of_C180s, step, &bFA);
-          printf("%d\n", No_of_C180s); 
       }
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
