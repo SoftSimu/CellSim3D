@@ -3,7 +3,7 @@ debug = -g -G
 arch = -arch=sm_30
 oflags = $(arch) -Xptxas="-v" -c -O3 -I inc -lnetcdf
 
-objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o PressureKernels.o BinaryOutput.o
+objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o PressureKernels.o
 
 eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm -lnetcdf
 
