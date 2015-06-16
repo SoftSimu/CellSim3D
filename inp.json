@@ -4,27 +4,29 @@
 {
     // First we have the core parameters for the simulation
     // The simulation cannot be run without these
+    // RESCALING
     "core": {
-        "particle_mass": 0.04,
-        "repulsion_range": 0.2,
-        "attraction_range": 0.3,
+        "particle_mass": 0.04, // 0.00004
+        "repulsion_range": 0.2, // 1.0
+        "attraction_range": 0.3, // 1.5
         "repulsion_strength": 100.0,
         "attraction_strength": 0.5,
-        "Youngs_mod": 1000.0,
-        "viscotic_damping": 2.0,
-        "internal_damping": 100.0,
-        "gamma_visc": 10,
-        "division_Vol": 2.9,
+        "Youngs_mod": 1000.0, // 1.0
+        "viscotic_damping": 15, // 0.015
+        "internal_damping": 100.0, // 0.1
+        "gamma_visc": 5, // 0.005
+        "division_Vol": 2.9, // 10.0
         "random_z_offset?": 0,
         "z_offset": 0.0, // added to a random value if random_z_offset == 1
-        "div_time_steps": 20000,
+        "div_time_steps": 150000,
         "time_interval": 0.0001,
         "Restart": 0,
         "trajWriteInt": 1000,
-        "non_div_time_steps": 100000,
-        "trajFileName": "traj_force_test_Pressure50.xyz",
-        "maxPressure": 65.0,
-        "minPressure": 50.0
+        "non_div_time_steps": 200000,
+        "trajFileName": "traj_big_wall_gamma5.xyz",
+        "maxPressure": 65.0, // 0.065
+        "minPressure": 50.0, // 0.050
+        "growth_rate": 0.008 // 0.00004
     },
     // Now params related to cell counting
     // In theory, these params are not needed for the simulation to run.
@@ -32,11 +34,11 @@
     // They may become truly optional later...
     "counting": {
         "countCells": 0,
-        "mit-index_file_name": "mit-index.dat",
+        "mit-index_file_name": "mit-index_big_wall_gamma5.dat",
         "count_only_internal_cells?": 0,
         "radius_cutoff": 0.6,
         "overwrite_mit_ind_file?": 0,
-        "cell_count_int": 1
+        "cell_count_int": 1000
     },
 
     // Params related to population modelling
@@ -53,7 +55,7 @@
 
     // Wall modelling parameters
     "walls": {
-        "useWalls": 0,
+        "useWalls": 1,
         "perpAxis": "z",
         "dAxis": 1.0,
         "wallLen": 10.0,
