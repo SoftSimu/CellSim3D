@@ -5,7 +5,7 @@ oflags = $(arch) -Xptxas="-v" -c -O3 -I inc -lnetcdf
 
 objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o PressureKernels.o
 
-eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm -lnetcdf
+eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm
 
 debug: oflags += $(debug)
 debug: eflags += $(debug)
