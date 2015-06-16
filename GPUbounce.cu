@@ -385,7 +385,6 @@ int main(int argc, char *argv[])
       return -1;
   }
 
-  BinFileAttrStruct bFA;
   //OpenBinaryFile("binFile.hist", &bFA, trajWriteInt);
 
   write_traj(0, trajfile);
