@@ -1,6 +1,5 @@
 #include<cuda.h>
 #include<stdio.h>
-#include"BinaryOutput.h"
 cudaDeviceProp getDevice(void);
 
 __global__ void  cell_division(int rank,
