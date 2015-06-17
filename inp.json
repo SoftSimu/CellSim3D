@@ -18,12 +18,12 @@
         "division_Vol": 2.9, // 10.0
         "random_z_offset?": 0,
         "z_offset": 0.0, // added to a random value if random_z_offset == 1
-        "div_time_steps": 150000,
+        "div_time_steps": 10000,
         "time_interval": 0.0001,
         "Restart": 0,
-        "trajWriteInt": 1000,
-        "non_div_time_steps": 200000,
-        "trajFileName": "traj_big_wall_gamma5.xyz",
+        "trajWriteInt": 100,
+        "non_div_time_steps": 5000,
+        "trajFileName": "traj_billiards.xyz",
         "maxPressure": 65.0, // 0.065
         "minPressure": 50.0, // 0.050
         "growth_rate": 0.008 // 0.00004
@@ -55,7 +55,7 @@
 
     // Wall modelling parameters
     "walls": {
-        "useWalls": 1,
+        "useWalls": 0,
         "perpAxis": "z",
         "dAxis": 1.0,
         "wallLen": 10.0,
