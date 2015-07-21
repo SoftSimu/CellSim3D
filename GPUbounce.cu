@@ -318,13 +318,13 @@ int main(int argc, char *argv[])
 
   cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
-  velListX = (float *)calloc(MaxNoofC180s, sizeof(float)); 
-  velListY = (float *)calloc(MaxNoofC180s, sizeof(float)); 
-  velListZ = (float *)calloc(MaxNoofC180s, sizeof(float));
+  velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
+  velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
+  velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
 
-  cudaMemcpy(d_velListX, velListX, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_velListY, velListY, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_velListZ, velListZ, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velListX, velListX, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velListY, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velListZ, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
   // cudaMemset(d_velListX, 0.0f, 192*MaxNoofC180s*2*sizeof(int)); 
   // cudaMemset(d_velListY, 0.0f, 192*MaxNoofC180s*2*sizeof(int)); 
@@ -1356,9 +1356,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         
         // first calculate velocities to use in the friction calculations
         
-        d_velListX[rank*192+atom] = (d_XP[atomInd] - d_XM[atomInd])/(2*delta_t); 
-        d_velListY[rank*192+atom] = (d_YP[atomInd] - d_YM[atomInd])/(2*delta_t); 
-        d_velListZ[rank*192+atom] = (d_ZP[atomInd] - d_ZM[atomInd])/(2*delta_t);
+        
+
         
         float velX = d_velListX[atomInd];
         float velY = d_velListY[atomInd];
@@ -1599,7 +1598,9 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             1.0/(1.0+delta_t/(2*mass))*
             ((delta_t*delta_t/mass)*FZ+2*d_Z[rank*192+atom]+(delta_t/(2*mass)-1.0)*d_ZM[rank*192+atom]);
 
-
+        d_velListX[rank*192+atom] = (d_XP[atomInd] - d_XM[atomInd])/(2*delta_t); 
+        d_velListY[rank*192+atom] = (d_YP[atomInd] - d_YM[atomInd])/(2*delta_t); 
+        d_velListZ[rank*192+atom] = (d_ZP[atomInd] - d_ZM[atomInd])/(2*delta_t);
 
     }
 }
