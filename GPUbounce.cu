@@ -1308,26 +1308,21 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
     rank = blockIdx.x;
     atom = threadIdx.x;
-    //printf("Cell = %d, Vx = %f, Vy = %f, Vz = %f\n", rank, d_velListX[rank*192+atom], d_velListZ[rank*192+atom], d_velListZ[rank*192+atom]); 
-    /*
-    if (atom == 0){ // Only need to do this once per cell
-        if (d_didCellDie[rank] == 0 and there is enough food to propagate ){
-            setPress = Pressure;
-            // Code to kill this thread (stop propagation)
-        }
-        else {
-            0;
-            // Going to add code here to do with cell death later.
-        }
-    }
-    __syncthreads();
-    */
     float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
 
     if ( rank < No_of_C180s && atom < 180 )
     {
+        if (isnan(d_X[rank*192+atom]) ||
+            isnan(d_Y[rank*192+atom]) || 
+            isnan(d_Z[rank*192+atom])){
+            printf("OH SHIT: we have a nan\n");
+            printf("Particle index: %d\n", atom);
+            printf("Crash now :(\n"); 
+            asm("trap;"); 
+        }
+        
         N1 = d_C180_nn[  0+atom];
         N2 = d_C180_nn[192+atom];
         N3 = d_C180_nn[384+atom];
@@ -1360,10 +1355,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
         int nnAtomInd;
         
-        // first calculate velocities to use in the friction calculations
-        
-        
-
         
         float velX = d_velListX[atomInd];
         float velY = d_velListY[atomInd];
@@ -1405,9 +1396,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             FY += -internal_damping*(d_velListY[atomInd] - d_velListY[rank*192+N1]);
             FZ += -internal_damping*(d_velListZ[atomInd] - d_velListZ[rank*192+N1]);
 
-            // printf("old= %f, new=%f\n",
-            //        -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1])),
-            //        -internal_damping*(d_velListX[atomInd] - d_velListX[rank*192+N1]));
         }
 
 #ifdef FORCE_DEBUG
@@ -1510,13 +1498,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                     float vTauX = v_ijx - vijDotn*NX;
                     float vTauY = v_ijy - vijDotn*NY;
                     float vTauZ = v_ijz - vijDotn*NZ; 
-
-                    // printf("vel vx = %f vy = %f vz = %f\ntan tx = %f ty = %f tz= %f\n\n", v_ijx, v_ijy, v_ijz,
-                    //        vTauX, vTauY, vTauZ); 
-                    
-                    // FX -= viscotic_damping*(d_velListX[atomInd] - d_velListX[nn_rank*192+nn_atom]); 
-                    // FY -= viscotic_damping*(d_velListY[atomInd] - d_velListY[nn_rank*192+nn_atom]); 
-                    // FZ -= viscotic_damping*(d_velListZ[atomInd] - d_velListZ[nn_rank*192+nn_atom]);
 
                     FX -= viscotic_damping*vTauX;
                     FY -= viscotic_damping*vTauY;
