@@ -142,109 +142,102 @@ cudaDeviceProp getDevice(void)
 }
 
 
+
+__device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap,
+                                       float CMx, float CMy, float CMz,
+                                       float X, float Y, float Z,
+                                       float* d_X,  float* d_Y,  float* d_Z,
+                                       float* d_XP, float* d_YP, float* d_ZP,
+                                       float planeNx, float planeNy, float planeNz){
+             
+    // redefine position of parent cell wrt to an origin that includes
+    // 0.5 the minimum gap between daughter cells
+    X = X - (CMx + halfGap*planeNx); 
+    Y = Y - (CMy + halfGap*planeNy); 
+    Z = Z - (CMz + halfGap*planeNz);
+
+    float posDotN = X*planeNx + Y*planeNy + Z*planeNz;
+
+    // If particle is below the plane, project onto the plane
+    if (posDotN < 0.0f){
+        X = X - posDotN*planeNx;
+        Y = Y - posDotN*planeNy;
+        Z = Z - posDotN*planeNz;
+    }
+             
+    d_XP[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
+    d_YP[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
+    d_ZP[daughtInd*192+partInd] = Z + (CMz + halfGap*planeNz);
+
+    d_X[daughtInd*192+partInd]  = d_XP[daughtInd*192+partInd];
+    d_Y[daughtInd*192+partInd]  = d_YP[daughtInd*192+partInd];
+    d_Z[daughtInd*192+partInd]  = d_ZP[daughtInd*192+partInd];
+
+}
+
+
 __global__ void  cell_division(int rank,
                                float *d_XP, float *d_YP, float *d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz, 
-                               int No_of_C180s, float *d_ran2, float repulsion_range)
-  {
-  int newrank;
-  float RCNNS, SCNNS, TCNNS;
-__shared__ float CMx, CMy, CMz;
+                               int No_of_C180s, float *d_ran2, float repulsion_range){
+    int newrank = No_of_C180s;
+    __shared__ float CMx, CMy, CMz;
   
-int tid  = threadIdx.x;
-int atom = tid;
+    int tid  = threadIdx.x;
+    int atom = tid;
 
- if (tid == 0){
-   CMx = AllCMx[rank];
-   CMy = AllCMy[rank];
-   CMz = AllCMz[rank];
- }
+    if (tid == 0){
+        CMx = AllCMx[rank];
+        CMy = AllCMy[rank];
+        CMz = AllCMz[rank];
+    }
 
-__syncthreads();
-
-
-  if ( atom < 180 ) 
-     {
-
-         // planeN is the division plane's normal vector
-         float planeNx = d_ran2[2];
-         float planeNy = d_ran2[3];
-         float planeNz = d_ran2[4];
-
-     
-         if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
-             printf("wtf\n");
-             asm("trap;");
-         }
-
-         float X = d_XP[rank*192+atom] - CMx; 
-         float Y = d_YP[rank*192+atom] - CMy; 
-         float Z = d_ZP[rank*192+atom] - CMz;
-
-         float posDotN = X*planeNx + Y*planeNy + Z*planeNz;
-
-     
-         // d1 is the position of atom belonging to first daughter
-         float d1X = 0;
-         float d1Y = 0;
-         float d1Z = 0;
-     
-         // d2 is the position of atom belonging to second daughter
-         float d2X = 0;
-         float d2Y = 0;
-         float d2Z = 0;
+    __syncthreads();
 
 
-     
-         // If atom is below the division plane or in the division plane
-         if (posDotN < 0 || posDotN == 0){
+    if ( atom < 180 ) 
+    {
+
+        // planeN is the division plane's normal vector
+        float planeNx = d_ran2[2];
+        float planeNy = d_ran2[3];
+        float planeNz = d_ran2[4];
+
+        if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
+            printf("OH SHIT: normal is not normalized\n");
+            printf("Crash now :(\n"); 
+            asm("trap;");
+        }
+
+
+        // First generate and write positions for the first daughter
+
+        float X = d_XP[rank*192+atom]; 
+        float Y = d_YP[rank*192+atom]; 
+        float Z = d_ZP[rank*192+atom]; 
          
-             // Project it onto the plane, and move it ABOVE the plane by
-             // 0.5*repulsion_range, give its new position to FIRST daughter
-             d1X = X - posDotN*planeNx + 0.5*repulsion_range*planeNx;
-             d1Y = Y - posDotN*planeNy + 0.5*repulsion_range*planeNy;
-             d1Z = Z - posDotN*planeNz + 0.5*repulsion_range*planeNz;
+        CalcAndUpdateDaughtPos(rank, atom, 0.5*repulsion_range,
+                               CMx, CMy, CMz,
+                               X, Y, Z,
+                               d_X, d_Y, d_Z, 
+                               d_XP, d_YP, d_ZP,
+                               planeNx, planeNy, planeNz);
+        
+        // Invert the normal
+        planeNx = -1*planeNx; 
+        planeNy = -1*planeNy; 
+        planeNz = -1*planeNz;
+
+        // Now repeat for the second daughter
+        CalcAndUpdateDaughtPos(newrank, atom, 0.5*repulsion_range,
+                               CMx, CMy, CMz,
+                               X, Y, Z,
+                               d_X, d_Y, d_Z, 
+                               d_XP, d_YP, d_ZP,
+                               planeNx, planeNy, planeNz); 
          
-             // Give atom's original position to SECOND daughter unchanged. 
-             d2X = X;
-             d2Y = Y;
-             d2Z = Z;
-         
-         } else { // if atom is above the division plane
-         
-             // Give atom's original position to FIRST daughter unchanged
-             d1X = X;
-             d1Y = Y;
-             d1Z = Z;
-
-             // Project it onto the plane, and move it UNDER the plane by
-             // 0.5*repulsion_range, give its new position to SECOND daughter
-             d2X = X - posDotN*planeNx - 0.5*repulsion_range*planeNx;
-             d2Y = Y - posDotN*planeNy - 0.5*repulsion_range*planeNy;
-             d2Z = Z - posDotN*planeNz - 0.5*repulsion_range*planeNz;
-         
-         }
-
-     
-         d_XP[rank*192+atom] = d1X + CMx;
-         d_YP[rank*192+atom] = d1Y + CMy;
-         d_ZP[rank*192+atom] = d1Z + CMz;
-
-         d_XP[newrank*192+atom] = d2X + CMx;
-         d_YP[newrank*192+atom] = d2Y + CMy;
-         d_ZP[newrank*192+atom] = d2Z + CMz;
-
-         d_X[rank*192+atom ]   = d_XP[rank*192+atom];
-         d_Y[rank*192+atom ]   = d_YP[rank*192+atom];
-         d_Z[rank*192+atom ]   = d_ZP[rank*192+atom];
-
-         d_X[newrank*192+atom] = d_XP[newrank*192+atom];
-         d_Y[newrank*192+atom] = d_YP[newrank*192+atom];
-         d_Z[newrank*192+atom] = d_ZP[newrank*192+atom];
-     
-     }
-
+    }
 }
 
 
