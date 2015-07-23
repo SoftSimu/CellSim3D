@@ -528,7 +528,6 @@ int main(int argc, char *argv[])
                                      d_volume, d_cell_div, divVol);
 
         count_and_get_div();
-
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
           do
@@ -539,6 +538,7 @@ int main(int argc, char *argv[])
               s = ran2[0]*ran2[0] + ran2[1]*ran2[1];
             }
           while ( s >= 1.0f);
+          float x1 = ran2[0]; float x2 = ran2[1]; 
           theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);
           if ( fabsf(ran2[0]) < 0.000001 ) phi = 0.0f;
           else phi = acos(ran2[0]/sqrtf(s));
@@ -546,7 +546,13 @@ int main(int argc, char *argv[])
 
           ran2[0] = theta; ran2[1] = phi;
 
-          cudaMemcpy( d_ran2, ran2, 2*sizeof(float),cudaMemcpyHostToDevice);
+
+          ran2[2] = 2*x1*sqrt(1-x1*x1-x2*x2);
+          ran2[3] = 2*x2*sqrt(1-x1*x1-x2*x2);
+          ran2[4] = 1 - 2*(x1*x1+x2*x2); 
+
+          cudaMemcpy( d_ran2, ran2, 5*sizeof(float),cudaMemcpyHostToDevice);
+          
           NDIV[globalrank] += 1;
 
           cell_division<<<1,256>>>(globalrank,
@@ -555,7 +561,7 @@ int main(int argc, char *argv[])
                                    d_CMx, d_CMy, d_CMz,
                                    No_of_C180s, d_ran2, repulsion_range);
           resetIndices[divCell] = globalrank;
-          resetIndices[divCell + num_cell_div] = No_of_C180s; 
+          resetIndices[divCell + num_cell_div] = No_of_C180s;
           ++No_of_C180s;
         }
 

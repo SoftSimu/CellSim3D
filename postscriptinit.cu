@@ -167,54 +167,83 @@ __syncthreads();
   if ( atom < 180 ) 
      {
 
-     float ALP =d_ran2[1];
-     float ALP2=d_ran2[0];
+         // planeN is the division plane's normal vector
+         float planeNx = d_ran2[2];
+         float planeNy = d_ran2[3];
+         float planeNz = d_ran2[4];
 
-     float SC =  cosf(ALP)*cosf(ALP2)*(d_XP[192*rank+atom]-CMx)
-                -sinf(ALP)*cosf(ALP2)*(d_YP[rank*192+atom]-CMy)
-                +sinf(ALP2)*(d_ZP[rank*192+atom]-CMz);
-     float TC =  sinf(ALP)*(d_XP[rank*192+atom]-CMx)
-                +cosf(ALP)*(d_YP[rank*192+atom]-CMy);
-     float RC = -sinf(ALP2)*cosf(ALP)*(d_XP[rank*192+atom]-CMx)
-                +sinf(ALP)*sinf(ALP2)*(d_YP[rank*192+atom]-CMy)
-                +cosf(ALP2)*(d_ZP[rank*192+atom]-CMz);
-
-
-     newrank = No_of_C180s;                
-  
-     SCNNS = SC;
-     TCNNS = TC;
-     if ( RC > 0.0f )
-         {
-         RCNNS = -repulsion_range/2.0f;
-         if ( RC < repulsion_range/2.0f ) RC = repulsion_range/2.0f;
-         }
-     else
-         {
-         RCNNS = RC;
-         if ( RCNNS > -repulsion_range/2.0f ) RCNNS = -repulsion_range/2.0f;
-         RC = repulsion_range/2.0f;
+     
+         if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
+             printf("wtf\n");
+             asm("trap;");
          }
 
+         float X = d_XP[rank*192+atom] - CMx; 
+         float Y = d_YP[rank*192+atom] - CMy; 
+         float Z = d_ZP[rank*192+atom] - CMz;
 
-     d_XP[192*rank+atom]    =  cosf(-ALP)*cosf(-ALP2)*SC -sinf(-ALP)*TC + cosf(-ALP)*sinf(-ALP2)*RC+CMx;
-     d_YP[192*rank+atom]    =  sinf(-ALP)*cosf(-ALP2)*SC +cosf(-ALP)*TC + sinf(-ALP)*sinf(-ALP2)*RC+CMy;
-     d_ZP[192*rank+atom]    =            -sinf(-ALP2)*SC                            +cosf(-ALP2)*RC+CMz;
+         float posDotN = X*planeNx + Y*planeNy + Z*planeNz;
 
-     d_XP[192*newrank+atom] =  cosf(-ALP)*cosf(-ALP2)*SCNNS-sinf(-ALP)*TCNNS + cosf(-ALP)*sinf(-ALP2)*RCNNS+CMx;
-     d_YP[192*newrank+atom] =  sinf(-ALP)*cosf(-ALP2)*SCNNS+cosf(-ALP)*TCNNS + sinf(-ALP)*sinf(-ALP2)*RCNNS+CMy;
-     d_ZP[192*newrank+atom] =            -sinf(-ALP2)*SCNNS                  +            cosf(-ALP2)*RCNNS+CMz;
+     
+         // d1 is the position of atom belonging to first daughter
+         float d1X = 0;
+         float d1Y = 0;
+         float d1Z = 0;
+     
+         // d2 is the position of atom belonging to second daughter
+         float d2X = 0;
+         float d2Y = 0;
+         float d2Z = 0;
 
-        
-     d_X[rank*192+atom ]   = d_XP[rank*192+atom];
-     d_Y[rank*192+atom ]   = d_YP[rank*192+atom];
-     d_Z[rank*192+atom ]   = d_ZP[rank*192+atom];
 
-     d_X[newrank*192+atom] = d_XP[newrank*192+atom];
-     d_Y[newrank*192+atom] = d_YP[newrank*192+atom];
-     d_Z[newrank*192+atom] = d_ZP[newrank*192+atom];
+     
+         // If atom is below the division plane or in the division plane
+         if (posDotN < 0 || posDotN == 0){
+         
+             // Project it onto the plane, and move it ABOVE the plane by
+             // 0.5*repulsion_range, give its new position to FIRST daughter
+             d1X = X - posDotN*planeNx + 0.5*repulsion_range*planeNx;
+             d1Y = Y - posDotN*planeNy + 0.5*repulsion_range*planeNy;
+             d1Z = Z - posDotN*planeNz + 0.5*repulsion_range*planeNz;
+         
+             // Give atom's original position to SECOND daughter unchanged. 
+             d2X = X;
+             d2Y = Y;
+             d2Z = Z;
+         
+         } else { // if atom is above the division plane
+         
+             // Give atom's original position to FIRST daughter unchanged
+             d1X = X;
+             d1Y = Y;
+             d1Z = Z;
+
+             // Project it onto the plane, and move it UNDER the plane by
+             // 0.5*repulsion_range, give its new position to SECOND daughter
+             d2X = X - posDotN*planeNx - 0.5*repulsion_range*planeNx;
+             d2Y = Y - posDotN*planeNy - 0.5*repulsion_range*planeNy;
+             d2Z = Z - posDotN*planeNz - 0.5*repulsion_range*planeNz;
+         
+         }
+
+     
+         d_XP[rank*192+atom] = d1X + CMx;
+         d_YP[rank*192+atom] = d1Y + CMy;
+         d_ZP[rank*192+atom] = d1Z + CMz;
+
+         d_XP[newrank*192+atom] = d2X + CMx;
+         d_YP[newrank*192+atom] = d2Y + CMy;
+         d_ZP[newrank*192+atom] = d2Z + CMz;
+
+         d_X[rank*192+atom ]   = d_XP[rank*192+atom];
+         d_Y[rank*192+atom ]   = d_YP[rank*192+atom];
+         d_Z[rank*192+atom ]   = d_ZP[rank*192+atom];
+
+         d_X[newrank*192+atom] = d_XP[newrank*192+atom];
+         d_Y[newrank*192+atom] = d_YP[newrank*192+atom];
+         d_Z[newrank*192+atom] = d_ZP[newrank*192+atom];
+     
      }
-
 
 }
 
