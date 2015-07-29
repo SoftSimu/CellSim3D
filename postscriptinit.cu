@@ -152,14 +152,14 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
              
     // redefine position of parent cell wrt to an origin that includes
     // 0.5 the minimum gap between daughter cells
-    X = X - (CMx + halfGap*planeNx); 
-    Y = Y - (CMy + halfGap*planeNy); 
-    Z = Z - (CMz + halfGap*planeNz);
+    X = X - CMx - halfGap*planeNx; 
+    Y = Y - CMy - halfGap*planeNy; 
+    Z = Z - CMz - halfGap*planeNz;
 
     float posDotN = X*planeNx + Y*planeNy + Z*planeNz;
 
     // If particle is below the plane, project onto the plane
-    if (posDotN < 0.0f){
+    if (posDotN < 0.0f || posDotN == 0){
         X = X - posDotN*planeNx;
         Y = Y - posDotN*planeNy;
         Z = Z - posDotN*planeNz;
