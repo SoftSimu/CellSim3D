@@ -88,7 +88,7 @@ __device__ void CalculateForce(int nodeInd, int cellInd, float nodeMass,
     
     float R = 0;
     int neighInd = -2;
-    float pressure = pressList[globalInd];
+    float pressure = pressList[cellInd];
     
     // Calculate forces over all the bonded neighbours (3 in this case)
     for (int b = 0; b < 3; b++){
