@@ -2,7 +2,8 @@ compiler = $(shell which nvcc)
 debug = -g -G
 arch = -arch=sm_35
 oflags = $(arch) -Xptxas="-v" -c -O3 -I inc -I /home/pmadhika/cuda-samples/common/inc
-objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o volume.o jsoncpp.o PressureKernels.o
+objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o	\
+volume.o jsoncpp.o PressureKernels.o IntegrationKernels.o
 
 eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm
 
@@ -36,6 +37,9 @@ PressureKernels.o: PressureKernels.cu postscript.h
 
 BinaryOutput.o: BinaryOutput.cu BinaryOutput.h
 	$(compiler) $(oflags) BinaryOutput.cu
+
+IntegrationKernels.o: IntegrationKernels.cu IntegrationKernels.h
+	$(compiler) $(oflags) IntegrationKernels.cu
 
 .PHONY: clean
 clean:
