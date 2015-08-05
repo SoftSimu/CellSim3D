@@ -316,8 +316,7 @@ __global__ void FirstTimeForceCalculation(int No_of_C180s, int* d_C180_nn, int* 
                                           float threshDist){
     int cellInd = blockIdx.x;
     int nodeInd = threadIdx.x;
-    int globalInd = cellInd*192+nodeInd;
-
+    
     if (cellInd < No_of_C180s && nodeInd < 180){
         CalculateForce(nodeInd, cellInd, m,
                        internal_damping, delta_t, d_pressList,
