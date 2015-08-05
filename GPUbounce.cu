@@ -355,6 +355,10 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_velHtsY, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velHtsZ, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
+  cudaMemcpy(d_Fx, velListX, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
+
   
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
@@ -568,7 +572,7 @@ int main(int argc, char *argv[])
                                                  wall1, wall2,
                                                  threshDist, useWalls,
                                                  d_velListX, d_velListY, d_velListZ);
-
+      
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
                                         d_CMx, d_CMy, d_CMz);
@@ -1625,6 +1629,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
 
             __syncthreads();
         }
+
+        printf("%d, Fx = %f, Fy = %f; Fz = %f\n", atom, FX, FY, FZ);
 
         // time propagation
         
