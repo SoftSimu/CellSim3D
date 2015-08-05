@@ -27,7 +27,6 @@ __device__ void VelocityUpdate(float Ax, float Ay, float Az,
 
 
 // Now for the force calculation kernel
-
 __device__ void CalculateForce(int nodeInd, int cellInd, float nodeMass,
                                float gamma_int, float delta_t, float* pressList,
                                float Youngs_mod, float R0, float attraction_strength,
@@ -301,3 +300,39 @@ __global__ void Integrate(int No_of_C180s, int* d_C180_nn, int* d_C180_sign,
     }
 }
 
+__global__ void FirstTimeForceCalculation(int No_of_C180s, int* d_C180_nn, int* d_C180_sign,
+                                          float* d_X, float* d_Y, float* d_Z,
+                                          float R0, float* d_pressList, float Youngs_mod,
+                                          float internal_damping, float delta_t, float* d_bounding_xyz,
+                                          float attraction_strength, float attraction_range,
+                                          float repulsion_strength, float repulsion_range,
+                                          float viscotic_damping, float m,
+                                          float Minx, float Miny, float Minz,
+                                          float xDiv, float yDiv, float zDiv,
+                                          int* d_NoofNNlist, int* d_NNlist, float DL, float gamma_visc,
+                                          float* VxL, float* VyL, float* VzL,
+                                          float* FxL, float* FyL, float* FzL,
+                                          float wall1, float wall2, bool useWalls,
+                                          float threshDist){
+    int cellInd = blockIdx.x;
+    int nodeInd = threadIdx.x;
+    int globalInd = cellInd*192+nodeInd;
+
+    if (cellInd < No_of_C180s && nodeInd < 180){
+        CalculateForce(nodeInd, cellInd, m,
+                       internal_damping, delta_t, d_pressList,
+                       Youngs_mod, R0, attraction_strength,
+                       attraction_range, repulsion_strength,
+                       repulsion_range, viscotic_damping,
+                       gamma_visc, DL,
+                       Minx, Miny, Minz,
+                       xDiv, yDiv, zDiv,
+                       VxL, VyL, VzL,
+                       d_C180_nn, d_C180_sign, d_NoofNNlist,
+                       d_NNlist, d_bounding_xyz,
+                       d_X, d_Y, d_Z,
+                       wall1, wall2, useWalls,
+                       threshDist,
+                       FxL, FyL, FzL);
+    }
+}

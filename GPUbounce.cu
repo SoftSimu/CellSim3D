@@ -16,11 +16,20 @@
 //#include "helper_cuda.h"
 #include "postscript.h"
 #include "marsaglia.h"
+#include "IntegrationKernels.h"
 
 #include "inc/json/json.h"
 //#include "BinaryOutput.h"
 
 #define MaxNoofC180s 10000
+
+#define CudaErrorCheck() { \
+      cudaError_t e = cudaGetLastError(); \
+      if (e!=cudaSuccess){\
+          printf("Cuda failure %s: %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
+          exit(0); \
+      }            \
+    }
 
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
@@ -482,10 +491,39 @@ int main(int argc, char *argv[])
 
   cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
 
+  // Initial force calculation
+
+  FirstTimeForceCalculation<<<noofblocks,threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign,
+                                          d_X, d_Y, d_Z,
+                                          R0, d_pressList, Youngs_mod,
+                                          internal_damping, delta_t, d_bounding_xyz,
+                                          attraction_strength, attraction_range,
+                                          repulsion_strength, repulsion_range,
+                                          viscotic_damping, mass,
+                                          Minx[0], Minx[2], Minx[4],
+                                          Xdiv, Ydiv, Zdiv,
+                                          d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                          d_velListX, d_velListY, d_velListZ,
+                                          d_Fx, d_Fy, d_Fz,
+                                          wall1, wall2, useWalls,
+                                          threshDist);
+
+  CudaErrorCheck();
+
+  cudaMemcpy(velListX, d_Fx, 192*MaxNoofC180s*sizeof(float), cudaMemcpyDeviceToHost); 
+  cudaMemcpy(velListY, d_Fy, 192*MaxNoofC180s*sizeof(float), cudaMemcpyDeviceToHost); 
+  cudaMemcpy(velListZ, d_Fz, 192*MaxNoofC180s*sizeof(float), cudaMemcpyDeviceToHost); 
+
+  for (int i = 0; i<180; i++){
+      printf("i = %d: Fx = %f, Fy = %f, Fz = %f\n", i, velListX[i], velListY[i], velListZ[i]);
+  }
+
+
   float rGrowth = 0;
 
   // Simulation loop
-  for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
+  //for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
+  for (step = 1; step< 2; step++)
   {
       if (doPopModel == 1){
             rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
