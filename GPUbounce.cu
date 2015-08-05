@@ -20,7 +20,7 @@
 #include "inc/json/json.h"
 //#include "BinaryOutput.h"
 
-#define MaxNoofC180s 250000
+#define MaxNoofC180s 10000
 
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
@@ -87,6 +87,10 @@ float* d_velListX;
 float* d_velListY; 
 float* d_velListZ;
 
+float* d_velHtsX;
+float* d_velHtsY;
+float* d_velHtsZ;
+
 float* velListX; 
 float* velListY; 
 float* velListZ; 
@@ -127,6 +131,11 @@ float  *X,  *Y,  *Z;     // host: atom positions
 float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
 float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
 float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
+
+
+float* d_Fx;
+float* d_Fy;
+float* d_Fz;
 
 // host: minimal bounding box for fullerene
 float *bounding_xyz;
@@ -286,7 +295,14 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_velHtsX, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_velHtsY, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_velHtsZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Fx, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  
 
 
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
@@ -326,10 +342,10 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_velListY, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velListZ, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
-  // cudaMemset(d_velListX, 0.0f, 192*MaxNoofC180s*2*sizeof(int)); 
-  // cudaMemset(d_velListY, 0.0f, 192*MaxNoofC180s*2*sizeof(int)); 
-  // cudaMemset(d_velListZ, 0.0f, 192*MaxNoofC180s*2*sizeof(int)); 
-  
+  cudaMemcpy(d_velHtsX, velListX, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velHtsY, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velHtsZ, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+
   
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
