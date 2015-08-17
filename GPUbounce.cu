@@ -21,7 +21,7 @@
 #include "inc/json/json.h"
 //#include "BinaryOutput.h"
 
-#define MaxNoofC180s 10000
+#define MaxNoofC180s 250000
 
 #define CudaErrorCheck() { \
       cudaError_t e = cudaGetLastError(); \
@@ -426,6 +426,8 @@ int main(int argc, char *argv[])
       return -1;
   }
 
+  FILE* velFile = fopen("velocity2.xyz", "w"); 
+
   //OpenBinaryFile("binFile.hist", &bFA, trajWriteInt);
 
   write_traj(0, trajfile);
@@ -654,7 +656,7 @@ int main(int argc, char *argv[])
 
       // ----------------------------------------- End Cell Death --------------
 
-
+      
       bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
                                          d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
                                          d_bounding_xyz, d_CMx, d_CMy, d_CMz);
@@ -680,7 +682,14 @@ int main(int argc, char *argv[])
           cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+
           write_traj(step, trajfile);
+
+          cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          
+          write_vel(step, velFile); 
           // WriteToBinaryFile(X, Y, Z,
           //                   No_of_C180s, step, &bFA);
       }
@@ -1661,6 +1670,15 @@ void write_traj(int t_step, FILE* trajfile)
   {
       fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[p], Y[p], Z[p]);
   }
+}
+
+void write_vel(int t_step, FILE* velFile){
+    fprintf(velFile, "%d\n", No_of_C180s * 192);
+    fprintf(velFile, "Step: %d\n", t_step);
+    for (int p = 0; p < No_of_C180s*192; p++)
+    {
+        fprintf(velFile, "%.7f,  %.7f,  %.7f\n", velListX[p], velListY[p], velListZ[p]);
+    }
 }
 
 
