@@ -516,20 +516,10 @@ int main(int argc, char *argv[])
 
   CudaErrorCheck();
 
-  cudaMemcpy(velListX, d_Fx, 192*MaxNoofC180s*sizeof(float), cudaMemcpyDeviceToHost); 
-  cudaMemcpy(velListY, d_Fy, 192*MaxNoofC180s*sizeof(float), cudaMemcpyDeviceToHost); 
-  cudaMemcpy(velListZ, d_Fz, 192*MaxNoofC180s*sizeof(float), cudaMemcpyDeviceToHost); 
-
-  for (int i = 0; i<180; i++){
-      printf("i = %d: Fx = %f, Fy = %f, Fz = %f\n", i, velListX[i], velListY[i], velListZ[i]);
-  }
-
-
   float rGrowth = 0;
 
   // Simulation loop
-  //for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
-  for (step = 1; step< 2; step++)
+  for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
       if (doPopModel == 1){
             rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
