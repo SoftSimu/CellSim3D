@@ -1639,8 +1639,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             __syncthreads();
         }
 
-        printf("%d, Fx = %f, Fy = %f; Fz = %f\n", atom, FX, FY, FZ);
-
         // time propagation
         
         d_XP[rank*192+atom] =
