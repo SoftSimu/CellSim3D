@@ -18,7 +18,7 @@
 #include "marsaglia.h"
 #include "IntegrationKernels.h"
 
-#include "inc/json/json.h"
+#include "json/json.h"
 //#include "BinaryOutput.h"
 
 #define MaxNoofC180s 250000

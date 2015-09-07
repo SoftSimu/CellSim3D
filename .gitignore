@@ -18,3 +18,4 @@ graphs/*
 *.json
 *.gif
 *.bdl
+./bin/*

@@ -1,46 +1,27 @@
 compiler = $(shell which nvcc)
 debug = -g -G
 arch = -arch=sm_30
-oflags = $(arch) -Xptxas="-v" -c -O3 -I inc -I /home/pmadhika/cuda-samples/common/inc
-objects = GPUbounce.o postscriptinit.o propagatebound.o centermass.o	\
-volume.o jsoncpp.o PressureKernels.o IntegrationKernels.o
+oflags = $(arch) -Xptxas="-v" -O3 -I inc -I /home/pmadhika/cuda-samples/common/inc
+objDir = bin
+sources = $(wildcard src/*.cu)
+objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
 
-eflags = -O3 $(arch) -o "CellDiv" $(objects) -lm
+eflags = -O3 $(arch) -o $(objDir)/"CellDiv" $(objects) bin/jsoncpp.o -lm
 
 debug: oflags += $(debug)
 debug: eflags += $(debug)
 debug: CellDiv
 
-CellDiv: $(objects)
+$(objects): bin/%.o : src/%.cu
+	$(compiler) $(oflags) -c $< -o $@
+
+CellDiv: $(objects) jsoncpp.o
 	$(compiler) $(eflags)
 
-GPUbounce.o: GPUbounce.cu postscript.h
-	$(compiler) $(oflags) GPUbounce.cu
-
-postscriptinit.o: postscriptinit.cu postscript.h
-	$(compiler) $(oflags) postscriptinit.cu
-
-propagatebound.o: propagatebound.cu postscript.h
-	$(compiler) $(oflags) propagatebound.cu
-
-centermass.o: centermass.cu postscript.h
-	$(compiler) $(oflags) centermass.cu
-
-volume.o: volume.cu postscript.h
-	$(compiler) $(oflags) volume.cu
-
+# Third party libraries
 jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
-	$(compiler) $(oflags) src/utils/jsoncpp.cpp
-
-PressureKernels.o: PressureKernels.cu postscript.h
-	$(compiler) $(oflags) PressureKernels.cu
-
-BinaryOutput.o: BinaryOutput.cu BinaryOutput.h
-	$(compiler) $(oflags) BinaryOutput.cu
-
-IntegrationKernels.o: IntegrationKernels.cu IntegrationKernels.h
-	$(compiler) $(oflags) IntegrationKernels.cu
+	$(compiler) $(oflags) -c src/utils/jsoncpp.cpp -o $(objDir)/jsoncpp.o
 
 .PHONY: clean
 clean:
-	rm -f CellDiv $(objects)
+	rm -f $(objDir)/CellDiv $(objects)
