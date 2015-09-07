@@ -1,10 +1,11 @@
 #!/bin/bash
 
-re='[0-9]+'
+n=$1
 
-if ! [[ $1 =~ $re ]]; then
-	echo "Must give me a perfect square number."
+m=$(echo "sqrt(""$n"")^2" | bc)
+
+if [ "$n" -ne "$m" ]; then
+    echo "Must give me a perfect square number."
 else
-	./CellDiv $1 | tee out.log
-#	echo okay
+    ./CellDiv $1 | tee out.log
 fi
