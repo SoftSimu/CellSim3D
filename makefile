@@ -13,6 +13,7 @@ debug: eflags += $(debug)
 debug: CellDiv
 
 $(objects): bin/%.o : src/%.cu
+	@mkdir -p $(@D)
 	$(compiler) $(oflags) -c $< -o $@
 
 CellDiv: $(objects) jsoncpp.o
