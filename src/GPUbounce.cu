@@ -17,6 +17,7 @@
 #include "postscript.h"
 #include "marsaglia.h"
 #include "IntegrationKernels.h"
+#include "RandomVector.h"
 
 #include "json/json.h"
 //#include "BinaryOutput.h"
@@ -178,6 +179,10 @@ float *ran2;             // host: ran2[]
 float *d_ran2;           // device: ran2[], used in celldivision
 
 int *NDIV;               // # of divisions
+
+// Parameters related to division
+bool useDivPlaneBasis;
+float divPlaneBasis[3]; 
 
 long int GPUMemory;
 long int CPUMemory;
@@ -580,28 +585,14 @@ int main(int argc, char *argv[])
         count_and_get_div();
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
-          do
-            {
-              ranmar(ran2,2);
-              ran2[0] = 2.0f*ran2[0]-1.0f;
-              ran2[1] = 2.0f*ran2[1]-1.0f;
-              s = ran2[0]*ran2[0] + ran2[1]*ran2[1];
-            }
-          while ( s >= 1.0f);
-          float x1 = ran2[0]; float x2 = ran2[1]; 
-          theta = 3.141592654f/2.0f- acosf(1.0f-2.0f*s);
-          if ( fabsf(ran2[0]) < 0.000001 ) phi = 0.0f;
-          else phi = acos(ran2[0]/sqrtf(s));
-          if ( ran2[1] < 0 ) phi = -phi;
+          float norm[3];
 
-          ran2[0] = theta; ran2[1] = phi;
+          if (useDivPlaneBasis)
+              GetRandomVectorBasis(norm, divPlaneBasis);
+          else
+              GetRandomVector(norm); 
 
-
-          ran2[2] = 2*x1*sqrt(1-x1*x1-x2*x2);
-          ran2[3] = 2*x2*sqrt(1-x1*x1-x2*x2);
-          ran2[4] = 1 - 2*(x1*x1+x2*x2); 
-
-          cudaMemcpy( d_ran2, ran2, 5*sizeof(float),cudaMemcpyHostToDevice);
+          cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice); 
           
           NDIV[globalrank] += 1;
 
@@ -1049,7 +1040,19 @@ int read_json_params(const char* inpFile){
         threshDist = wallParams["threshDist"].asFloat();
     }
 
-
+    Json::Value divParams = inpRoot.get("divParams", Json::nullValue);
+    
+    if (divParams == Json::nullValue){
+        printf("ERROR: Cannot load division parameters\n");
+        return -1;
+    } else{
+        useDivPlaneBasis = divParams["useDivPlaneBasis"].asInt();
+        divPlaneBasis[0] = divParams["divPlaneBasisX"].asFloat();
+        divPlaneBasis[1] = divParams["divPlaneBasisY"].asFloat();
+        divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
+        printf("%f %f %f\n", divPlaneBasis[0], divPlaneBasis[1], divPlaneBasis[2]);
+    }
+    
     if (ranZOffset == 0)
         zOffset = 0.0;
 

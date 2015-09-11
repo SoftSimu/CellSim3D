@@ -180,7 +180,7 @@ __global__ void  cell_division(int rank,
                                float *d_XP, float *d_YP, float *d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz, 
-                               int No_of_C180s, float *d_ran2, float repulsion_range){
+                               int No_of_C180s, float *d_randNorm, float repulsion_range){
     int newrank = No_of_C180s;
     __shared__ float CMx, CMy, CMz;
   
@@ -200,9 +200,9 @@ __global__ void  cell_division(int rank,
     {
 
         // planeN is the division plane's normal vector
-        float planeNx = d_ran2[2];
-        float planeNy = d_ran2[3];
-        float planeNz = d_ran2[4];
+        float planeNx = d_randNorm[0];
+        float planeNy = d_randNorm[1];
+        float planeNz = d_randNorm[2];
 
         if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
             printf("OH SHIT: normal is not normalized\n");

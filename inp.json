@@ -61,5 +61,13 @@
         "wallLen": 10.0,
         "wallWidth": 10.0,
         "threshDist": 0.01
+    },
+
+    // Division parameters
+    "divParam":{
+        "useDivPlaneBasis": 0,
+        "divPlaneBasisX": 1,
+        "divPlaneBasisY": 1,
+        "divPlaneBasisZ": 1
     }
 }
