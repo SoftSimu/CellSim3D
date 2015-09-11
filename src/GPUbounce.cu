@@ -502,25 +502,6 @@ int main(int argc, char *argv[])
 
   cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
 
-  // Initial force calculation
-
-  FirstTimeForceCalculation<<<noofblocks,threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign,
-                                          d_X, d_Y, d_Z,
-                                          R0, d_pressList, Youngs_mod,
-                                          internal_damping, delta_t, d_bounding_xyz,
-                                          attraction_strength, attraction_range,
-                                          repulsion_strength, repulsion_range,
-                                          viscotic_damping, mass,
-                                          Minx[0], Minx[2], Minx[4],
-                                          Xdiv, Ydiv, Zdiv,
-                                          d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                          d_velListX, d_velListY, d_velListZ,
-                                          d_Fx, d_Fy, d_Fz,
-                                          wall1, wall2, useWalls,
-                                          threshDist);
-
-  CudaErrorCheck();
-
   float rGrowth = 0;
 
   // Simulation loop
