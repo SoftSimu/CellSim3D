@@ -83,25 +83,6 @@ inline float getRmax2();
 
 inline int num_cells_far();
 
-
-// Adding propagate kernel to take into account walls in the XY plane (wall axis is Z)
-__global__ void propagate_zwall( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
-                                 float d_XP[], float d_YP[], float d_ZP[],
-                                 float d_X[],  float d_Y[],  float d_Z[],
-                                 float d_XM[], float d_YM[], float d_ZM[],
-                                 float *d_CMx, float *d_CMy, float *d_CMz,
-                                 float R0, float* d_pressList, float Youngs_mod ,
-                                 float internal_damping, float delta_t,
-                                 float d_bounding_xyz[],
-                                 float attraction_strength, float attraction_range,
-                                 float repulsion_strength, float repulsion_range,
-                                 float viscotic_damping, float mass,
-                                 float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
-                                 int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
-                                 float wall1, float wall2,
-                                 float threshDist,
-                                 float* d_velListX, float* d_velListY, float* d_velListZ);
-
 __global__ void PressureUpdate (float* d_pressList, float maxPressure,
                                 float minPressure, float inc, int No_of_C180s);
 
