@@ -20,9 +20,6 @@
 #include "RandomVector.h"
 
 #include "json/json.h"
-//#include "BinaryOutput.h"
-
-#define MaxNoofC180s 250000
 
 #define CudaErrorCheck() { \
       cudaError_t e = cudaGetLastError(); \
@@ -174,6 +171,7 @@ float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0;
 
 int  No_of_C180s;        // the global number of C180 fullerenes
 int  No_of_C180s_in;     // the number of C180s near the center of mass of the system
+int MaxNoofC180s; 
 
 float *ran2;             // host: ran2[]
 float *d_ran2;           // device: ran2[], used in celldivision
@@ -220,6 +218,12 @@ int main(int argc, char *argv[])
 
   No_of_threads = atoi(argv[1]);
 
+  char inpFile[256];
+  strcpy(inpFile, argv[2]);
+
+  if ( read_json_params(inpFile)          != 0 ) return(-1);
+
+  printf("%d\n", MaxNoofC180s); 
 
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
   if ( No_of_threads > MaxNoofC180s || Side_length*Side_length != No_of_threads )
@@ -235,11 +239,7 @@ int main(int argc, char *argv[])
   GPUMemory = 0L;
   CPUMemory = 0L;
 
-  char inpFile[256];
-  strcpy(inpFile, argv[2]);
-
   //if ( read_global_params()               != 0 ) return(-1);
-  if ( read_json_params(inpFile)          != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   if ( generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
@@ -969,6 +969,7 @@ int read_json_params(const char* inpFile){
         return -1;
     }
     else {
+        MaxNoofC180s = coreParams["MaxNoofC180s"].asInt(); 
         mass = coreParams["particle_mass"].asFloat();
         repulsion_range = coreParams["repulsion_range"].asFloat();
         attraction_range = coreParams["attraction_range"].asFloat();
