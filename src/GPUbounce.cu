@@ -32,7 +32,8 @@
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
 float repulsion_strength, attraction_strength;     //  ST1, ST2
-float Youngs_mod;
+float stiffness1; 
+float* d_Youngs_mod;
 float viscotic_damping, internal_damping;          //  C, DMP
 float gamma_visc;
 float zOffset; // Offset from Z = 0 for starting positions.
@@ -316,6 +317,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fx, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
   
 
 
@@ -364,7 +366,15 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
-  
+  // Set the Youngs_mod for the cells
+
+  for (int i = 0; i < MaxNoofC180s; i++){
+      velListZ[i] = stiffness1;
+  }
+
+  cudaMemcpy(d_Youngs_mod, velListZ, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+        
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
   size_t freeGPUMem;
@@ -409,7 +419,9 @@ int main(int argc, char *argv[])
   reductionblocks = (No_of_C180s-1)/1024+1;
   minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
                                        d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+  CudaErrorCheck(); 
   minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+  CudaErrorCheck(); 
   cudaMemset(d_NoofNNlist, 0, 1024*1024);
   cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
   //  DL = 3.8f;
@@ -420,7 +432,7 @@ int main(int argc, char *argv[])
   Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
   makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
                                          attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-
+  CudaErrorCheck(); 
   globalrank = 0;
 
   // open trajectory file
@@ -541,7 +553,7 @@ int main(int argc, char *argv[])
       propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                  d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                  d_CMx, d_CMy, d_CMz,
-                                                 R0, d_pressList, Youngs_mod ,
+                                                 R0, d_pressList, d_Youngs_mod ,
                                                  internal_damping, delta_t, d_bounding_xyz,
                                                  attraction_strength, attraction_range,
                                                  repulsion_strength, repulsion_range,
@@ -636,7 +648,7 @@ int main(int argc, char *argv[])
 
       makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
                                              attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-
+      CudaErrorCheck(); 
 
       if ( step%trajWriteInt == 0 )
       {
@@ -752,6 +764,10 @@ int main(int argc, char *argv[])
   free(num_new_cells_per_step);
   free(cell_div_inds);
   free(pressList);
+
+  free(velListX); 
+  free(velListY); 
+  free(velListZ); 
 
   fclose(trajfile);
   fclose(MitIndFile);
@@ -956,7 +972,7 @@ int read_json_params(const char* inpFile){
         attraction_range = coreParams["attraction_range"].asFloat();
         repulsion_strength = coreParams["repulsion_strength"].asFloat();
         attraction_strength = coreParams["attraction_strength"].asFloat();
-        Youngs_mod = coreParams["Youngs_mod"].asFloat();
+        stiffness1 = coreParams["Youngs_mod"].asFloat();
         viscotic_damping = coreParams["viscotic_damping"].asFloat();
         internal_damping = coreParams["internal_damping"].asFloat();
         divVol = coreParams["division_Vol"].asFloat();
@@ -1045,7 +1061,7 @@ int read_json_params(const char* inpFile){
     printf("      attraction range    = %f\n",attraction_range);
     printf("      repulsion strength  = %f\n",repulsion_strength);
     printf("      attraction strength = %f\n",attraction_strength);
-    printf("      Youngs modulus      = %f\n",Youngs_mod);
+    printf("      Youngs modulus      = %f\n",stiffness1);
     printf("      viscotic damping    = %f\n",viscotic_damping);
     printf("      internal damping    = %f\n",internal_damping);
     printf("      division volume     = %f\n",divVol);
@@ -1162,7 +1178,7 @@ int read_global_params(void)
   if ( fscanf(infil,"%f",&attraction_range)    != 1 ) {error =  3 ;}
   if ( fscanf(infil,"%f",&repulsion_strength)  != 1 ) {error =  4 ;}
   if ( fscanf(infil,"%f",&attraction_strength) != 1 ) {error =  5 ;}
-  if ( fscanf(infil,"%f",&Youngs_mod)          != 1 ) {error =  6 ;}
+//  if ( fscanf(infil,"%f",&Youngs_mod)          != 1 ) {error =  6 ;}
   if ( fscanf(infil,"%f",&viscotic_damping)    != 1 ) {error =  7 ;}
   if ( fscanf(infil,"%f",&internal_damping)    != 1 ) {error =  8 ;}
   if ( fscanf(infil,"%f",&divVol)              != 1 ) {error =  9 ;}
@@ -1269,7 +1285,7 @@ int read_global_params(void)
   printf("      attraction range    = %f\n",attraction_range);
   printf("      repulsion strength  = %f\n",repulsion_strength);
   printf("      attraction strength = %f\n",attraction_strength);
-  printf("      Youngs modulus      = %f\n",Youngs_mod);
+//  printf("      Youngs modulus      = %f\n",Youngs_mod);
   printf("      viscotic damping    = %f\n",viscotic_damping);
   printf("      internal damping    = %f\n",internal_damping);
   printf("      division volume     = %f\n",divVol);
@@ -1310,7 +1326,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float* d_pressList, float Youngs_mod ,
+                           float R0, float* d_pressList, float* d_Youngs_mod ,
                            float internal_damping, float delta_t,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
@@ -1353,6 +1369,12 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
+    float Youngs_mod;
+    
+    if (atom == 0){
+        Youngs_mod = d_Youngs_mod[rank];
+    }
+    __syncthreads(); 
 
     if ( rank < No_of_C180s && atom < 180 )
     {
