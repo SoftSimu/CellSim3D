@@ -1,7 +1,7 @@
 compiler = $(shell which nvcc)
 debug = -g -G
 arch = -arch=sm_30
-oflags = $(arch) -Xptxas="-v" -O3 -I inc -I /home/pmadhika/cuda-samples/common/inc
+oflags = $(arch) -Xptxas="-v" -O3 -I inc
 objDir = bin
 sources = $(wildcard src/*.cu)
 objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
