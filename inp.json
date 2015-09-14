@@ -65,7 +65,7 @@
     },
 
     // Division parameters
-    "divParam":{
+    "divParams":{
         "useDivPlaneBasis": 0,
         "divPlaneBasisX": 1,
         "divPlaneBasisY": 1,
