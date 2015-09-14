@@ -634,11 +634,17 @@ int main(int argc, char *argv[])
       bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
                                          d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
                                          d_bounding_xyz, d_CMx, d_CMy, d_CMz);
+      CudaErrorCheck(); 
 
       reductionblocks = (No_of_C180s-1)/1024+1;
       minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
                                            d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+      CudaErrorCheck(); 
+
       minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+      
+      CudaErrorCheck(); 
+
       cudaMemset(d_NoofNNlist, 0, 1024*1024);
 
       cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
