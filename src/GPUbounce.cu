@@ -364,7 +364,9 @@ int main(int argc, char *argv[])
 
   cudaMemcpy(d_Fx, velListX, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
+  cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  
+  cudaMemcpy(d_volume, velListZ, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
   // Set the Youngs_mod for the cells
 
