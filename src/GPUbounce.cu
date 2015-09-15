@@ -678,7 +678,7 @@ int main(int argc, char *argv[])
       volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
-                                     d_volume, d_cell_div, divVol);
+                                     d_volume, d_cell_div, divVol*100);
       
       cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       for (int i = 0; i < No_of_C180s; i++){
