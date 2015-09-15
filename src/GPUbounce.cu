@@ -1379,11 +1379,6 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     int atomInd = cellOffset + atom;
     float Youngs_mod;
     
-    if (atom == 0){
-        Youngs_mod = d_Youngs_mod[rank];
-    }
-    __syncthreads(); 
-
     if ( rank < No_of_C180s && atom < 180 )
     {
         if (isnan(d_X[rank*192+atom]) ||
@@ -1394,6 +1389,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             printf("Crash now :(\n"); 
             asm("trap;"); 
         }
+
+        Youngs_mod = d_Youngs_mod[rank];
         
         N1 = d_C180_nn[  0+atom];
         N2 = d_C180_nn[192+atom];
