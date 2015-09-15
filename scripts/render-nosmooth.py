@@ -23,7 +23,7 @@ while True:
             line = f.readline()
             line = line.strip()
             line = line.split(',')
-            verts.append([float(v) for v in line])
+            verts.append([float(line[i]) for i in range(3)])
 
 # read and append fullerene cell vertex indexes making up face polygons
     firstfaces = []

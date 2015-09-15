@@ -1,11 +1,11 @@
 import bpy
 import csv
-import sys 
+import sys
 
 # This script presupposes a scene with camera, lights, and mesh object named Cube.
 # Cube material is copied to fullerene cell meshes. Current settings are used for rendering.
 
-imageindex = 0                  
+imageindex = 0
 f = open(sys.argv[6])
 while True:
 # read and append fullerene cell vertex coords for each time step
@@ -21,7 +21,7 @@ while True:
         line = f.readline()
         line = line.strip()
         line = line.split(',')
-        verts.append([float(v) for v in line])
+        verts.append([float(line[i]) for i in range(3)])
 
 # read and append fullerene cell vertex indexes making up face polygons
     firstfaces = []
@@ -69,9 +69,8 @@ while True:
     imagename +="/images/CellDiv_""%i"".png" % imageindex
     bpy.context.scene.render.filepath = imagename
     bpy.ops.render.render(write_still=True)  # render to file
-    
+
     bpy.ops.object.select_pattern(pattern='cellObject')
     bpy.ops.object.delete()                                     # delete mesh...
 #    if imageindex<11:                                          # ...or use this instead to leave
 #        bpy.ops.object.delete()                                # mesh from last time step (11)
-
