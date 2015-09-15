@@ -634,7 +634,7 @@ int main(int argc, char *argv[])
       bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
                                          d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
                                          d_bounding_xyz, d_CMx, d_CMy, d_CMz);
-      CudaErrorCheck(); 
+      CudaErrorCheck();
 
       reductionblocks = (No_of_C180s-1)/1024+1;
       minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
