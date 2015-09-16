@@ -139,6 +139,10 @@ float wall1, wall2;
 float wallWStart, wallWEnd;
 float wallLStart, wallLEnd;
 
+float boxLength, boxMin[3];
+bool useRigidSimulationBox; 
+float* d_boxMin;
+
 int No_of_threads; // ie number of staring cells
 int Side_length;
 int ex, ey;
@@ -328,6 +332,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1); 
   
 
 
@@ -528,7 +533,27 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
 
   float rGrowth = 0;
+  bool growthDone = false;
 
+  boxMin[0] = 0;
+  boxMin[1] = 0;
+  boxMin[2] = 0;
+  
+  // Setup simulation box, if needed (non-pbc)
+  if (useRigidSimulationBox){
+      printf("   Setup rigid (non-PBC) box...\n"); 
+      boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
+      if (Side_length < 5) boxLength = boxLength * 5; 
+      boxMin[0] = floor(Minx[0] - 0.1);
+      boxMin[1] = floor(Minx[2] - 0.1);
+      boxMin[2] = floor(Minx[4] - 0.1);
+      printf("   Done!\n");
+      printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
+      printf("   Simulation box length = %f\n", boxLength);
+  }
+
+  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice); 
+  
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -574,7 +599,8 @@ int main(int argc, char *argv[])
                                                  Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                  wall1, wall2,
                                                  threshDist, useWalls,
-                                                 d_velListX, d_velListY, d_velListZ);
+                                                 d_velListX, d_velListY, d_velListZ,
+                                                 useRigidSimulationBox, boxLength, d_boxMin);
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
@@ -1240,7 +1266,17 @@ int read_json_params(const char* inpFile){
     }
     */
 
+    if ( !(closenessToCenter >=0 && closenessToCenter <= 1) ){
+        printf("ERROR: closenessToCenter is not in [0, 1]\n");
+        printf("ERROR: invalid input parameter\n");
+        return -1;
+    }
 
+    if (useWalls && useRigidSimulationBox){
+        printf("ERROR: Cannot use infinite XY walls and rigid simulation box simultaneously.\n");
+        printf("ERROR: Only use on or the other.\n");
+        return -1;
+    }
 
     return 0;
 }
@@ -1422,7 +1458,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
-                           float* d_velListX, float* d_velListY, float* d_velListZ)
+                           float* d_velListX, float* d_velListY, float* d_velListZ,
+                           bool useRigidSimulationBox, float boxLength, float* d_boxMin)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
@@ -1717,6 +1754,35 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             }
 
             __syncthreads();
+        }
+
+        // add forces from simulation box if needed:
+
+        if (useRigidSimulationBox){
+            float gap1, gap2;
+            
+            // X
+            
+            gap1 = d_X[atomInd] - d_boxMin[0];
+            gap2 = d_boxMin[0] + boxLength - d_X[atomInd];
+            
+            if (abs(gap1) < threshDist && gap1*FX < 0) FX = -FX;
+            if (abs(gap2) < threshDist && gap2*FX < 0) FX = -FX;
+
+            // Y
+
+            gap1 = d_Y[atomInd] - d_boxMin[1];
+            gap2 = d_boxMin[1] + boxLength - d_Y[atomInd];
+
+            if (abs(gap1) < threshDist && gap1*FY < 0) FY = -FY;
+            if (abs(gap2) < threshDist && gap2*FY < 0) FY = -FY;
+
+            // Z
+            gap1 = d_Z[atomInd] - d_boxMin[2];
+            gap2 = d_boxMin[2] + boxLength - d_Z[atomInd];
+
+            if (abs(gap1) < threshDist && gap1*FZ < 0) FZ = -FZ;
+            if (abs(gap2) < threshDist && gap2*FZ < 0) FZ = -FZ;
         }
 
         // time propagation
