@@ -32,8 +32,18 @@
 float mass;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
 float repulsion_strength, attraction_strength;     //  ST1, ST2
-float stiffness1; 
+
+// variables to allow for different stiffnesses
+float stiffness1;
+float stiffness2; 
 float* d_Youngs_mod;
+float* youngsModArray; 
+bool useDifferentStiffnesses;
+float softYoungsMod;
+int numberOfSofterCells;
+float closenessToCenter;
+int startAtPop; 
+
 float viscotic_damping, internal_damping;          //  C, DMP
 float gamma_visc;
 float zOffset; // Offset from Z = 0 for starting positions.
@@ -369,12 +379,13 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_volume, velListZ, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
   // Set the Youngs_mod for the cells
+  youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
 
   for (int i = 0; i < MaxNoofC180s; i++){
-      velListZ[i] = stiffness1;
+      youngsModArray[i] = stiffness1;
   }
 
-  cudaMemcpy(d_Youngs_mod, velListZ, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
         
   // Better way to see how much GPU memory is being used.
@@ -656,7 +667,51 @@ int main(int argc, char *argv[])
 
       makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
                                              attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-      CudaErrorCheck(); 
+      CudaErrorCheck();
+
+      if (!growthDone && step > Time_steps+1){
+          printf("Cell growth halted.\nProceeding with MD simulation without growth...\n");
+          growthDone = true;
+          
+          if (useDifferentStiffnesses){
+              printf("Now making some cells softer...\n"); 
+              // search for the oldest cells near the center of the system, and make them soft
+              cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+              cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+              cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+
+              float Rmax2 = getRmax2();
+              float R2, dx, dy, dz;
+              int softCellCounter = 0;
+              int cellInd = 0; 
+              calc_sys_CM();
+
+              float f = 1 - closenessToCenter;
+              
+              printf("Made cells with indices "); 
+
+              while (softCellCounter < numberOfSofterCells && cellInd < No_of_C180s){
+                  dx = CMx[cellInd] - sysCMx; 
+                  dy = CMy[cellInd] - sysCMy; 
+                  dz = CMz[cellInd] - sysCMz;
+
+                  R2 = dx*dx + dy*dy + dz*dz;
+
+                  if (R2 <= f*f*Rmax2){
+                      printf("%d, ", cellInd); 
+                      softCellCounter++; 
+                      youngsModArray[cellInd] = stiffness2; 
+
+                  }
+
+                  cellInd++; 
+              }
+          }
+
+          cudaMemcpy(d_Youngs_mod, youngsModArray, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+          printf("\b\b softer\n"); 
+
+      }
 
       if ( step%trajWriteInt == 0 )
       {
@@ -1058,6 +1113,29 @@ int read_json_params(const char* inpFile){
         divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
         printf("%f %f %f\n", divPlaneBasis[0], divPlaneBasis[1], divPlaneBasis[2]);
     }
+
+    Json::Value stiffnessParams = inpRoot.get("stiffnessParams", Json::nullValue);
+
+    if (stiffnessParams == Json::nullValue){
+        printf("ERROR: Cannot load stiffness parameters\n");
+        return -1;
+    } else {
+        useDifferentStiffnesses = stiffnessParams["useDifferentStiffnesses"].asBool();
+        stiffness2 = stiffnessParams["softYoungsMod"].asFloat();
+        numberOfSofterCells = stiffnessParams["numberOfSofterCells"].asInt();
+        closenessToCenter = stiffnessParams["closenessToCenter"].asFloat();
+        startAtPop = stiffnessParams["startAtPop"].asInt();
+    }
+
+    Json::Value boxParams = inpRoot.get("boxParams", Json::nullValue);
+
+    if (boxParams == Json::nullValue){
+        printf("ERROR: Cannot load box parameters\n");
+        return -1;
+    } else{
+        useRigidSimulationBox = boxParams["useRigidSimulationBox"].asBool();
+    }
+    
     
     if (ranZOffset == 0)
         zOffset = 0.0;
@@ -1665,10 +1743,26 @@ void write_traj(int t_step, FILE* trajfile)
 
   fprintf(trajfile, "%d\n", No_of_C180s * 192);
   fprintf(trajfile, "Step: %d\n", t_step);
+  
+  if (useDifferentStiffnesses){
+      
+        for (int p = 0; p < No_of_C180s*192; p++)
+        {
+            int cellInd = p/192; 
+            if (youngsModArray[cellInd] == stiffness1)
+                fprintf(trajfile, "%.7f,  %.7f,  %.7f,  H\n", X[p], Y[p], Z[p]);
+            else if(youngsModArray[cellInd] == stiffness2)
+                fprintf(trajfile, "%.7f,  %.7f,  %.7f,  C\n", X[p], Y[p], Z[p]);
 
-  for (int p = 0; p < No_of_C180s*192; p++)
-  {
-      fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[p], Y[p], Z[p]);
+        }
+        
+  } else {
+      
+      for (int p = 0; p < No_of_C180s*192; p++)
+      {
+          fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[p], Y[p], Z[p]);
+      }
+      
   }
 }
 
