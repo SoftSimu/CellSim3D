@@ -700,42 +700,84 @@ int main(int argc, char *argv[])
           growthDone = true;
           
           if (useDifferentStiffnesses){
-              printf("Now making some cells softer...\n"); 
-              // search for the oldest cells near the center of the system, and make them soft
-              cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-              cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-              cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-
-              float Rmax2 = getRmax2();
-              float R2, dx, dy, dz;
+              printf("Now making some cells softer...\n");
               int softCellCounter = 0;
-              int cellInd = 0; 
-              calc_sys_CM();
-
-              float f = 1 - closenessToCenter;
+              if (fractionOfSofterCells > 0){
+                  numberOfSofterCells = roundf(fractionOfSofterCells*No_of_C180s); 
+              }
               
-              printf("Made cells with indices "); 
+              if (chooseRandomCellIndices){
+                  float rnd[1];
+                  //int* chosenIndices = (int*)malloc(numberOfSofterCells, sizeof(int));
+                  int chosenIndices[numberOfSofterCells]; 
+                  
+                  for (int i = 0; i < numberOfSofterCells; i++){
+                      chosenIndices[i] = -1; 
+                  }
+                  
+                  bool indexChosen = false;
+                  int cellInd = -1; 
+                  
+                  while (softCellCounter < numberOfSofterCells){
+                      ranmar(rnd, 1);
+                      cellInd = roundf(rnd[1] * No_of_C180s);
+                      
+                      for (int i = 0; i < softCellCounter; i++){
+                          if (chosenIndices[i] == cellInd){
+                              indexChosen = true;
+                              break;
+                          }
+                      }
 
-              while (softCellCounter < numberOfSofterCells && cellInd < No_of_C180s){
-                  dx = CMx[cellInd] - sysCMx; 
-                  dy = CMy[cellInd] - sysCMy; 
-                  dz = CMz[cellInd] - sysCMz;
-
-                  R2 = dx*dx + dy*dy + dz*dz;
-
-                  if (R2 <= f*f*Rmax2){
-                      printf("%d, ", cellInd); 
-                      softCellCounter++; 
-                      youngsModArray[cellInd] = stiffness2; 
-
+                      if (!indexChosen){
+                          chosenIndices[softCellCounter] = cellInd;
+                          softCellCounter++;
+                      } else
+                          indexChosen = false;
+                      
                   }
 
-                  cellInd++; 
-              }
-          }
+                  //free(chosenIndices);
 
-          cudaMemcpy(d_Youngs_mod, youngsModArray, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-          printf("\b\b softer\n"); 
+                  for (int i = 0; i < numberOfSofterCells; i++){
+                      youngsModArray[chosenIndices[i]] = stiffness2; 
+                  }
+              }
+              else {
+                  // search for the oldest cells near the center of the system, and make them soft
+                  cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+                  cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+                  cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+
+                  float Rmax2 = getRmax2();
+                  float R2, dx, dy, dz;
+                  int cellInd = 0; 
+                  calc_sys_CM();
+
+                  float f = 1 - closenessToCenter;
+              
+                  printf("Made cells with indices "); 
+
+                  while (softCellCounter < numberOfSofterCells && cellInd < No_of_C180s){
+                      dx = CMx[cellInd] - sysCMx; 
+                      dy = CMy[cellInd] - sysCMy; 
+                      dz = CMz[cellInd] - sysCMz;
+
+                      R2 = dx*dx + dy*dy + dz*dz;
+
+                      if (R2 <= f*f*Rmax2){
+                          printf("%d, ", cellInd); 
+                          softCellCounter++; 
+                          youngsModArray[cellInd] = stiffness2; 
+
+                      }
+                      cellInd++; 
+                  }
+              }
+              
+              cudaMemcpy(d_Youngs_mod, youngsModArray, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+              printf("\b\b softer\n"); 
+          }
 
       }
 

@@ -77,8 +77,10 @@
         "useDifferentStiffnesses": 0,
         "softYoungsMod": 800,
         "numberOfSofterCells": 1,
+        "fractionOfSofterCells": -1, // if this is > 0, numberOfSofterCells ignored
         "closenessToCenter": 0, // cells within R*(1-ctc) will be softened, ctc=0.9 means very close
-        "startAtPop": 2000
+        "startAtPop": 2000,
+        "chooseRandomCellIndices": 0 // if this is one, closenessToCenter is ignored
     },
 
     // Rigid box parameters
