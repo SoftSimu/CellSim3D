@@ -42,7 +42,10 @@ bool useDifferentStiffnesses;
 float softYoungsMod;
 int numberOfSofterCells;
 float closenessToCenter;
-int startAtPop; 
+int startAtPop;
+
+bool chooseRandomCellIndices;
+float fractionOfSofterCells;
 
 float viscotic_damping, internal_damping;          //  C, DMP
 float gamma_visc;
@@ -705,6 +708,8 @@ int main(int argc, char *argv[])
               if (fractionOfSofterCells > 0){
                   numberOfSofterCells = roundf(fractionOfSofterCells*No_of_C180s); 
               }
+
+              printf("Will make %d cells softer\n", numberOfSofterCells); 
               
               if (chooseRandomCellIndices){
                   float rnd[1];
@@ -716,12 +721,14 @@ int main(int argc, char *argv[])
                   }
                   
                   bool indexChosen = false;
-                  int cellInd = -1; 
+                  int cellInd = -1;
+
+                  printf("Make cells with indices "); 
                   
                   while (softCellCounter < numberOfSofterCells){
                       ranmar(rnd, 1);
-                      cellInd = roundf(rnd[1] * No_of_C180s);
-                      
+                      cellInd = roundf(rnd[0] * No_of_C180s);
+
                       for (int i = 0; i < softCellCounter; i++){
                           if (chosenIndices[i] == cellInd){
                               indexChosen = true;
@@ -732,6 +739,7 @@ int main(int argc, char *argv[])
                       if (!indexChosen){
                           chosenIndices[softCellCounter] = cellInd;
                           softCellCounter++;
+                          printf("%d, ", cellInd); 
                       } else
                           indexChosen = false;
                       
@@ -1193,6 +1201,8 @@ int read_json_params(const char* inpFile){
         numberOfSofterCells = stiffnessParams["numberOfSofterCells"].asInt();
         closenessToCenter = stiffnessParams["closenessToCenter"].asFloat();
         startAtPop = stiffnessParams["startAtPop"].asInt();
+        fractionOfSofterCells = stiffnessParams["fractionOfSofterCells"].asFloat();
+        chooseRandomCellIndices = stiffnessParams["chooseRandomCellIndices"].asBool(); 
     }
 
     Json::Value boxParams = inpRoot.get("boxParams", Json::nullValue);
@@ -1319,6 +1329,12 @@ int read_json_params(const char* inpFile){
         printf("ERROR: Only use on or the other.\n");
         return -1;
     }
+
+    if (fractionOfSofterCells > 1.0){
+        printf("ERROR: Softer cell fraction is > 1\n");
+        return -1;
+    }
+        
 
     return 0;
 }
