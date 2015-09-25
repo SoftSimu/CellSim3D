@@ -41,6 +41,7 @@ float* youngsModArray;
 bool useDifferentStiffnesses;
 float softYoungsMod;
 int numberOfSofterCells;
+bool duringGrowth; 
 float closenessToCenter;
 int startAtPop;
 
@@ -388,11 +389,56 @@ int main(int argc, char *argv[])
 
   // Set the Youngs_mod for the cells
   youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
+  if (useDifferentStiffnesses){
+      
+      if (!duringGrowth){
+          
+          for (int i = 0; i < MaxNoofC180s; i++){
+              youngsModArray[i] = stiffness1;
+          }
+          
+      } else {
+          
+          if (fractionOfSofterCells > 0){
+              
+              int c = 0;
+              for (int i = 0; i < MaxNoofC180s; i++){
+                  float ran1[1];
+                  ranmar(ran1, 1);
+                  if (ran1[0] <= fractionOfSofterCells){
+                      youngsModArray[i] = stiffness2;
+                      c++; 
+                  }
+                  else
+                      youngsModArray[i] = stiffness1;
+                  
+              }
+              
+              float fset = ((float)c)/((float)MaxNoofC180s);
+              if ( abs(fset - fractionOfSofterCells) > 1e-1 )
+                  printf("WARNING: %.2f %% cells set to softer, %.2f %% requested\n",
+                         fset*100, fractionOfSofterCells*100);
+              
+          } else if (numberOfSofterCells > 0){
+              
+              if (!chooseRandomCellIndices){
+                  printf("ERROR: Cell indices can only be chose randomly during growth\n");
+                  return -11;
+              }
+              
+              for (int i = 0; i < numberOfSofterCells; i++){
+                  youngsModArray[i] = stiffness2; 
+              }
 
-  for (int i = 0; i < MaxNoofC180s; i++){
-      youngsModArray[i] = stiffness1;
+               for (int i = numberOfSofterCells; i < MaxNoofC180s; i++){
+                  youngsModArray[i] = stiffness1; 
+              }
+              
+          }
+          
+      }
   }
-
+  
   cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
         
@@ -594,7 +640,7 @@ int main(int argc, char *argv[])
       propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                  d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                  d_CMx, d_CMy, d_CMz,
-                                                 R0, d_pressList, d_Youngs_mod ,
+                                                 R0, d_pressList, d_Youngs_mod , stiffness1, 
                                                  internal_damping, delta_t, d_bounding_xyz,
                                                  attraction_strength, attraction_range,
                                                  repulsion_strength, repulsion_range,
@@ -702,7 +748,7 @@ int main(int argc, char *argv[])
           printf("Cell growth halted.\nProceeding with MD simulation without growth...\n");
           growthDone = true;
           
-          if (useDifferentStiffnesses){
+          if (useDifferentStiffnesses && !duringGrowth){
               printf("Now making some cells softer...\n");
               int softCellCounter = 0;
               if (fractionOfSofterCells > 0){
@@ -1199,6 +1245,7 @@ int read_json_params(const char* inpFile){
         useDifferentStiffnesses = stiffnessParams["useDifferentStiffnesses"].asBool();
         stiffness2 = stiffnessParams["softYoungsMod"].asFloat();
         numberOfSofterCells = stiffnessParams["numberOfSofterCells"].asInt();
+        duringGrowth = stiffnessParams["duringGrowth"].asBool(); 
         closenessToCenter = stiffnessParams["closenessToCenter"].asFloat();
         startAtPop = stiffnessParams["startAtPop"].asInt();
         fractionOfSofterCells = stiffnessParams["fractionOfSofterCells"].asFloat();
@@ -1506,7 +1553,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float* d_pressList, float* d_Youngs_mod ,
+                           float R0, float* d_pressList, float* d_Youngs_mod , float bondingYoungsMod, 
                            float internal_damping, float delta_t,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,

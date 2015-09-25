@@ -65,7 +65,8 @@
     },
 
     // Division parameters
-    "divParams":{
+    "divParams":{ // these params will make the division planes perpendicular
+                  // to the vector defined by the basis vector
         "useDivPlaneBasis": 0,
         "divPlaneBasisX": 1,
         "divPlaneBasisY": 1,
@@ -74,10 +75,12 @@
 
     // Stiffness parameters
     "stiffnessParams":{
-        "useDifferentStiffnesses": 0,
+        "useDifferentStiffnesses": 0, // below values must be changed if this is 1
         "softYoungsMod": 800,
-        "numberOfSofterCells": 1,
+        "numberOfSofterCells": 0, // Don't use this param, it really sucks
+                                  // fractionOfSofterCells is 10x better
         "fractionOfSofterCells": -1, // if this is > 0, numberOfSofterCells ignored
+        "duringGrowth": 0, // If this is true, everything below is ignored
         "closenessToCenter": 0, // cells within R*(1-ctc) will be softened, ctc=0.9 means very close
         "startAtPop": 2000,
         "chooseRandomCellIndices": 0 // if this is one, closenessToCenter is ignored
