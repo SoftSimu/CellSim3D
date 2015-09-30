@@ -41,7 +41,8 @@ float* youngsModArray;
 bool useDifferentStiffnesses;
 float softYoungsMod;
 int numberOfSofterCells;
-bool duringGrowth; 
+bool duringGrowth;
+bool daughtSameStiffness;
 float closenessToCenter;
 int startAtPop;
 
@@ -684,6 +685,13 @@ int main(int argc, char *argv[])
                                    No_of_C180s, d_ran2, repulsion_range);
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
+
+          if (daughtSameStiffness){
+              youngsModArray[No_of_C180s] = youngsModArray[globalrank];
+              cudaMemcpy(d_Youngs_mod+No_of_C180s, youngsModArray+No_of_C180s,
+                         sizeof(float), cudaMemcpyHostToDevice);
+          }
+
           ++No_of_C180s;
         }
 
