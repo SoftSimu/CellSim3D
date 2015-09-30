@@ -439,6 +439,10 @@ int main(int argc, char *argv[])
           
       }
   }
+
+  // for (int i = 0; i < MaxNoofC180s; i++){
+  //     printf("cell: %d, stiffness = %f\n", i, youngsModArray[i]);
+  // }
   
   cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
@@ -1042,6 +1046,7 @@ int generate_random(int no_of_ran1_vectors)
   kl = seed_kl%30081;
   rmarin(ij,kl);
 
+  printf("RNG seeds: %d, %d\n", ij, kl); 
   return(0);
 }
 
@@ -1241,7 +1246,6 @@ int read_json_params(const char* inpFile){
         divPlaneBasis[0] = divParams["divPlaneBasisX"].asFloat();
         divPlaneBasis[1] = divParams["divPlaneBasisY"].asFloat();
         divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
-        printf("%f %f %f\n", divPlaneBasis[0], divPlaneBasis[1], divPlaneBasis[2]);
     }
 
     Json::Value stiffnessParams = inpRoot.get("stiffnessParams", Json::nullValue);
@@ -1257,7 +1261,8 @@ int read_json_params(const char* inpFile){
         closenessToCenter = stiffnessParams["closenessToCenter"].asFloat();
         startAtPop = stiffnessParams["startAtPop"].asInt();
         fractionOfSofterCells = stiffnessParams["fractionOfSofterCells"].asFloat();
-        chooseRandomCellIndices = stiffnessParams["chooseRandomCellIndices"].asBool(); 
+        chooseRandomCellIndices = stiffnessParams["chooseRandomCellIndices"].asBool();
+        daughtSameStiffness = stiffnessParams["daughtSameStiffness"].asBool(); 
     }
 
     Json::Value boxParams = inpRoot.get("boxParams", Json::nullValue);
@@ -1308,8 +1313,23 @@ int read_json_params(const char* inpFile){
     printf("      thresDist           = %f\n", threshDist);
     printf("      maxPressure         = %f\n", maxPressure);
     printf("      minPressure         = %f\n", minPressure);
-    printf("      gamma_visc               = %f\n", gamma_visc);
-
+    printf("      gamma_visc          = %f\n", gamma_visc);
+    printf("      useDivPlanebasis    = %d\n", useDivPlaneBasis);
+    printf("      divPlaneBasisX      = %f\n", divPlaneBasis[0]);
+    printf("      divPlaneBasisY      = %f\n", divPlaneBasis[1]);
+    printf("      divPlaneBasisZ      = %f\n", divPlaneBasis[2]);
+    printf("      useDifferentStiffnesses = %d\n", useDifferentStiffnesses);
+    printf("      softYoungsMod       = %f\n", softYoungsMod);
+    printf("      numberOfsofterCells = %d\n", numberOfSofterCells);
+    printf("      duringGrowth        = %d\n", duringGrowth);
+    printf("      closenesstoCenter   = %f\n", closenessToCenter);
+    printf("      startAtPop          = %d\n", startAtPop);
+    printf("      fractionOfSofterCells   = %f\n", fractionOfSofterCells);
+    printf("      chooseRandomCellIndices = %d\n", chooseRandomCellIndices);
+    printf("      daughtSameStiffness = %d\n", daughtSameStiffness);
+    printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
+    
+    
 
 
 
