@@ -163,7 +163,7 @@ def analyze(filePath, storePath, name = None):
     plt.legend()
     plt.xlabel('Time')
     plt.ylabel('Polygon Fraction (%)')
-    plt.savefig(storePath + '%d_polyevo.eps' % timeStep)
+    plt.savefig(storePath + '%d_polyevo.png' % timeStep)
     plt.close()
 
 
@@ -203,7 +203,7 @@ def analyze(filePath, storePath, name = None):
     plt.ylim(voro.points[:, 1].min() - 0.1*ptp_bound[1],
              voro.points[:, 1].max() + 0.1*ptp_bound[1])
 
-    plt.savefig(storePath + '%d_voronoi.eps' % (timeStep))
+    plt.savefig(storePath + '%d_voronoi.png' % (timeStep))
     plt.close()
 
     print "Mapping %s mitotic cells..." % fileName

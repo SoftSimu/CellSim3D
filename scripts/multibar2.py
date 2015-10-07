@@ -19,6 +19,9 @@ parser.add_argument("--traj", nargs="+",
                     help="Absolute or relative paths")
 parser.add_argument("--endat", type=int,
                     help="time step to stop processing at")
+parser.add_argument("-o",
+                    help="Output File Name",
+                    type=str)
 
 args = parser.parse_args()
 
@@ -38,7 +41,7 @@ barFig = []
 n = len(args.traj)
 width = 0.25
 
-gammas = ['0', '5', '10', '15', '20', '25']
+gammas = ['0', '10', '20', '30', '40', '50', '100']
 
 def analyze(filePath, cm, barAx, c, width, ind, polyTrendAx, gamma):
     voro = []
@@ -155,7 +158,7 @@ def analyze(filePath, cm, barAx, c, width, ind, polyTrendAx, gamma):
     pos = ind*(n+2)*width + c*width - ((n+2)/2.0 * width)
 
     barAx.bar(pos, meanFracs, width, yerr=err,
-              label='$\gamma_{ext} = %s$' % gamma, ecolor='k',
+              label='%s%%' % gamma, ecolor='k',
               color=cm(cl)[0])
 
     timeRange = xrange(len(polyCountEvo[6]))
@@ -190,16 +193,20 @@ pos = ind*(n+2)*width + (c+1)*width - ((n+2)/2.0 * width)
 
 #barAx.bar(pos, [0.5 for j in xrange(len(ind))], width, color='k')
 
-barAx.set_ylabel('Percent')
+barAx.set_ylabel('Fraction')
 barAx.set_xlabel('Number of neighbours')
+barAx.set_title('Soft(80% Stiffness)/Normal Cell Packing')
 barAx.set_ylim((0,1))
 
 
 barAx.set_xticks(ind*(n+2)*width - (width/2))
 barAx.set_xticklabels(ind)
-barAx.legend()
+barAx.legend(title='Percent Softer Cells')
 
 polyTrendAx.set_xlabel('Time')
 polyTrendAx.set_ylabel('Hexagons')
 
-plt.savefig('manybars.eps')
+if args.o is "":
+    plt.savefig('manybars.png')
+else:
+    plt.savefig(args.o)

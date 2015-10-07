@@ -438,11 +438,17 @@ int main(int argc, char *argv[])
           }
           
       }
+  } else if (!useDifferentStiffnesses){
+      
+      for (int i = 0; i < MaxNoofC180s; i++){
+          youngsModArray[i] = stiffness1;
+      }
   }
 
-  // for (int i = 0; i < MaxNoofC180s; i++){
-  //     printf("cell: %d, stiffness = %f\n", i, youngsModArray[i]);
-  // }
+  for (int i = 0; i < MaxNoofC180s; i++){
+      printf("cell: %d, stiffness = %f\n", i, youngsModArray[i]);
+  }
+  
   
   cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
