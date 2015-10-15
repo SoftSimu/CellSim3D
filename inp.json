@@ -27,7 +27,8 @@
         "trajFileName": "traj_billiards.xyz",
         "maxPressure": 65.0, // 0.065
         "minPressure": 50.0, // 0.050
-        "growth_rate": 0.008 // 0.00004
+        "growth_rate": 0.008, // 0.00004
+        "checkSphericity": 0
     },
     // Now params related to cell counting
     // In theory, these params are not needed for the simulation to run.

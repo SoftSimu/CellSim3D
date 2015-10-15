@@ -45,6 +45,7 @@ bool duringGrowth;
 bool daughtSameStiffness;
 float closenessToCenter;
 int startAtPop;
+bool checkSphericity; 
 
 bool chooseRandomCellIndices;
 float fractionOfSofterCells;
@@ -1193,8 +1194,8 @@ int read_json_params(const char* inpFile){
         maxPressure = coreParams["maxPressure"].asFloat();
         minPressure = coreParams["minPressure"].asFloat();
         gamma_visc = coreParams["gamma_visc"].asFloat();
-        rMax = coreParams["growth_rate"].asFloat();     
-
+        rMax = coreParams["growth_rate"].asFloat();
+        checkSphericity = coreParams["checkSphericity"].asBool(); 
     }
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);
@@ -1319,6 +1320,8 @@ int read_json_params(const char* inpFile){
     printf("      thresDist           = %f\n", threshDist);
     printf("      maxPressure         = %f\n", maxPressure);
     printf("      minPressure         = %f\n", minPressure);
+    printf("      growth_rate         = %f\n", rMax);
+    printf("      checkSphericity     = %d\n", checkSphericity);
     printf("      gamma_visc          = %f\n", gamma_visc);
     printf("      useDivPlanebasis    = %d\n", useDivPlaneBasis);
     printf("      divPlaneBasisX      = %f\n", divPlaneBasis[0]);
