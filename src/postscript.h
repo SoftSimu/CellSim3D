@@ -72,7 +72,7 @@ void ranmar(float rvec[], int len);
 // Function to write the trajectory
 void write_traj(int t_step, FILE* trajfile);
 void write_vel(int t_step, FILE* velFile);
-
+void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount);
 
 // Function to get the indeces of dividing cells
 inline void count_and_get_div();

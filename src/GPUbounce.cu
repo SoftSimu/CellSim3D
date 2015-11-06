@@ -70,6 +70,7 @@ int newCellCountInt; // Interval at which to count the divided cells
 int equiStepCount;
 const char* ptrajFileName;
 char trajFileName[256];
+bool binaryOutput; 
 
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f;
@@ -206,6 +207,8 @@ float divPlaneBasis[3];
 long int GPUMemory;
 long int CPUMemory;
 
+
+int frameCount = 0; 
 
 int main(int argc, char *argv[])
 {
@@ -446,10 +449,6 @@ int main(int argc, char *argv[])
       }
   }
 
-  for (int i = 0; i < MaxNoofC180s; i++){
-      printf("cell: %d, stiffness = %f\n", i, youngsModArray[i]);
-  }
-  
   
   cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
@@ -524,11 +523,20 @@ int main(int argc, char *argv[])
 
   FILE* velFile = fopen("velocity2.xyz", "w"); 
 
-  //OpenBinaryFile("binFile.hist", &bFA, trajWriteInt);
-
-  write_traj(0, trajfile);
- // WriteToBinaryFile(X, Y, Z,
- //                    No_of_C180s, 0, &bFA);
+  if (binaryOutput){
+      int t = MaxNoofC180s;
+      fwrite(&t, sizeof(int), 1, trajfile);
+      
+      t = (int)useDifferentStiffnesses;
+      fwrite(&t, sizeof(int), 1, trajfile);
+      
+      t = Time_steps+equiStepCount+1;
+      fwrite(&t, sizeof(int), 1, trajfile);
+      
+    
+      WriteBinaryTraj(0, trajfile, 1); 
+  } else    
+      write_traj(0, trajfile);
 
   // Set up walls if needed
   if (useWalls == 1){
@@ -857,19 +865,21 @@ int main(int argc, char *argv[])
       if ( step%trajWriteInt == 0 )
       {
           //printf("   Writing trajectory to traj.xyz...\n");
+          frameCount++; 
           cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-
-          write_traj(step, trajfile);
+          
+          if (binaryOutput)
+              WriteBinaryTraj(step, trajfile, frameCount);
+          else
+              write_traj(step, trajfile);
 
           cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           
           write_vel(step, velFile); 
-          // WriteToBinaryFile(X, Y, Z,
-          //                   No_of_C180s, step, &bFA);
       }
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
@@ -880,7 +890,12 @@ int main(int argc, char *argv[])
       
       cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       for (int i = 0; i < No_of_C180s; i++){
-          printf ("Cell: %d, volume= %f\n", i, volume[i]);
+          printf ("Cell: %d, volume= %f", i, volume[i]);
+          
+          if (volume[i] > divVol)
+              printf(", I'm too big :(");
+          
+          printf("\n"); 
       }
 #endif
 
@@ -893,13 +908,11 @@ int main(int argc, char *argv[])
       }
   }
 
-
-  // Write postscript file
-  //cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-  //cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-  //cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-  //PSNET(No_of_C180s*270,Side_length,L1,X,Y,Z,CCI);
-
+  if (binaryOutput){
+      fseek(trajfile, 0, SEEK_SET);
+      fwrite(&No_of_C180s, sizeof(int), 1, trajfile);
+  }
+  
   printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
 
   FILE* MitIndFile;
@@ -1190,6 +1203,7 @@ int read_json_params(const char* inpFile){
         equiStepCount = coreParams["non_div_time_steps"].asInt();
 
         std::strcpy (trajFileName, coreParams["trajFileName"].asString().c_str());
+        binaryOutput = coreParams["binaryOutput"].asBool(); 
 
         maxPressure = coreParams["maxPressure"].asFloat();
         minPressure = coreParams["minPressure"].asFloat();
@@ -1777,7 +1791,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             ++NooflocalNN;
 
             if ( NooflocalNN > 10 ){
-                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                //printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
                 continue;
             }
 
@@ -1950,7 +1964,7 @@ void write_traj(int t_step, FILE* trajfile)
 {
 
   fprintf(trajfile, "%d\n", No_of_C180s * 192);
-  fprintf(trajfile, "Step: %d\n", t_step);
+  fprintf(trajfile, "Step: %d, frame: %d\n", t_step, t_step/trajWriteInt);
   
   if (useDifferentStiffnesses){
       
@@ -1972,6 +1986,39 @@ void write_traj(int t_step, FILE* trajfile)
       }
       
   }
+}
+
+void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount){
+    
+    fwrite(&t_step, sizeof(int), 1, trajFile);
+    fwrite(&frameCount, sizeof(int), 1, trajFile); 
+    fwrite(&No_of_C180s, sizeof(int), 1, trajFile);
+    if (useDifferentStiffnesses){
+        char cellType = 0; 
+        for (int c = 0; c < No_of_C180s; c++){
+            fwrite(&c, sizeof(int), 1, trajFile);
+            fwrite(X, sizeof(float), 192, trajFile); 
+            fwrite(Y, sizeof(float), 192, trajFile); 
+            fwrite(Z, sizeof(float), 192, trajFile);
+            
+            if (youngsModArray[c] == stiffness1)
+                cellType = 0;
+            else
+                cellType = 1; 
+            
+            fwrite(&cellType, sizeof(char), 1, trajFile);
+        }
+    } else {
+        for (int c = 0; c < No_of_C180s; c++){
+            fwrite(&c, sizeof(int), 1, trajFile);
+            
+            fwrite(X, sizeof(float), 192, trajFile); 
+            fwrite(Y, sizeof(float), 192, trajFile); 
+            fwrite(Z, sizeof(float), 192, trajFile); 
+        }
+    }
+        
+    
 }
 
 void write_vel(int t_step, FILE* velFile){

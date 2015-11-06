@@ -25,6 +25,7 @@
         "trajWriteInt": 100,
         "non_div_time_steps": 5000,
         "trajFileName": "traj_billiards.xyz",
+        "binaryOutput": 0,
         "maxPressure": 65.0, // 0.065
         "minPressure": 50.0, // 0.050
         "growth_rate": 0.008, // 0.00004
