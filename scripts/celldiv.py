@@ -12,9 +12,13 @@ class TrajHandle(object):
     """
     def __init__(self, filePath, numPart=192, ramFrac=0.5,
                  writeName="celldiv-traj.npz", forceReRead=False):
+        import os
+        import sys
+        import numpy as np
 
         trajPath = os.path.abspath(filePath)
 
+        self.npTrajPath = None
         self.fileExists = os.path.isfile(trajPath)
 
         try:
@@ -54,6 +58,7 @@ class TrajHandle(object):
     def ReadTraj(self,  trajPath, numPart, ramFrac, outFileName, compress=True):
         # Start reading the trajectory
         # Assume binary trajectory for now.
+        import numpy as np
 
         self.bytesRead = 0
         self.readDone = False
@@ -78,46 +83,51 @@ class TrajHandle(object):
 
 
             #self.traj = np.zeros((maxFrames, maxNCells, numPart, 3))
-            traj = []
+            traj = {}
 
 
             self.bytesRead += 1*4
-            c = -1
+            c = 0
             while self.bytesRead < self.trajFileSize:
                 step = GetArray(np.int32, 1)[0]
                 frameCount = GetArray(np.int32, 1)[0]
                 print("Reading frame %d" % frameCount)
                 nCells = GetArray(np.int32, 1)[0]
-                frame = np.zeros((nCells, numPart, 3))
+                self.bytesRead += 4*3
+                frame = np.empty((numPart*nCells, 3))
 
                 for i in range(nCells):
                     cellInd = GetArray(np.int32, 1)[0]
                     x = GetArray(np.float32, numPart)
                     y = GetArray(np.float32, numPart)
                     z = GetArray(np.float32, numPart)
-
+                    self.bytesRead += 4*(numPart*3 + 1)
                     if self.readDone:
                         print("Data missing")
-                        print("Read until step %d" % step)
+                        print("Have read until step %d" % step)
+                        self.frameCount = i
                         break
                     else:
-                        frame[cellInd, :, 0] = x
-                        frame[cellInd, :, 1] = y
-                        frame[cellInd, :, 2] = z
+                        frame[i*numPart:(i+1)*numPart, 0] = x
+                        frame[i*numPart:(i+1)*numPart, 1] = y
+                        frame[i*numPart:(i+1)*numPart, 2] = z
+                        c+=1
 
-                    c+= 1
-                traj.append(frame)
+
+
+                if self.readDone:
+                    break
+
+                traj[str(frameCount-1)] = frame
 
             if compress:
-                np.savez_compressed(outFileName, *traj)
+                np.savez_compressed(outFileName, **traj)
             else:
-                np.savez(outFileName, *traj)
+                np.savez(outFileName, **traj)
 
 
     def GetTraj(self):
         return self.npTrajPath
-
-
 
 
 def main():
@@ -131,7 +141,7 @@ def main():
     th = TrajHandle(args.trajPath)
 
     with np.load(th.GetTraj(), 'r') as t:
-        print(t["arr_0"].shape)
+        print(t["0"].shape)
 
 
 if __name__ == "__main__":
