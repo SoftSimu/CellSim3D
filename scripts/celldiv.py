@@ -1,8 +1,14 @@
-#!/usr/bin/env ipython3
+#!/usr/bin/env python3
 
 import sys
 import os
 import numpy as np
+
+class IncompleteTrajectoryError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
 
 class TrajHandle(object):
     """
@@ -10,139 +16,123 @@ class TrajHandle(object):
     "Intelligently" read the trajectory and store it into an easily
     accessible form, and make that form available to the analysis scripts
     """
-    def __init__(self, filePath, numPart=192, ramFrac=0.5,
-                 writeName="celldiv-traj.npz", forceReRead=False):
+    def __init__(self, filePath, numPart=192):
         import os
         import sys
         import numpy as np
 
         trajPath = os.path.abspath(filePath)
 
-        self.npTrajPath = None
         self.fileExists = os.path.isfile(trajPath)
+        self.trajHandle = None
+        self.numPart = numPart
+        self.frameReadFailed = False
+        self.fatalError = False
+        self.lastFrameNum = -1
+        self.currFrameNum = -1
+        self.nCellsLastFrame = 0
+        self.frame = None
+        self.fileSize = 0
 
-        try:
-            os.makedirs(storePath)
-        except:
-            pass
+        self.intSize = np.array([0], dtype=np.int32).itemsize
+        self.floatSize = np.array([0.1], dtype=np.float32).itemsize
 
         if not self.fileExists:
-            print("Can't find the trajectory.")
-            print("%s" % trajPath)
+            raise IOError("Couldn't find the trajectory file.")
         else:
-            print("Found trajectory, reading now...")
+            try:
+                self.Initialize(trajPath)
+            except:
+                print("Something went wrong in:", sys.exc_info()[0])
+                raise
 
-            # Check if the trajectory is newer than what was stored
-            storePath, fileName = os.path.split(trajPath)
-            fileName = os.path.splitext(fileName)[0]
-            storePath = os.path.join(storePath, fileName, "celldiv-traj",)
-            outFileName = storePath + os.sep + writeName
-            self.npTrajPath = outFileName
-
-            if (forceReRead) or (not os.path.isfile(outFileName)) or \
-               (os.path.getmtime(trajPath) > os.path.getmtime(outFileName)):
-
-                print("Trajectory is either newer, didn't exist before, " + \
-                      "or reread was forced")
-
-                print("Reading...")
-                self.trajFileSize = os.path.getsize(trajPath)
-                print("File size: %.3f MB" % (self.trajFileSize/(1024.0*1024)))
-                self.ReadTraj(trajPath, numPart, ramFrac, outFileName)
-            else:
-                print("This trajectory was already read, skipping read")
-
-            print("Trajectory retrieved!")
-            print("It's at %s" % outFileName)
-
-    def ReadTraj(self,  trajPath, numPart, ramFrac, outFileName, compress=True):
-        # Start reading the trajectory
-        # Assume binary trajectory for now.
-        import numpy as np
-
-        self.bytesRead = 0
-        self.readDone = False
-
-        with open(trajPath, "rb") as tfh:
-
-            def GetArray(d, c):
-                a = np.fromfile(tfh, dtype=d, count=c, sep="")
-                self.bytesRead += c*4
+    def _GetArray(self, d, c):
+                a = np.fromfile(self.trajHandle, dtype=d, count=c, sep="")
                 if a.size is not c:
-                    self.readDone = True
-
+                    self.readFailed = True
+                    raise IncompleteTrajectoryError("Data missing from trajectory.")
                 return a
-                #trajVersion = np.fromfile(tfh, dtype=np.int32, count=1, sep="")
-
-            maxNCells = GetArray(np.int32, 1)[0]
-            variableStiffness = GetArray(np.int32, 1)[0]
-            maxFrames = GetArray(np.int32, 1)[0]
-            print(maxNCells)
-            print(bool(variableStiffness))
-            print(maxFrames)
 
 
-            #self.traj = np.zeros((maxFrames, maxNCells, numPart, 3))
-            traj = {}
+    def Initialize(self, trajPath):
+        self.fileSize = os.path.getsize(trajPath)
+        self.trajHandle = open(trajPath, 'rb')
+        try:
+            self.maxNCells = self._GetArray(np.int32, 1)[0]
+            self.variableStiffness = self._GetArray(np.int32, 1)[0]
+            self.maxFrames = self._GetArray(np.int32,1)[0]
+        except IncompleteTrajectoryError as e:
+            print("This trajectory file is a stub.")
+            self.close()
+            self.FatalError = True
 
 
-            self.bytesRead += 1*4
-            c = 0
-            while self.bytesRead < self.trajFileSize:
-                step = GetArray(np.int32, 1)[0]
-                frameCount = GetArray(np.int32, 1)[0]
-                print("Reading frame %d" % frameCount)
-                nCells = GetArray(np.int32, 1)[0]
-                self.bytesRead += 4*3
-                frame = np.empty((numPart*nCells, 3))
+    def GoToFrame(self, frameNum):
+        if self.currFrameNum < frameNum:
+            # move forwards
+            trajHandle.seek(self.intSize)
+            fN = self._GetArray(np.int32,1)[0]
+            if ( fN == frameNum):
+                trajHandle.seek(-2*self.intSize)
+                return
+            else:
+                nC = self._GetArray(np.int32, 1)[0]
+                trajHandle.seek(nC*(self.intSize + 3*self.numPart))
+
+    def ReadFrame(self, frameNum=None, inc=1):
+        # Read the frame!
+        if self.fatalError:
+            self.close()
+            raise IncompleteTrajectoryError("Reading this trajectory failed.")
+
+
+        if self.frameReadFailed or self.lastFrameNum == self.maxFrames:
+            print("Can't read past frame %d" % self.currFrameNum)
+            return self.frame
+        else:
+            try:
+                step = self._GetArray(np.int32, 1)[0]
+                frameNum = self._GetArray(np.int32, 1)[0]
+                nCells = self._GetArray(np.int32, 1)[0]
+                frame  = np.empty((self.numPart*nCells, 3))
 
                 for i in range(nCells):
-                    cellInd = GetArray(np.int32, 1)[0]
-                    x = GetArray(np.float32, numPart)
-                    y = GetArray(np.float32, numPart)
-                    z = GetArray(np.float32, numPart)
-                    self.bytesRead += 4*(numPart*3 + 1)
-                    if self.readDone:
-                        print("Data missing")
-                        print("Have read until step %d" % step)
-                        self.frameCount = i
-                        break
-                    else:
-                        frame[i*numPart:(i+1)*numPart, 0] = x
-                        frame[i*numPart:(i+1)*numPart, 1] = y
-                        frame[i*numPart:(i+1)*numPart, 2] = z
-                        c+=1
+                    cellInd = self._GetArray(np.int32, 1)[0]
+                    x = self._GetArray(np.float32, self.numPart)
+                    y = self._GetArray(np.float32, self.numPart)
+                    z = self._GetArray(np.float32, self.numPart)
 
+                    frame[i*self.numPart:(i+1)*self.numPart, 0] = x
+                    frame[i*self.numPart:(i+1)*self.numPart, 1] = y
+                    frame[i*self.numPart:(i+1)*self.numPart, 2] = z
 
+                self.frame = frame
+                self.nCellsLastFrame = nCells
 
-                if self.readDone:
-                    break
+                self.lastFrameNum = self.currFrameNum
+                self.currFrameNum = frameNum
 
-                traj[str(frameCount-1)] = frame
+                return self.frame
+            except IncompleteTrajectoryError as e:
+                print ("Trajectory incomplete, maxFrames set to %d" % self.maxFrames)
 
-            if compress:
-                np.savez_compressed(outFileName, **traj)
-            else:
-                np.savez(outFileName, **traj)
-
-
-    def GetTraj(self):
-        return self.npTrajPath
-
+    def close(self):
+        self.trajHandle.close()
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-
     parser.add_argument("trajPath", help='Trajectory file to test.')
-
     args = parser.parse_args()
 
     th = TrajHandle(args.trajPath)
 
-    with np.load(th.GetTraj(), 'r') as t:
-        print(t["0"].shape)
+    for i in range(5):
+        th.ReadFrame(inc=2)
 
+    print(th.currFrameNum)
+
+    th.close()
 
 if __name__ == "__main__":
     main()
