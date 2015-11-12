@@ -38,7 +38,7 @@ class TrajHandle(object):
         self.floatSize = np.array([0.1], dtype=np.float32).itemsize
 
         if not self.fileExists:
-            raise IOError("Couldn't find the trajectory file.")
+            raise IOError("Couldn't find the trajectory file. at %s" % trajPath)
         else:
             try:
                 self.Initialize(trajPath)
