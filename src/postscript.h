@@ -25,7 +25,8 @@ __global__ void CenterOfMass( int No_of_C180s,
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
-                         char* cell_div, float divVol);
+                         char* cell_div, float divVol, bool checkSphericity,
+                         float* areaList);
 
 int printboundingbox(int rank, float *bounding_xyz);
 int initialize_C180s(int Orig_No_of_C180s);
@@ -89,3 +90,9 @@ __global__ void PressureUpdate (float* d_pressList, float maxPressure,
 
 __global__ void PressureReset (int* d_resetIndices, float* d_pressList,
                                float minPressure, int numResetCells);
+
+__global__ void CheckCellDivision(int No_of_C180s, int *C180_56,
+                                  float *X,    float *Y,   float *Z,
+                                  float *CMx , float *CMy, float *CMz, float *voll,
+                                  int* d_C180_56,
+                                  char* cell_div, float divVol, bool checkSpherecity);
