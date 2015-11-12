@@ -535,7 +535,7 @@ int main(int argc, char *argv[])
       t = (int)useDifferentStiffnesses;
       fwrite(&t, sizeof(int), 1, trajfile);
       
-      t = Time_steps+equiStepCount+1;
+      t = (Time_steps+equiStepCount+1) / trajWriteInterval;
       fwrite(&t, sizeof(int), 1, trajfile);
       
     
