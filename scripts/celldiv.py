@@ -29,7 +29,7 @@ class TrajHandle(object):
         self.frameReadFailed = False
         self.fatalError = False
         self.lastFrameNum = -1
-        self.currFrameNum = -1
+        self.currFrameNum = 0
         self.nCellsLastFrame = 0
         self.frame = None
         self.fileSize = 0
@@ -61,23 +61,34 @@ class TrajHandle(object):
             self.maxNCells = self._GetArray(np.int32, 1)[0]
             self.variableStiffness = self._GetArray(np.int32, 1)[0]
             self.maxFrames = self._GetArray(np.int32,1)[0]
+            self.trajStart = self.trajHandle.tell()
         except IncompleteTrajectoryError as e:
             print("This trajectory file is a stub.")
             self.close()
             self.FatalError = True
+            raise
 
 
-    def GoToFrame(self, frameNum):
-        if self.currFrameNum < frameNum:
+    def GoToFrame(self, frameNum, force=False):
+        offset = self.currFrameNum
+        if force:
+            offset = 0
+
+        if self.currFrameNum < frameNum or force:
             # move forwards
-            trajHandle.seek(self.intSize)
-            fN = self._GetArray(np.int32,1)[0]
-            if ( fN == frameNum):
-                trajHandle.seek(-2*self.intSize)
-                return
-            else:
+            for i in range(frameNum - offset - 1):
+                self.trajHandle.seek(2*self.intSize, os.SEEK_CUR)
                 nC = self._GetArray(np.int32, 1)[0]
-                trajHandle.seek(nC*(self.intSize + 3*self.numPart))
+                self.trajHandle.seek(nC*(self.intSize + 3*self.numPart*self.floatSize),
+                                     os.SEEK_CUR)
+            return False
+        elif self.currFrameNum > frameNum:
+            # move backwards
+            self.trajHandle.seek(self.trajStart, os.SEEK_SET)
+            self.GoToFrame(frameNum, force=True)
+            return False
+        else:
+            return True
 
     def ReadFrame(self, frameNum=None, inc=1):
         # Read the frame!
@@ -91,11 +102,14 @@ class TrajHandle(object):
             return self.frame
         else:
             try:
+                if frameNum is not None:
+                    if(self.GoToFrame(frameNum)):
+                        return self.frame
+
                 step = self._GetArray(np.int32, 1)[0]
                 frameNum = self._GetArray(np.int32, 1)[0]
                 nCells = self._GetArray(np.int32, 1)[0]
                 frame  = np.empty((self.numPart*nCells, 3))
-
                 for i in range(nCells):
                     cellInd = self._GetArray(np.int32, 1)[0]
                     x = self._GetArray(np.float32, self.numPart)
@@ -115,6 +129,7 @@ class TrajHandle(object):
                 return self.frame
             except IncompleteTrajectoryError as e:
                 print ("Trajectory incomplete, maxFrames set to %d" % self.maxFrames)
+                raise
 
     def close(self):
         self.trajHandle.close()
@@ -126,11 +141,7 @@ def main():
     args = parser.parse_args()
 
     th = TrajHandle(args.trajPath)
-
-    for i in range(5):
-        th.ReadFrame(inc=2)
-
-    print(th.currFrameNum)
+    print(th.frame)
 
     th.close()
 
