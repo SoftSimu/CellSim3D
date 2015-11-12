@@ -70,6 +70,9 @@ class TrajHandle(object):
 
 
     def GoToFrame(self, frameNum, force=False):
+        if frameNum - self.lastFrameNum <= 1:
+            return
+
         offset = self.currFrameNum
         if force:
             offset = 0
@@ -106,6 +109,8 @@ class TrajHandle(object):
                     if(self.GoToFrame(frameNum)):
                         return self.frame
 
+                self.GoToFrame(self.currFrameNum + inc)
+
                 step = self._GetArray(np.int32, 1)[0]
                 frameNum = self._GetArray(np.int32, 1)[0]
                 nCells = self._GetArray(np.int32, 1)[0]
@@ -141,7 +146,12 @@ def main():
     args = parser.parse_args()
 
     th = TrajHandle(args.trajPath)
-    print(th.frame)
+    th.ReadFrame(inc = 2)
+    th.ReadFrame(inc = 2)
+    th.ReadFrame(inc = 2)
+    th.ReadFrame(inc = 2)
+
+    print(th.currFrameNum)
 
     th.close()
 
