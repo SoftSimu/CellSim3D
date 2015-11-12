@@ -1,5 +1,5 @@
 //#define FORCE_DEBUG
-//#define PRINT_VOLUMES
+#define PRINT_VOLUMES
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -95,6 +95,8 @@ int   *d_C180_56;
 
 float *d_volume;
 float *volume;
+float *d_area; 
+float *area; 
 char* cell_div;
 char* d_cell_div;
 int num_cell_div;
@@ -208,7 +210,7 @@ long int GPUMemory;
 long int CPUMemory;
 
 
-int frameCount = 0; 
+int frameCount = 1; 
 
 int main(int argc, char *argv[])
 {
@@ -318,6 +320,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Minx ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Maxx ,         1024*sizeof(float))) return(-1);
@@ -350,6 +353,7 @@ int main(int argc, char *argv[])
   CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
   volume= (float *)calloc(MaxNoofC180s, sizeof(float));
+  area= (float *)calloc(MaxNoofC180s, sizeof(float));
   cell_div = (char *)calloc(MaxNoofC180s, sizeof(char));
   cell_div_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
   Minx  = (float *)calloc(1024, sizeof(float));
@@ -390,7 +394,8 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
-  cudaMemcpy(d_volume, velListZ, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
+  cudaMemcpy(d_volume, volume, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
+  cudaMemcpy(d_area, area, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
   // Set the Youngs_mod for the cells
   youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -600,6 +605,7 @@ int main(int argc, char *argv[])
   }
 
   cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
 
   float rGrowth = 0;
   bool growthDone = false;
@@ -621,7 +627,8 @@ int main(int argc, char *argv[])
       printf("   Simulation box length = %f\n", boxLength);
   }
 
-  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice); 
+  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck(); 
   
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
@@ -639,6 +646,7 @@ int main(int argc, char *argv[])
       rGrowth = rMax;
       }
       PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s);
+      CudaErrorCheck(); 
       
       if ( (step)%1000 == 0)
       {
@@ -670,10 +678,12 @@ int main(int argc, char *argv[])
                                                  threshDist, useWalls,
                                                  d_velListX, d_velListY, d_velListZ,
                                                  useRigidSimulationBox, boxLength, d_boxMin);
+      CudaErrorCheck(); 
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
                                         d_CMx, d_CMy, d_CMz);
+      CudaErrorCheck();
       if (step <= Time_steps && rGrowth > 0){
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
@@ -681,8 +691,9 @@ int main(int argc, char *argv[])
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
-                                     d_volume, d_cell_div, divVol);
-
+                                     d_volume, d_cell_div, divVol,
+                                     checkSphericity, d_area); 
+        CudaErrorCheck();
         count_and_get_div();
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
@@ -693,7 +704,8 @@ int main(int argc, char *argv[])
           else
               GetRandomVector(norm); 
 
-          cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice); 
+          cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice);
+          CudaErrorCheck();
           
           NDIV[globalrank] += 1;
 
@@ -702,24 +714,38 @@ int main(int argc, char *argv[])
                                    d_X, d_Y, d_Z,
                                    d_CMx, d_CMy, d_CMz,
                                    No_of_C180s, d_ran2, repulsion_range);
+          CudaErrorCheck()
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
-
+          if (No_of_C180s >= MaxNoofC180s){
+              printf("ERROR: Population is %d, only allocated enough memory for %d\n",
+                     No_of_C180s, MaxNoofC180s);
+              printf("ERROR: Fatal error, crashing...\n");
+              return -69;
+          }
+          
           if (daughtSameStiffness){
               youngsModArray[No_of_C180s] = youngsModArray[globalrank];
               cudaMemcpy(d_Youngs_mod+No_of_C180s, youngsModArray+No_of_C180s,
                          sizeof(float), cudaMemcpyHostToDevice);
+              CudaErrorCheck();
           }
+          
 
           ++No_of_C180s;
         }
+        
+        if (num_cell_div>0){
+            cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int),
+                       cudaMemcpyHostToDevice);
 
-        cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int),
-                   cudaMemcpyHostToDevice); 
+            CudaErrorCheck(); 
 
-        PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
-
+            PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
+            CudaErrorCheck();
+        }
         totalFood -= num_cell_div*cellFoodConsDiv;
+        
 
         if (countOnlyInternal == 1){
           num_cell_div -= num_cells_far();
@@ -745,7 +771,6 @@ int main(int argc, char *argv[])
 
       // ----------------------------------------- End Cell Death --------------
 
-      
       bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
                                          d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
                                          d_bounding_xyz, d_CMx, d_CMy, d_CMz);
@@ -875,27 +900,41 @@ int main(int argc, char *argv[])
           else
               write_traj(step, trajfile);
 
-          cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          // cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          // cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          // cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           
-          write_vel(step, velFile); 
+          // write_vel(step, velFile); 
       }
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
       volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
-                                     d_volume, d_cell_div, divVol*100);
-      
-      cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      for (int i = 0; i < No_of_C180s; i++){
-          printf ("Cell: %d, volume= %f", i, volume[i]);
+                                   d_volume, d_cell_div, divVol*100, checkSphericity, d_area);
+
+      if (checkSphericity){
+          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          for (int i = 0; i < No_of_C180s; i++){
+              printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i],
+                      4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]);
           
-          if (volume[i] > divVol)
-              printf(", I'm too big :(");
+              if (volume[i] > divVol)
+                  printf(", I'm too big :(");
           
-          printf("\n"); 
+              printf("\n"); 
+          }
+      } else{
+          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          for (int i = 0; i < No_of_C180s; i++){
+              printf ("Cell: %d, volume= %f", i, volume[i]); 
+          
+              if (volume[i] > divVol)
+                  printf(", I'm too big :(");
+          
+              printf("\n"); 
+          }
       }
 #endif
 
@@ -1082,7 +1121,7 @@ int read_fullerene_nn(void)
 
   infil = fopen("C180NN","r");
   if ( infil == NULL ) {printf("Unable to open file C180NN\n");return(-1);}
-
+  
   end = 180;
   for ( i = 0; i < 180 ; ++i )
   {
