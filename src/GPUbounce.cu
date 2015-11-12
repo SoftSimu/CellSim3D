@@ -2036,9 +2036,9 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount){
         char cellType = 0; 
         for (int c = 0; c < No_of_C180s; c++){
             fwrite(&c, sizeof(int), 1, trajFile);
-            fwrite(X, sizeof(float), 192, trajFile); 
-            fwrite(Y, sizeof(float), 192, trajFile); 
-            fwrite(Z, sizeof(float), 192, trajFile);
+            fwrite(X + (c*192), sizeof(float), 192, trajFile); 
+            fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
+            fwrite(Z + (c*192), sizeof(float), 192, trajFile);
             
             if (youngsModArray[c] == stiffness1)
                 cellType = 0;
@@ -2051,9 +2051,9 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount){
         for (int c = 0; c < No_of_C180s; c++){
             fwrite(&c, sizeof(int), 1, trajFile);
             
-            fwrite(X, sizeof(float), 192, trajFile); 
-            fwrite(Y, sizeof(float), 192, trajFile); 
-            fwrite(Z, sizeof(float), 192, trajFile); 
+            fwrite(X + (c*192), sizeof(float), 192, trajFile); 
+            fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
+            fwrite(Z + (c*192), sizeof(float), 192, trajFile); 
         }
     }
         
