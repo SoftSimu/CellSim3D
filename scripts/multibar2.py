@@ -30,6 +30,9 @@ if args.endat is None:
 else:
     endat = args.endat
 
+if args.o is None:
+    args.o = "multibar.png"
+
 trajList = [os.path.abspath(p) for p in args.traj]
 
 try:
@@ -205,8 +208,3 @@ barAx.legend(title='Percent Softer Cells')
 
 polyTrendAx.set_xlabel('Time')
 polyTrendAx.set_ylabel('Hexagons')
-
-if args.o is "":
-    plt.savefig('manybars.png')
-else:
-    plt.savefig(args.o)
