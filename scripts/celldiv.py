@@ -287,7 +287,7 @@ class TrajHandleAscii(object):
                 l = self._GetLine().split(' ')
                 step = int(l[1])
                 frameNum = int(l[3])
-                print(step, frameNum)
+                #print(step, frameNum)
                 frame = []
                 for i in range(nCells):
                     cellInd = int(self._GetLine().split(' ')[1])
