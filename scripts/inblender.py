@@ -28,12 +28,11 @@ class Visualizer(object):
                 self.firstfaces.append([int(v) for v in row])
 
 
-    def DisplayFrame(self, frame: int = None, inc: int = None) -> None:
-        if self.pF != frame:
+    def DisplayFrame(self, frameNum: int = None, inc: int = None) -> None:
+        if self.pF != frameNum:
             bpy.ops.object.select_pattern(pattern='cellObj%d' % self.ind)
             bpy.ops.object.delete()
-
-        fr = self.th.ReadFrame(frame).tolist()
+        fr = self.th.ReadFrame(frameNum).tolist()
         f = []
         for c in range(int(len(fr)/192)):
             for r in self.firstfaces:
