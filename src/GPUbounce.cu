@@ -535,13 +535,25 @@ int main(int argc, char *argv[])
       t = (int)useDifferentStiffnesses;
       fwrite(&t, sizeof(int), 1, trajfile);
       
-      t = (Time_steps+equiStepCount+1) / trajWriteInterval;
+      t = (Time_steps+equiStepCount+1) / trajWriteInt;
       fwrite(&t, sizeof(int), 1, trajfile);
       
     
       WriteBinaryTraj(0, trajfile, 1); 
-  } else    
+  } else {
+      fprintf(trajfile, "Header Start:\n");
+      fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+
+      fprintf(trajfile, "Using variable stiffness:\n");
+      if (useDifferentStiffnesses)
+          fprintf(trajfile, "True\n");
+      else
+          fprintf(trajfile, "False\n");
+
+      fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
+      fprintf(trajfile, "Header End\n");
       write_traj(0, trajfile);
+  }
 
   // Set up walls if needed
   if (useWalls == 1){
@@ -2003,25 +2015,31 @@ void write_traj(int t_step, FILE* trajfile)
 {
 
   fprintf(trajfile, "%d\n", No_of_C180s * 192);
-  fprintf(trajfile, "Step: %d, frame: %d\n", t_step, t_step/trajWriteInt);
+  fprintf(trajfile, "Step: %d frame: %d\n", t_step, t_step/trajWriteInt);
   
   if (useDifferentStiffnesses){
-      
-        for (int p = 0; p < No_of_C180s*192; p++)
-        {
-            int cellInd = p/192; 
-            if (youngsModArray[cellInd] == stiffness1)
-                fprintf(trajfile, "%.7f,  %.7f,  %.7f,  H\n", X[p], Y[p], Z[p]);
-            else if(youngsModArray[cellInd] == stiffness2)
-                fprintf(trajfile, "%.7f,  %.7f,  %.7f,  C\n", X[p], Y[p], Z[p]);
+      for (int c = 0; c < No_of_C180s; c++){
+          if (youngsModArray[c] == stiffness1)
+              fprintf(trajfile, "cell: %d H\n", c);
+          else if(youngsModArray[c] == stiffness2)
+              fprintf(trajfile, "cell: %d C\n", c);
+          else
+              fprintf(trajfile, "cell: %d UnknownStiffness\n", c);
 
-        }
+          for (int p = 0; p < 192; p++)
+          {
+              fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[(c*192)+p], Y[(c*192)+p], Z[(c*192)+p]);
+          }
+      }
         
   } else {
-      
-      for (int p = 0; p < No_of_C180s*192; p++)
-      {
-          fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[p], Y[p], Z[p]);
+      for (int c = 0; c < No_of_C180s; c++){
+              fprintf(trajfile, "cell: %d\n", c);
+              
+              for (int p = 0; p < 192; p++)
+              {
+                  fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[(c*192)+p], Y[(c*192)+p], Z[(c*192)+p]);
+              }
       }
       
   }
