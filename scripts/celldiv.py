@@ -142,7 +142,7 @@ class TrajHandleBinary(object):
 
                 return self.frame
             except IncompleteTrajectoryError as e:
-                print ("Trajectory incomplete, maxFrames set to %d" % self.maxFrames)
+                print ("Trajectory incomplete, maxFrames set to %d" % self.lastFrameNum)
                 raise
 
     def close(self):
