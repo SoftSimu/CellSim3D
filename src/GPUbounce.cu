@@ -928,6 +928,7 @@ int main(int argc, char *argv[])
       if (checkSphericity){
           cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
           cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          printf("time: %d\n", step); 
           for (int i = 0; i < No_of_C180s; i++){
               printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i],
                       4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]);
