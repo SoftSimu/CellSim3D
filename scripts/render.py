@@ -10,7 +10,9 @@ firstfaces = []
 bpy.data.worlds["World"].horizon_color=[0.051, 0.051, 0.051]
 bpy.data.scenes["Scene"].render.alpha_mode='SKY'
 
-doSmooth = sys.argv[8].lower() == "smooth"
+doSmooth = False
+if len(sys.argv) > 8:
+    doSmooth = sys.argv[8].lower() == "smooth"
 
 with open('C180_pentahexa.csv', newline='') as g:
     readerfaces = csv.reader(g, delimiter=',')
