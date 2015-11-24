@@ -35,7 +35,8 @@ float repulsion_strength, attraction_strength;     //  ST1, ST2
 
 // variables to allow for different stiffnesses
 float stiffness1;
-float stiffness2; 
+float stiffness2;
+float Youngs_mod; 
 float* d_Youngs_mod;
 float* youngsModArray; 
 bool useDifferentStiffnesses;
@@ -689,7 +690,7 @@ int main(int argc, char *argv[])
                                                  wall1, wall2,
                                                  threshDist, useWalls,
                                                  d_velListX, d_velListY, d_velListZ,
-                                                 useRigidSimulationBox, boxLength, d_boxMin);
+                                                 useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod);
       CudaErrorCheck(); 
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
@@ -1242,7 +1243,8 @@ int read_json_params(const char* inpFile){
         attraction_range = coreParams["attraction_range"].asFloat();
         repulsion_strength = coreParams["repulsion_strength"].asFloat();
         attraction_strength = coreParams["attraction_strength"].asFloat();
-        stiffness1 = coreParams["Youngs_mod"].asFloat();
+        Youngs_mod = coreParams["Youngs_mod"].asFloat(); 
+        stiffness1 = coreParams["stiffFactor1"].asFloat()*Youngs_mod;
         viscotic_damping = coreParams["viscotic_damping"].asFloat();
         internal_damping = coreParams["internal_damping"].asFloat();
         divVol = coreParams["division_Vol"].asFloat();
@@ -1328,7 +1330,7 @@ int read_json_params(const char* inpFile){
         return -1;
     } else {
         useDifferentStiffnesses = stiffnessParams["useDifferentStiffnesses"].asBool();
-        stiffness2 = stiffnessParams["softYoungsMod"].asFloat();
+        stiffness2 = stiffnessParams["softStiffFactor"].asFloat() * Youngs_mod;
         numberOfSofterCells = stiffnessParams["numberOfSofterCells"].asInt();
         duringGrowth = stiffnessParams["duringGrowth"].asBool(); 
         closenessToCenter = stiffnessParams["closenessToCenter"].asFloat();
@@ -1656,7 +1658,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float* d_pressList, float* d_Youngs_mod , float bondingYoungsMod, 
+                           float R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, float delta_t,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
@@ -1667,7 +1669,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin)
+                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
@@ -1700,7 +1702,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
     float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
-    float Youngs_mod;
+    float stiffness;
     
     if ( rank < No_of_C180s && atom < 180 )
     {
@@ -1713,7 +1715,9 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             asm("trap;"); 
         }
 
-        Youngs_mod = d_Youngs_mod[rank];
+        stiffness = d_stiffness[rank];
+        // printf("stiffness: %f\n", stiffness);
+        // asm("trap;"); 
         
         N1 = d_C180_nn[  0+atom];
         N2 = d_C180_nn[192+atom];
@@ -1769,9 +1773,9 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
             // spring forces
-            FX += +Youngs_mod*(R-R0)/R0*deltaX/R;
-            FY += +Youngs_mod*(R-R0)/R0*deltaY/R;
-            FZ += +Youngs_mod*(R-R0)/R0*deltaZ/R;
+            FX += +stiffness*(R-R0)/R0*deltaX/R;
+            FY += +stiffness*(R-R0)/R0*deltaY/R;
+            FZ += +stiffness*(R-R0)/R0*deltaZ/R;
 
 
             // pressure forces
