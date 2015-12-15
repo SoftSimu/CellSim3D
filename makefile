@@ -1,6 +1,6 @@
 compiler = $(shell which nvcc)
 debug = -g -G
-arch = -arch=sm_30
+arch = -arch=sm_35
 oflags = $(arch) -Xptxas="-v" -O3 -I inc
 objDir = bin
 sources = $(wildcard src/*.cu)
