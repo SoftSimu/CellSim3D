@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
-  cudaMemcpy(d_volume, volume, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
+  cudaMemset(d_volume, 0, MaxNoofC180s*sizeof(float)); 
   cudaMemcpy(d_area, area, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
   // Set the Youngs_mod for the cells
@@ -705,8 +705,36 @@ int main(int argc, char *argv[])
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol,
-                                     checkSphericity, d_area); 
+                                     checkSphericity, d_area);
         CudaErrorCheck();
+
+#if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
+      if (checkSphericity){
+          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          printf("time: %d\n", step); 
+          for (int i = 0; i < No_of_C180s; i++){
+              printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i],
+                      4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]);
+          
+              if (volume[i] > divVol)
+                  printf(", I'm too big :(");
+          
+              printf("\n"); 
+          }
+      } else{
+          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          for (int i = 0; i < No_of_C180s; i++){
+              printf ("Cell: %d, volume= %f", i, volume[i]); 
+          
+              if (volume[i] > divVol)
+                  printf(", I'm too big :(");
+          
+              printf("\n"); 
+          }
+      }
+#endif
+
         count_and_get_div();
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
@@ -919,40 +947,6 @@ int main(int argc, char *argv[])
           
           // write_vel(step, velFile); 
       }
-
-#if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
-      volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
-                                     d_XP, d_YP, d_ZP,
-                                     d_CMx , d_CMy, d_CMz,
-                                   d_volume, d_cell_div, divVol*100, checkSphericity, d_area);
-
-      if (checkSphericity){
-          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          printf("time: %d\n", step); 
-          for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i],
-                      4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]);
-          
-              if (volume[i] > divVol)
-                  printf(", I'm too big :(");
-          
-              printf("\n"); 
-          }
-      } else{
-          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f", i, volume[i]); 
-          
-              if (volume[i] > divVol)
-                  printf(", I'm too big :(");
-          
-              printf("\n"); 
-          }
-      }
-#endif
-
-
 
       myError = cudaGetLastError();
       if ( cudaSuccess != myError )
