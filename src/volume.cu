@@ -1,28 +1,7 @@
 #include <cuda.h>
 #include <stdio.h>
+#include "DeviceFunctions.cuh"
 
-
-struct vec{
-    float x;
-    float y;
-    float z; 
-};
-
-
-
-__device__ float dot(float3 a, float3 b){
-    return (a.x*b.x + a.y*b.y + a.z*b.z); 
-}
-
-__device__ float3 cross(float3 a, float3 b){
-    float3 r;
-    r.x = a.y*b.z - b.z*a.y;
-    r.y = a.z*b.x - a.x*b.z;
-    r.z = a.x*b.y - b.y*b.x;
-
-    return r; 
-}
-    
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
@@ -107,7 +86,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             p2.y = locY[C180_56[7*tid+i+1]];
             p2.z = locZ[C180_56[7*tid+i+1]];
 
-            totvol2 += dot(p0, cross(p1, p2)); 
+            //totvol2 += dot(p0, cross(p1, p2)); 
 
             if (checkSphericity){
        
