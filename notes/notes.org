@@ -1,0 +1,77 @@
+* angle force computation theory
+  Derivation
+  using a harmonic potential on the angle, we write $V(\theta_{ijk}) =
+  \frac{1}{2} k^\theta (\theta_{ijk} - \theta_{ijk})$.
+  for the angle $\theta_{ijk}$ between particles $i$, $j$, and
+  $k$. assume particle $j$ is the one we are processing and the origin is at $\mathbf{r}_j$,
+
+  \begin{equation*}
+    \begin{aligned}
+    \mathbf{F}_{i}(\theta_{ijk}) &= -\frac{\partial}{\partial\mathbf{r}_i}
+    (\frac{1}{2} k^\theta (\theta_{ijk} - \theta_{ijk}^o)^2)\\
+    &= - \frac{1}{2} k^\theta \frac{\partial \theta_{ijk}}{\partial \mathbf{r}_i}
+    \frac{\partial}{\partial \theta_{ijk}} \left( \theta_{ijk} - \theta_{ijk}^o
+    \right)^2\\
+    &= -k^\theta \left(\theta_{ijk} - \theta_{ijk}^o\right) \frac{\partial
+    \theta_{ijk}}{\partial \mathbf{r}_i }\\
+    \end{aligned}
+  \end{equation*}
+
+  $\theta_{ijk} = \arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i
+  r_k} \right)}$ and $\frac{\partial}{\partial \mathbf{r}_i} = \left(
+  \frac{\partial}{\partial r_{ix}} + \frac{\partial}{\partial r_{iy}} +
+  \frac{\partial}{\partial r_{iz}} \right)$, so
+
+  \begin{equation*}
+    \begin{aligned}
+    \frac{\partial \theta_{ijk}}{\partial \mathbf{r}_i} &= \left(\frac{\partial}{\partial r_ix} +
+    \frac{\partial}{\partial r_iy} + \frac{\partial}{\partial r_iz} \right)
+    arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)}\\
+    \end{aligned}
+  \end{equation*}
+
+  let's write a sample one for the x
+
+  \begin{equation*}
+    \begin{aligned}
+      \frac{\partial}{\partial r_{ix}} arccos{\left( \frac{\mathbf{r}_i \cdot
+      \mathbf{r}_k}{r_i  r_k}\right)} &=       \frac{1}{\sqrt{1 -
+      \left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)^2}}
+      \frac{\partial}{\partial r_{ix}} \left( \frac{r_{ix} r_{kx} + r_{iy}{r_ky}
+      + r_{iz}{r_{kz}}}{r_k \left( r_{ix}^2 + r_{iy}^2 + r_{iz}^2\right)^\frac{1}{2}} \right)\\
+        &= \frac{1}{r_k\sqrt{1 -
+      \left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)^2}} \left( \frac{r_{kx}}{r_i} -
+       \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i^3} r_{ix}\right)\\
+    \end{aligned}
+  \end{equation*}
+
+  Which leads to the equation for the angle force
+    \begin{equation*}
+    \begin{aligned}
+      \mathbf{F}_{i}(\theta_{ijk}) = -k^\theta \left(\theta_{ijk} - \theta^o_{ijk}\right) \left[
+      \frac{1}{r_i r_k\sqrt{1 - \left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k} {r_i r_k} \right)^2}}
+      \left(
+      \left(r_{kx} - \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i^2}r_{ix} \right)\hat{\mathbf{x}}
+      + \left(r_{ky} - \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i^2}r_{iy} \right)\hat{\mathbf{y}}
+      + \left(r_{kz} - \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i^2}r_{iz} \right)\hat{\mathbf{z}}
+      \right)\right]
+    \end{aligned}
+  \end{equation*}
+
+  let $C_1 = \frac{1}{r_i r_k \sqrt{1 - \left(\frac{\mathbf{r}_i \cdot
+  \mathbf{r}_k}{r_i r_k}\right)^2}}$ and $C_2 = \frac{\mathbf{r}_i
+  \cdot \mathbf{r}_k} {r_i^2}$ then we get
+
+  \begin{equation*}
+\mathbf{F}_i(\theta_{ijk}) = -k_\theta C_1 (\theta_{ijk} -
+  \theta_{ijk}^o) \left[\left(r_{kx} - C_2 r_{ix}
+  \right)\hat{\mathbf{x}} +
+  + \left(r_{ky} - C_2 r_{iy} \right)\hat{\mathbf{y}}
+  + \left(r_{kz} - C_2 r_{iz} \right)\hat{\mathbf{z}}
+  \right]
+  \end{equation*}
+
+  Which lets us calculate the force on particle $j$
+  \begin{equation*}
+    \mathbf{F}_j(\theta_{ijk}) = -\mathbf{F}_i - \mathbf{F}_k
+  \end{equation*}
