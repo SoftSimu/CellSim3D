@@ -1,0 +1,22 @@
+* Overhaul structure
+  As it is now (Feb 1, 2016) the code is very hard to reconfigure. I
+  will try to rewrite it in an intelligent way to allow for easy
+  configuration at a later time.
+** CellDiv
+*** Input
+**** Force-field parameters
+***** All the force field parameters
+**** Cell Geometry
+***** Padding?
+***** Number of nodes?
+***** Division Algorithm Selection?
+**** GPU Selection?
+***** Multiple GPU?
+***** Which GPU?
+**** Simulation parameters
+***** Number of Cellls
+***** Boundary Conditions
+**** Output to disk
+*** Initialization
+*** Simulation
+*** Close
