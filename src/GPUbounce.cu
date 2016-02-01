@@ -151,7 +151,8 @@ float wallWStart, wallWEnd;
 float wallLStart, wallLEnd;
 
 float boxLength, boxMin[3];
-bool useRigidSimulationBox; 
+bool useRigidSimulationBox;
+bool usePBCs; 
 float* d_boxMin;
 
 int No_of_threads; // ie number of staring cells
@@ -471,6 +472,9 @@ int main(int argc, char *argv[])
 
   GPUMemory = totalGPUMem - freeGPUMem;
 
+
+
+
   printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
   printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
 
@@ -519,6 +523,7 @@ int main(int argc, char *argv[])
                                          attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
   CudaErrorCheck(); 
   globalrank = 0;
+
 
   // open trajectory file
   trajfile = fopen (trajFileName, "w");
@@ -623,7 +628,7 @@ int main(int argc, char *argv[])
 
   float rGrowth = 0;
   bool growthDone = false;
-
+  
   boxMin[0] = 0;
   boxMin[1] = 0;
   boxMin[2] = 0;
@@ -632,7 +637,7 @@ int main(int argc, char *argv[])
   if (useRigidSimulationBox){
       printf("   Setup rigid (non-PBC) box...\n"); 
       boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
-      if (Side_length < 5) boxLength = boxLength * 5; 
+      //if (Side_length < 5) boxLength = boxLength * 5; 
       boxMin[0] = floor(Minx[0] - 0.1);
       boxMin[1] = floor(Minx[2] - 0.1);
       boxMin[2] = floor(Minx[4] - 0.1);
@@ -641,8 +646,36 @@ int main(int argc, char *argv[])
       printf("   Simulation box length = %f\n", boxLength);
   }
 
+  
   cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck(); 
+
+  if (ranZOffset){
+      float f = 0.7; 
+      if (useRigidSimulationBox)
+          f *= boxLength;
+      
+      float randoms[No_of_C180s];
+      ranmar(randoms, No_of_C180s);
+
+      
+      for (int c = 0; c < No_of_C180s; c++){
+          for (int p = 0; p< 192; p++){
+              X[c*192 + p] = X[c*192 + p] + randoms[c]*f; 
+              Y[c*192 + p] = Y[c*192 + p] + randoms[c]*f; 
+              Z[c*192 + p] = Z[c*192 + p] + randoms[c]*f; 
+          }
+      }
+        cudaMemcpy(d_XP, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_YP, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_ZP, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_X,  X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_Y,  Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_Z,  Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_XM, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_YM, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+        cudaMemcpy(d_ZM, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
+  }
   
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
@@ -1081,9 +1114,6 @@ int initialize_C180s(int Orig_No_of_C180s)
       ey=rank%Side_length;
       ex=rank/Side_length;
 
-      if (ranZOffset) // Branch prediction should kick in
-          zOffset += ran2[rank]-0.5;
-
       for ( atom = 0 ; atom < 180 ; ++atom)
       {
           X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1;
@@ -1342,6 +1372,8 @@ int read_json_params(const char* inpFile){
         return -1;
     } else{
         useRigidSimulationBox = boxParams["useRigidSimulationBox"].asBool();
+        usePBCs = boxParams["usePBCs"].asBool();
+        boxLength = boxParams["boxLength"].asFloat(); 
     }
     
     
@@ -1400,10 +1432,9 @@ int read_json_params(const char* inpFile){
     printf("      chooseRandomCellIndices = %d\n", chooseRandomCellIndices);
     printf("      daughtSameStiffness = %d\n", daughtSameStiffness);
     printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
+    printf("      usePBCs             = %d\n", usePBCs);
+    printf("      boxLength           = %d\n", boxLength);
     
-    
-
-
 
     if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
         printf("radFrac not in [0.4, 0.8] setting to 1.\n");
