@@ -677,7 +677,16 @@ int main(int argc, char *argv[])
         cudaMemcpy(d_YM, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
         cudaMemcpy(d_ZM, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
   }
-  
+
+  // Code to set up pbc things
+  if (usePBCs){
+      boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
+      //if (Side_length < 5) boxLength = boxLength * 5; 
+      boxMin[0] = floor(Minx[0] - 0.1);
+      boxMin[1] = floor(Minx[2] - 0.1);
+      boxMin[2] = floor(Minx[4] - 0.1);
+      
+  }
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -1434,7 +1443,7 @@ int read_json_params(const char* inpFile){
     printf("      daughtSameStiffness = %d\n", daughtSameStiffness);
     printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
     printf("      usePBCs             = %d\n", usePBCs);
-    printf("      boxLength           = %d\n", boxLength);
+    printf("      boxLength           = %f\n", boxLength);
     
 
     if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
