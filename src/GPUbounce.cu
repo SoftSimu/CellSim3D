@@ -512,6 +512,7 @@ int main(int argc, char *argv[])
   minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
   CudaErrorCheck(); 
   cudaMemset(d_NoofNNlist, 0, 1024*1024);
+  cudaMemset(d_NNlist, 0, 32*1024*1024);
   cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
   //  DL = 3.8f;
   DL = 2.9f;
