@@ -523,7 +523,8 @@ public:
   static const UInt64 maxUInt64;
 #endif // defined(JSON_HAS_INT64)
 
-private:
+//private:
+public:
 #ifndef JSONCPP_DOC_EXCLUDE_IMPLEMENTATION
 #ifndef JSON_VALUE_USE_INTERNAL_MAP
   class CZString {
