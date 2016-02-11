@@ -19,3 +19,5 @@ graphs/*
 *.gif
 *.bdl
 ./bin/*
+*.bak*
+*.gz
