@@ -17,7 +17,7 @@
     \end{aligned}
   \end{equation*}
 
-  $\theta_{ijk} = \arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i
+  $\theta_{ijk} = \\arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i
   r_k} \right)}$ and $\frac{\partial}{\partial \mathbf{r}_i} = \left(
   \frac{\partial}{\partial r_{ix}} + \frac{\partial}{\partial r_{iy}} +
   \frac{\partial}{\partial r_{iz}} \right)$, so
@@ -26,7 +26,7 @@
     \begin{aligned}
     \frac{\partial \theta_{ijk}}{\partial \mathbf{r}_i} &= \left(\frac{\partial}{\partial r_ix} +
     \frac{\partial}{\partial r_iy} + \frac{\partial}{\partial r_iz} \right)
-    arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)}\\
+    \arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)}\\
     \end{aligned}
   \end{equation*}
 
@@ -34,7 +34,7 @@
 
   \begin{equation*}
     \begin{aligned}
-      \frac{\partial}{\partial r_{ix}} arccos{\left( \frac{\mathbf{r}_i \cdot
+      \frac{\partial}{\partial r_{ix}} \arccos{\left( \frac{\mathbf{r}_i \cdot
       \mathbf{r}_k}{r_i  r_k}\right)} &=       \frac{1}{\sqrt{1 -
       \left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)^2}}
       \frac{\partial}{\partial r_{ix}} \left( \frac{r_{ix} r_{kx} + r_{iy}{r_ky}
@@ -59,17 +59,25 @@
   \end{equation*}
 
   let $C_1 = \frac{1}{r_i r_k \sqrt{1 - \left(\frac{\mathbf{r}_i \cdot
-  \mathbf{r}_k}{r_i r_k}\right)^2}}$ and $C_2 = \frac{\mathbf{r}_i
+  \mathbf{r}_k}{r_i r_k}\right)^2}} = \frac{1}{\sqrt{r_i^2 r_k^2 -
+  \left(\mathbf{r}_i \cdot \mathbf{r}_k\right)^2}}$ and $C_2 = \frac{\mathbf{r}_i
   \cdot \mathbf{r}_k} {r_i^2}$ then we get
 
   \begin{equation*}
 \mathbf{F}_i(\theta_{ijk}) = -k_\theta C_1 (\theta_{ijk} -
   \theta_{ijk}^o) \left[\left(r_{kx} - C_2 r_{ix}
-  \right)\hat{\mathbf{x}} +
+  \right)\hat{\mathbf{x}}
   + \left(r_{ky} - C_2 r_{iy} \right)\hat{\mathbf{y}}
   + \left(r_{kz} - C_2 r_{iz} \right)\hat{\mathbf{z}}
   \right]
   \end{equation*}
+
+  Rewrite to
+ \begin{equation*}
+   \mathbf{F}_i(\theta_{ijk}) = -k_\theta C_1 \left(\theta_{ijk} - \theta_{ijk}^o\right) \left( \mathbf{r}_k -
+  C_2\mathbf{r}_i\right)
+\end{equation*}
+
 
   Which lets us calculate the force on particle $j$
   \begin{equation*}
