@@ -344,7 +344,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             ++NooflocalNN;
 
             if ( NooflocalNN > 10 ){
-                //printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
                 continue;
             }
 
