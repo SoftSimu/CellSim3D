@@ -4,7 +4,7 @@
 #define VECTOR_FUNCTIONS_HPP
 
 __host__ __device__ inline float dot(float3 a, float3 b){
-    return a.x*a.x + a.y*a.y + a.z*a.z;
+    return a.x*b.x + a.y*b.y + a.z*b.z;
 }
 
 
