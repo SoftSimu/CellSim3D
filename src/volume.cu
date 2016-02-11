@@ -86,7 +86,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             p2.y = locY[C180_56[7*tid+i+1]];
             p2.z = locZ[C180_56[7*tid+i+1]];
 
-            //totvol2 += dot(p0, cross(p1, p2)); 
+            totvol2 += dot(p0, cross(p1, p2)); 
 
             if (checkSphericity){
        
@@ -126,21 +126,19 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
     __syncthreads();
 
     if ( tid == 0){
-        // if (isnan(vol[fullerene])){
-        //     printf("OH SHIT: nan volume for cell %d", fullerene); 
-        //     asm("trap;");
-        // }
+        if (isnan(vol[fullerene])){
+            printf("OH SHIT: nan volume for cell %d", fullerene); 
+            asm("trap;");
+        }
 
         
      
-        volume = volume/6.0; 
+        volume = volume/6.0;
+        volume2 = volume2/6.0;
         vol[fullerene] = volume;
         bool divide = 0; 
-     
         if (volume > divVol){
             cell_div[fullerene] = 1;
-            //printf("Cell %d volume =%f, volume2=%f \n", fullerene, volume/6.0, volume2/6.0); 
-            //divide = 1; 
         }
 
         if (checkSphericity){
