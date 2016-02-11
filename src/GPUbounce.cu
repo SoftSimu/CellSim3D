@@ -18,7 +18,7 @@
 #include "marsaglia.h"
 #include "IntegrationKernels.h"
 #include "RandomVector.h"
-#include "DeviceFunctions.cuh"
+#include "VectorFunctions.hpp"
 
 #include "json/json.h"
 

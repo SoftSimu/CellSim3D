@@ -1,6 +1,6 @@
 #include<cuda.h>
 #include<stdio.h>
-#include"DeviceFunctions.cuh"
+#include "VectorFunctions.hpp"
 
 __device__ void NeighAngleForce(int cellInd, int nodeInd,
                                    float d_X[], float d_Y[], float d_Z[],

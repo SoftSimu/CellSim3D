@@ -1,6 +1,6 @@
 #include <cuda.h>
 #include <stdio.h>
-#include "DeviceFunctions.cuh"
+#include "VectorFunctions.hpp"
 
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
