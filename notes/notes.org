@@ -1,4 +1,10 @@
 * angle force computation theory
+  *_THIS METHOD WILL FAIL IF CELL GEOMETRY CHANGES_*
+
+  Here are the details regarding the theory of calculating the force
+  on a node $j$ due to variations of the the angle it makes with nodes
+  $i, k$.
+** First, the first neighbour contributions
   Derivation
   using a harmonic potential on the angle, we write $V(\theta_{ijk}) =
   \frac{1}{2} k^\theta (\theta_{ijk} - \theta_{ijk})$.
@@ -83,3 +89,9 @@
   \begin{equation*}
     \mathbf{F}_j(\theta_{ijk}) = -\mathbf{F}_i - \mathbf{F}_k
   \end{equation*}
+** And now the second neighbour contribution
+   $j$ participates in other angles with $i$ and $k$. E.g. $i$ will
+   have 3 neighbours itself
+** Implementation details
+   Here are the details of how things are implemented in the code.
+***
