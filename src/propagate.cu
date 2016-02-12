@@ -65,7 +65,7 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     // i = n1, k = n2
     nodeForce = nodeForce - (GetAngleForce(n1Pos-nodePos, n2Pos-nodePos, theta_o, k) + GetAngleForce(n2Pos-nodePos, n1Pos-nodePos, theta_o, k));
     // i = n1, k = n3
-    nodeForce = nodeForce - (GetAngleForce(n1Pos-nodePos, n3Pos-nodePos, theta_o, k) + GetAngleForce(n3Pos-nodePos, n3Pos-nodePos, theta_o, k));
+    nodeForce = nodeForce - (GetAngleForce(n1Pos-nodePos, n3Pos-nodePos, theta_o, k) + GetAngleForce(n3Pos-nodePos, n1Pos-nodePos, theta_o, k));
     // i = n2, k = n3
     nodeForce = nodeForce - (GetAngleForce(n2Pos-nodePos, n3Pos-nodePos, theta_o, k) + GetAngleForce(n3Pos-nodePos, n2Pos-nodePos, theta_o, k));
     
@@ -126,8 +126,8 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     t2Pos.y = d_Y[cellInd*192 + n32]; 
     t2Pos.z = d_Z[cellInd*192 + n32];
 
-    nodeForce = nodeForce + GetAngleForce(nodePos - n2Pos, t1Pos - n3Pos, theta_o, k); 
-    nodeForce = nodeForce + GetAngleForce(nodePos - n2Pos, t2Pos - n3Pos, theta_o, k);
+    nodeForce = nodeForce + GetAngleForce(nodePos - n3Pos, t1Pos - n3Pos, theta_o, k); 
+    nodeForce = nodeForce + GetAngleForce(nodePos - n3Pos, t2Pos - n3Pos, theta_o, k);
 
     return nodeForce;
 }
