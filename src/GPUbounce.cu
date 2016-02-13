@@ -171,6 +171,10 @@ float* d_Fx;
 float* d_Fy;
 float* d_Fz;
 
+float* theta0;
+float* d_theta0;
+bool constrainAngles;
+
 // host: minimal bounding box for fullerene
 float *bounding_xyz;
 float *d_bounding_xyz;   // device:  bounding_xyz
@@ -348,6 +352,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1); 
+  if ( cudaSuccess != cudaMalloc( (void **)&d_theta0, 3*192*sizeof(float))) return(-1); 
   
 
 
@@ -368,7 +373,8 @@ int main(int argc, char *argv[])
   NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
   pressList = (float *)calloc(MaxNoofC180s, sizeof(float));
-  resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int)); 
+  resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
+  theta0 = (float *)calloc(3*192, sizeof(float)); 
 
   CPUMemory += MaxNoofC180s*7L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(float);
@@ -377,6 +383,7 @@ int main(int argc, char *argv[])
   CPUMemory += MaxNoofC180s*sizeof(char);
   CPUMemory += MaxNoofC180s*sizeof(int);
   CPUMemory += MaxNoofC180s*sizeof(int); 
+  CPUMemory += 3*180*sizeof(float); 
 
 
   cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
@@ -687,6 +694,45 @@ int main(int argc, char *argv[])
       boxMin[2] = floor(Minx[4] - 0.1);
       
   }
+  if (constrainAngles){
+      // Code to initialize equillibrium angles
+      float3 p, n1, n2, n3;
+      printf("Angles_o:\n"); 
+      for (int n = 0; n<180; n++){
+          p.x = X[0*192+n];
+          p.y = Y[0*192+n];
+          p.z = Z[0*192+n];
+
+          n1.x = X[0*192 + C180_nn[0*192 + n]];
+          n1.y = Y[0*192 + C180_nn[0*192 + n]];
+          n1.z = Z[0*192 + C180_nn[0*192 + n]];
+          
+          n2.x = X[0*192 + C180_nn[1*192 + n]];
+          n2.y = Y[0*192 + C180_nn[1*192 + n]];
+          n2.z = Z[0*192 + C180_nn[1*192 + n]];
+          
+          n3.x = X[0*192 + C180_nn[2*192 + n]];
+          n3.y = Y[0*192 + C180_nn[2*192 + n]];
+          n3.z = Z[0*192 + C180_nn[2*192 + n]];
+
+          n1 = n1-p;
+          n2 = n2-p;
+          n3 = n3-p; 
+
+          // n1, n2
+          theta0[n+0] = acosf(dot(n1, n2)/(mag(n1)*mag(n2)));
+          // n2, n3
+          theta0[n+1] = acosf(dot(n2, n3)/(mag(n2)*mag(n3)));
+          // n1, n3
+          theta0[n+2] = acosf(dot(n1, n3)/(mag(n1)*mag(n3))); 
+
+          printf("p %d, (%f, %f, %f)\n", n, theta0[n+0], theta0[n+1], theta0[n+2]); 
+                               
+      }
+
+      cudaMemcpy(d_theta0, theta0, 3*192*sizeof(float), cudaMemcpyHostToDevice);
+      CudaErrorCheck(); 
+  }
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -734,7 +780,8 @@ int main(int argc, char *argv[])
                                                  wall1, wall2,
                                                  threshDist, useWalls,
                                                  d_velListX, d_velListY, d_velListZ,
-                                                 useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod);
+                                                 useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                 constrainAngles, d_theta0); 
       CudaErrorCheck(); 
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
@@ -1298,7 +1345,8 @@ int read_json_params(const char* inpFile){
         minPressure = coreParams["minPressure"].asFloat();
         gamma_visc = coreParams["gamma_visc"].asFloat();
         rMax = coreParams["growth_rate"].asFloat();
-        checkSphericity = coreParams["checkSphericity"].asBool(); 
+        checkSphericity = coreParams["checkSphericity"].asBool();
+        constrainAngles = coreParams["constrainAngles"].asBool(); 
     }
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);

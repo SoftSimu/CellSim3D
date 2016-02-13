@@ -56,7 +56,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float wall1, float wall2,
                            float threshDist, bool useWalls,
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod);
+                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod,
+                           bool constrainAngles, const float d_theta0[]);
 
 __global__ void bounding_boxes( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,

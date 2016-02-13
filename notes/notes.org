@@ -3,7 +3,10 @@
 
   Here are the details regarding the theory of calculating the force
   on a node $j$ due to variations of the the angle it makes with nodes
-  $i, k$.
+  $i, k$. It is based on the figure below
+  #+CAPTION: Angles that node $j$ is a part of
+  #+NAME: fig:angles
+  [[./AngleForce.eps]]
 ** First, the first neighbour contributions
   Derivation
   using a harmonic potential on the angle, we write $V(\theta_{ijk}) =
