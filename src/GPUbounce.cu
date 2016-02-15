@@ -299,12 +299,10 @@ int main(int argc, char *argv[])
 
 
 
-  // Allocate initializing memory for didCellDie
-
-  didCellDie = (char *)(calloc(MaxNoofC180s, sizeof(char)));
   CPUMemory += (long)MaxNoofC180s * sizeof(char);
 
   cudaDeviceProp deviceProp = getDevice();
+  cudaSetDevice(0); 
 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
