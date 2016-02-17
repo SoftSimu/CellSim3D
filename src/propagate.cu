@@ -49,7 +49,7 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     
     float3 nodePos, nodeForce;
 
-    nodeForce.x = 0; nodeForce.y = 0; nodeForce.z=0; 
+    nodeForce.x = 0.0; nodeForce.y = 0.0; nodeForce.z=0.0; 
 
     nodePos.x = d_X[cellInd*192 + nodeInd];
     nodePos.y = d_Y[cellInd*192 + nodeInd];
@@ -72,19 +72,19 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     float theta_o = 0;
     
     // i = n1, k = n2
-    theta_o = d_theta0[nodeInd+0];
+    theta_o = d_theta0[0*192 + nodeInd];
     nodeForce = nodeForce - 
         (GetAngleForce(n1Pos-nodePos, n2Pos-nodePos, theta_o, k) + 
          GetAngleForce(n2Pos-nodePos, n1Pos-nodePos, theta_o, k));
     
     // i = n2, k = n3
-    theta_o = d_theta0[nodeInd+1]; 
+    theta_o = d_theta0[1*192 + nodeInd]; 
     nodeForce = nodeForce - 
         (GetAngleForce(n2Pos-nodePos, n3Pos-nodePos, theta_o, k) + 
          GetAngleForce(n3Pos-nodePos, n2Pos-nodePos, theta_o, k));
 
     // i = n1, k = n3
-    theta_o = d_theta0[nodeInd+2]; 
+    theta_o = d_theta0[2*192 + nodeInd]; 
     nodeForce = nodeForce -
         (GetAngleForce(n1Pos-nodePos, n3Pos-nodePos, theta_o, k) +
          GetAngleForce(n3Pos-nodePos, n1Pos-nodePos, theta_o, k));
@@ -298,8 +298,9 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         
         float3 t = CalculateAngleForce(atom, d_C180_nn,
                                        d_X, d_Y, d_Z,
-                                       d_theta0, Youngs_mod, rank);
-            
+                                       d_theta0, Youngs_mod/100.0, rank);
+        FX += t.x; FY += t.y; FZ += t.z;
+        
         // printf("Angle Force on node %d= (%f, %f, %f)\n", atom, t.x, t.y, t.z);
 
         // FX += t.x;

@@ -718,13 +718,13 @@ int main(int argc, char *argv[])
           n3 = n3-p; 
 
           // n1, n2
-          theta0[n+0] = acosf(dot(n1, n2)/(mag(n1)*mag(n2)));
+          theta0[0*192 + n] = acosf(dot(n1, n2)/(mag(n1)*mag(n2)));
           // n2, n3
-          theta0[n+1] = acosf(dot(n2, n3)/(mag(n2)*mag(n3)));
+          theta0[1*192 + n] = acosf(dot(n2, n3)/(mag(n2)*mag(n3)));
           // n1, n3
-          theta0[n+2] = acosf(dot(n1, n3)/(mag(n1)*mag(n3))); 
+          theta0[2*192 + n] = acosf(dot(n1, n3)/(mag(n1)*mag(n3))); 
 
-          printf("p %d, (%f, %f, %f)\n", n, theta0[n+0], theta0[n+1], theta0[n+2]); 
+          printf("p %d, (%f, %f, %f)\n", n, theta0[0*192+n], theta0[1*192+n], theta0[2*192+n]); 
                                
       }
 
