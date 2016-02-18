@@ -6,13 +6,14 @@
   $i, k$. It is based on the figure below
   #+CAPTION: Angles that node $j$ is a part of
   #+NAME: fig:angles
-  [[./AngleForce.eps]]
-** First, the first neighbour contributions
+  [[./AngleForce.png]]
+** TODO First, the first neighbour contributions
   Derivation
   using a harmonic potential on the angle, we write $V(\theta_{ijk}) =
   \frac{1}{2} k^\theta (\theta_{ijk} - \theta_{ijk})$.
   for the angle $\theta_{ijk}$ between particles $i$, $j$, and
-  $k$. assume particle $j$ is the one we are processing and the origin is at $\mathbf{r}_j$,
+  $k$. assume particle $j$ is the one we are processing and the origin
+  is the position of $j$,
 
   \begin{equation*}
     \begin{aligned}
@@ -26,22 +27,22 @@
     \end{aligned}
   \end{equation*}
 
-  $\theta_{ijk} = \\arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i
+  $\theta_{ijk} = \arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i
   r_k} \right)}$ and $\frac{\partial}{\partial \mathbf{r}_i} = \left(
-  \frac{\partial}{\partial r_{ix}} + \frac{\partial}{\partial r_{iy}} +
-  \frac{\partial}{\partial r_{iz}} \right)$, so
+  \frac{\partial}{\partial r_{ix}} \hat{\mathbf{x}} + \frac{\partial}{\partial r_{iy}}\hat{\mathbf{y}} +
+  \frac{\partial}{\partial r_{iz}} \hat{\mathbf{z}}\right)$, so
 
   \begin{equation*}
     \begin{aligned}
-    \frac{\partial \theta_{ijk}}{\partial \mathbf{r}_i} &= \left(\frac{\partial}{\partial r_ix} +
-    \frac{\partial}{\partial r_iy} + \frac{\partial}{\partial r_iz} \right)
+    \frac{\partial \theta_{ijk}}{\partial \mathbf{r}_i} &= \left(\frac{\partial}{\partial r_{ix}}\hat{\mathbf{x}} +
+    \frac{\partial}{\partial r_{iy}}\hat{\mathbf{y}} + \frac{\partial}{\partial r_iz}\hat{\mathbf{z}} \right)
     \arccos{\left( \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i  r_k}\right)}\\
     \end{aligned}
   \end{equation*}
 
   let's write a sample one for the x
-
-  \begin{equation*}
+  * Error here. Missing minus sign, check code.*
+ \begin{equation*}
     \begin{aligned}
       \frac{\partial}{\partial r_{ix}} \arccos{\left( \frac{\mathbf{r}_i \cdot
       \mathbf{r}_k}{r_i  r_k}\right)} &=       \frac{1}{\sqrt{1 -
