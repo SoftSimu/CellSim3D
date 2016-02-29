@@ -13,6 +13,9 @@
 #include <string>
 
 #include <cuda.h>
+#include <vector_functions.h>
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
 //#include "helper_cuda.h"
 #include "postscript.h"
 #include "marsaglia.h"
@@ -171,8 +174,9 @@ float* d_Fx;
 float* d_Fy;
 float* d_Fz;
 
-float* theta0;
-float* d_theta0;
+// float* theta0;
+// float* d_theta0;
+
 bool constrainAngles;
 
 // host: minimal bounding box for fullerene
@@ -350,10 +354,11 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1); 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_theta0, 3*192*sizeof(float))) return(-1); 
   
-
-
+  thrust::host_vector<angles3> theta0(192);
+  thrust::device_vector<angles3> d_theta0V(192);
+  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]); 
+  
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -372,8 +377,7 @@ int main(int argc, char *argv[])
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
   pressList = (float *)calloc(MaxNoofC180s, sizeof(float));
   resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
-  theta0 = (float *)calloc(3*192, sizeof(float)); 
-
+  
   CPUMemory += MaxNoofC180s*7L*sizeof(float);
   CPUMemory += MaxNoofC180s*sizeof(float);
   CPUMemory += 3L*MaxNoofC180s*sizeof(float);
@@ -694,41 +698,31 @@ int main(int argc, char *argv[])
   }
   if (constrainAngles){
       // Code to initialize equillibrium angles
-      float3 p, n1, n2, n3;
-      printf("Angles_o:\n"); 
+      float3 p, ni, nj, nk;
       for (int n = 0; n<180; n++){
-          p.x = X[0*192+n];
-          p.y = Y[0*192+n];
-          p.z = Z[0*192+n];
+          p = make_float3(X[n], Y[n], Z[n]); 
 
-          n1.x = X[0*192 + C180_nn[0*192 + n]];
-          n1.y = Y[0*192 + C180_nn[0*192 + n]];
-          n1.z = Z[0*192 + C180_nn[0*192 + n]];
+          ni = make_float3(X[C180_nn[0*192 + n]], Y[C180_nn[0*192 + n]], 
+                           Z[C180_nn[0*192 + n]]); 
           
-          n2.x = X[0*192 + C180_nn[1*192 + n]];
-          n2.y = Y[0*192 + C180_nn[1*192 + n]];
-          n2.z = Z[0*192 + C180_nn[1*192 + n]];
+          nj = make_float3(X[C180_nn[1*192 + n]], Y[C180_nn[1*192 + n]], 
+                           Z[C180_nn[1*192 + n]]);
           
-          n3.x = X[0*192 + C180_nn[2*192 + n]];
-          n3.y = Y[0*192 + C180_nn[2*192 + n]];
-          n3.z = Z[0*192 + C180_nn[2*192 + n]];
+          nk = make_float3(X[C180_nn[2*192 + n]], Y[C180_nn[2*192 + n]],
+                           Z[C180_nn[2*192 + n]]);
 
-          n1 = n1-p;
-          n2 = n2-p;
-          n3 = n3-p; 
+          ni = ni-p;
+          nj = nj-p;
+          nk = nk-p; 
 
-          // n1, n2
-          theta0[0*192 + n] = acosf(dot(n1, n2)/(mag(n1)*mag(n2)));
-          // n2, n3
-          theta0[1*192 + n] = acosf(dot(n2, n3)/(mag(n2)*mag(n3)));
-          // n1, n3
-          theta0[2*192 + n] = acosf(dot(n1, n3)/(mag(n1)*mag(n3))); 
-
-          printf("p %d, (%f, %f, %f)\n", n, theta0[0*192+n], theta0[1*192+n], theta0[2*192+n]); 
-                               
+          theta0[n].aij = acosf(dot(ni, nj)/(mag(ni)*mag(nj)));
+          
+          theta0[n].ajk = acosf(dot(nj, nk)/(mag(nj)*mag(nk)));
+          
+          theta0[n].aik = acosf(dot(ni, nk)/(mag(ni)*mag(nk))); 
       }
 
-      cudaMemcpy(d_theta0, theta0, 3*192*sizeof(float), cudaMemcpyHostToDevice);
+      d_theta0V = theta0; 
       CudaErrorCheck(); 
   }
   // Simulation loop
@@ -1124,6 +1118,7 @@ int main(int argc, char *argv[])
 
   fclose(trajfile);
   fclose(MitIndFile);
+  cudaDeviceReset(); 
   // CloseBinaryFile(&bFA);
   return(0);
 

@@ -7,6 +7,7 @@
   #+CAPTION: Angles that node $j$ is a part of
   #+NAME: fig:angles
   [[./AngleForce.png]]
+
 ** TODO First, the first neighbour contributions
   Derivation
   using a harmonic potential on the angle, we write $V(\theta_{ijk}) =
@@ -41,7 +42,7 @@
   \end{equation*}
 
   let's write a sample one for the x
-  * Error here. Missing minus sign, check code.*
+  *Error here. Missing minus sign, check code.*
  \begin{equation*}
     \begin{aligned}
       \frac{\partial}{\partial r_{ix}} \arccos{\left( \frac{\mathbf{r}_i \cdot
