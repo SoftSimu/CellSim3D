@@ -8,7 +8,7 @@
   #+NAME: fig:angles
   [[./AngleForce.png]]
 
-** TODO First, the first neighbour contributions
+** First, the first neighbour contributions
   Derivation
   using a harmonic potential on the angle, we write $V(\theta_{ijk}) =
   \frac{1}{2} k^\theta (\theta_{ijk} - \theta_{ijk})$.
@@ -41,8 +41,6 @@
     \end{aligned}
   \end{equation*}
 
-  let's write a sample one for the x
-  *Error here. Missing minus sign, check code.*
  \begin{equation*}
     \begin{aligned}
       \frac{\partial}{\partial r_{ix}} \arccos{\left( \frac{\mathbf{r}_i \cdot
@@ -55,6 +53,9 @@
        \frac{\mathbf{r}_i \cdot \mathbf{r}_k}{r_i^3} r_{ix}\right)\\
     \end{aligned}
   \end{equation*}
+  let's write a sample one for the x
+
+  +*Error here. Missing minus sign, check code.*+ done, see 2424a6ca2d7
 
   Which leads to the equation for the angle force
     \begin{equation*}

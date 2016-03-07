@@ -15,7 +15,7 @@ __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
     float c2 = i_dot_k/ri_2;
         
     float theta = acosf(i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2)));
-
+    
     float3 F_i = -k * c1 * (theta - theta_o)*(kPos - c2*iPos);
     
     
@@ -113,8 +113,8 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
                         d_Y[cellInd*192 + nij],
                         d_Z[cellInd*192 + nij]);
     
-    // nodeForce = nodeForce + GetAngleForce(nodePos - niPos, tiPos - niPos, theta1_o, k); 
-    // nodeForce = nodeForce + GetAngleForce(nodePos - niPos, tjPos - niPos, theta2_o, k);
+    nodeForce = nodeForce + GetAngleForce(nodePos - niPos, tiPos - niPos, theta1_o, k); 
+    nodeForce = nodeForce + GetAngleForce(nodePos - niPos, tjPos - niPos, theta2_o, k);
     
     NeighNeighs(nodeInd, nj, nji, njj, njk, d_theta0, theta1_o, theta2_o);
     tiPos = make_float3(d_X[cellInd*192 + nji],
@@ -125,8 +125,8 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
                         d_Y[cellInd*192 + njj],
                         d_Z[cellInd*192 + njj]);
 
-    // nodeForce = nodeForce + GetAngleForce(nodePos - njPos, tjPos - njPos, theta1_o, k); 
-    // nodeForce = nodeForce + GetAngleForce(nodePos - njPos, tiPos - njPos, theta2_o, k);
+    nodeForce = nodeForce + GetAngleForce(nodePos - njPos, tiPos - njPos, theta1_o, k); 
+    nodeForce = nodeForce + GetAngleForce(nodePos - njPos, tjPos - njPos, theta2_o, k);
 
     NeighNeighs(nodeInd, nk, nki, nkj, nkk, d_theta0, theta1_o, theta2_o);
     tiPos = make_float3(d_X[cellInd*192 + nki],
@@ -137,10 +137,11 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
                         d_Y[cellInd*192 + nkj],
                         d_Z[cellInd*192 + nkj]);
 
-    // nodeForce = nodeForce + GetAngleForce(nodePos - nkPos, t1Pos - nkPos, theta1_o, k); 
-    // nodeForce = nodeForce + GetAngleForce(nodePos - nkPos, t2Pos - nkPos, theta2_o, k);
+    nodeForce = nodeForce + GetAngleForce(nodePos - nkPos, tiPos - nkPos, theta1_o, k); 
+    nodeForce = nodeForce + GetAngleForce(nodePos - nkPos, tjPos - nkPos, theta2_o, k);
 
     return nodeForce;
+    //return make_float3(0,0,0);
 }
         
 __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -296,8 +297,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         
         float3 t = CalculateAngleForce(atom, d_C180_nn,
                                        d_X, d_Y, d_Z,
-                                       d_theta0, Youngs_mod, rank);
-        //FX += t.x; FY += t.y; FZ += t.z;
+                                       d_theta0, Youngs_mod/10, rank);
+        FX += t.x; FY += t.y; FZ += t.z;
         
         
         

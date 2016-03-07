@@ -715,11 +715,13 @@ int main(int argc, char *argv[])
           nj = nj-p;
           nk = nk-p; 
 
-          theta0[n].aij = acosf(dot(ni, nj)/(mag(ni)*mag(nj)));
+          theta0[n].aij = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
           
-          theta0[n].ajk = acosf(dot(nj, nk)/(mag(nj)*mag(nk)));
+          theta0[n].ajk = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
           
-          theta0[n].aik = acosf(dot(ni, nk)/(mag(ni)*mag(nk))); 
+          theta0[n].aik = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
+
+          printf("node %d, angles %f %f %f\n", n, theta0[n].aij, theta0[n].ajk, theta0[n].aik);
       }
 
       d_theta0V = theta0; 
