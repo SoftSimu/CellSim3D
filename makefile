@@ -1,16 +1,21 @@
 compiler = $(shell which nvcc)
-debug = -g -G
+debug = -g -G -lineinfo
 arch = -arch=sm_52
-oflags = $(arch) -Xptxas="-v" -O3 -I inc -dc
+oflags = $(arch) -Xptxas="-v" -I inc -dc
 objDir = bin
 sources = $(wildcard src/*.cu)
 objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
 
-eflags = -O3 $(arch) -o $(objDir)/"CellDiv" $(objects) bin/jsoncpp.o -lm
+eflags = $(arch) -o $(objDir)/"CellDiv" $(objects) bin/jsoncpp.o -lm
+opt = -O3
 
+debug: opt= -O0
 debug: oflags += $(debug)
 debug: eflags += $(debug)
 debug: CellDiv
+
+oflags += $(opt)
+eflags += $(opt)
 
 $(objects): bin/%.o : src/%.cu
 	@mkdir -p $(@D)
