@@ -2,6 +2,7 @@
 
 #ifndef VECTOR_FUNCTIONS_HPP
 #define VECTOR_FUNCTIONS_HPP
+#include <stdio.h>
 
 struct angles3{
     float aij, ajk, aik;
@@ -66,11 +67,7 @@ __host__ __device__ inline float3 operator*(const float a, const float3 b){
 }
 
 __host__ __device__ inline float3 operator*(const float3 b, const float a){
-    float3 c;
-    c.x = a*b.x;
-    c.y = a*b.y;
-    c.z = a*b.z;
-    return c;
+    return a*b;
 }
 
 __host__ __device__ inline float3 operator/(const float3 b, const float a){
@@ -79,5 +76,18 @@ __host__ __device__ inline float3 operator/(const float3 b, const float a){
     c.y = b.y/a;
     c.z = b.z/a;
     return c;
+}
+
+__host__ __device__ inline void print_float3(float3 a){
+    printf("(%f, %f, %f)", a.x, a.y, a.z);
+}
+
+__host__ __device__ inline bool good_float3(float3 a){
+    if ( !isfinite(a.x) ||
+         !isfinite(a.y) ||
+         !isfinite(a.z) )
+        return false;
+    return true;
+
 }
 #endif // VECTOR_FUNCTIONS_HPP
