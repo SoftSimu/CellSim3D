@@ -1,6 +1,7 @@
 import bpy
 import csv
 import sys
+import os
 
 sys.path.append("/home/pranav/dev/celldiv/scripts")
 import celldiv
@@ -19,8 +20,9 @@ with open('C180_pentahexa.csv', newline='') as g:
     for row in readerfaces:
         firstfaces.append([int(v) for v in row])
 
-basename = sys.argv[7] + "/images/CellDiv_"
 
+filename = os.path.realpath(sys.argv[6])
+basename = os.path.splitext(filename)[0] + "/images/CellDiv_"
 
 with celldiv.TrajHandle(sys.argv[6]) as th:
     for i in range(th.maxFrames):
