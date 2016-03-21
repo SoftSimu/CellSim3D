@@ -4,20 +4,32 @@
 #include "VectorFunctions.hpp"
 
 
+#define check_float3(a){ \
+        if (!good_float3(a)){ \
+        printf("uh oh hotdog\n"); \
+        printf("%d, %s, %d, %d \n", __LINE__, __FILE__, blockIdx.x, threadIdx.x);   \
+        asm("trap;"); \
+    } \
+}
+
 __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
                                       const float theta_o, const float k){
     float i_dot_k = dot(iPos, kPos);
     float ri_2 = mag2(iPos);
     float rk_2 = mag2(kPos);
-    
-    float c1 = -1/( sqrtf( ri_2*rk_2 - i_dot_k*i_dot_k ) );
+    //if (ri_2*rk_2 - i_dot_k*i_dot_k < 0) asm("trap;");
+    float c1 = -1/( sqrtf( ri_2*rk_2 - i_dot_k*i_dot_k + 1e-3));
     
     float c2 = i_dot_k/ri_2;
-        
-    float theta = acosf(i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2)));
+    
+    float theta = acos(i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2) + 1e-3));
     
     float3 F_i = -k * c1 * (theta - theta_o)*(kPos - c2*iPos);
-    
+    if (!good_float3(F_i)){
+        printf("c1: %f, c2: %f, theta: %f, %d %d\n", c1, c2, theta, blockIdx.x, threadIdx.x);
+        printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, blockIdx.x, threadIdx.x);
+        asm("trap;");
+    }
     
     return F_i; 
 }
@@ -141,7 +153,6 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     nodeForce = nodeForce + GetAngleForce(nodePos - nkPos, tjPos - nkPos, theta2_o, k);
 
     return nodeForce;
-    //return make_float3(0,0,0);
 }
         
 __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -210,7 +221,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             isnan(d_Y[rank*192+atom]) || 
             isnan(d_Z[rank*192+atom])){
             printf("OH SHIT: we have a nan\n");
-            printf("Particle index: %d\n", atom);
+            printf("Particle index: %d, Cell: %d\n", atom, rank);
             printf("Crash now :(\n"); 
             asm("trap;"); 
         }
@@ -297,7 +308,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         
         float3 t = CalculateAngleForce(atom, d_C180_nn,
                                        d_X, d_Y, d_Z,
-                                       d_theta0, Youngs_mod/10, rank);
+                                       d_theta0, Youngs_mod, rank);
         FX += t.x; FY += t.y; FZ += t.z;
         
         
