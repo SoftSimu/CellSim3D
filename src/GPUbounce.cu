@@ -1,9 +1,9 @@
 //#define FORCE_DEBUG
 //#define PRINT_VOLUMES
+//#define TURNOFF_RAN
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <math.h>
 #include <locale.h>
 #include <algorithm>
 #include <iostream>
@@ -26,9 +26,19 @@
 #include "json/json.h"
 
 #define CudaErrorCheck() { \
-      cudaError_t e = cudaGetLastError(); \
-      if (e!=cudaSuccess){\
-          printf("Cuda failure %s: %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
+        cudaError_t e = cudaDeviceSynchronize();        \
+        if (e!=cudaSuccess){                                            \
+            printf("Cuda failure %s: %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
+            cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); \
+            cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); \
+            printf("time: %d\n", step);                                 \
+            for (int i = 0; i < No_of_C180s; i++){                      \
+                printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i], \
+                        4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]); \
+                if (volume[i] > divVol)                                 \
+                    printf(", I'm too big :(");                         \
+                printf("\n");                                           \
+          } \          
           exit(0); \
       }            \
     }
@@ -520,8 +530,6 @@ int main(int argc, char *argv[])
   CudaErrorCheck(); 
   minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
   CudaErrorCheck(); 
-  cudaMemset(d_NoofNNlist, 0, 1024*1024);
-  cudaMemset(d_NNlist, 0, 32*1024*1024);
   cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
   //  DL = 3.8f;
   DL = 2.9f;
@@ -721,8 +729,7 @@ int main(int argc, char *argv[])
           
           theta0[n].aik = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
 
-          printf("node %d, angles %f %f %f\n", n, theta0[n].aij, theta0[n].ajk, theta0[n].aik);
-      }
+        }
 
       d_theta0V = theta0; 
       CudaErrorCheck(); 
@@ -821,20 +828,28 @@ int main(int argc, char *argv[])
 #endif
 
         count_and_get_div();
+        if (num_cell_div)
+            printf("%d cells in division at t=%d\n", num_cell_div, step); 
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
+          printf("dividing cell %d\n", globalrank); 
           float norm[3];
 
+#ifdef TURNOFF_RAN
+          norm[0] = 1; 
+          norm[1] = 0; 
+          norm[2] = 0; 
+#else
           if (useDivPlaneBasis)
               GetRandomVectorBasis(norm, divPlaneBasis);
           else
-              GetRandomVector(norm); 
-
+              GetRandomVector(norm);
+#endif
           cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice);
           CudaErrorCheck();
           
           NDIV[globalrank] += 1;
-
+          
           cell_division<<<1,256>>>(globalrank,
                                    d_XP, d_YP, d_ZP,
                                    d_X, d_Y, d_Z,
