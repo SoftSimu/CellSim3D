@@ -126,17 +126,23 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
     __syncthreads();
 
     if ( tid == 0){
-        if (isnan(vol[fullerene])){
-            printf("OH SHIT: nan volume for cell %d", fullerene); 
-            asm("trap;");
-        }
-
-        
-     
         volume = volume/6.0;
         volume2 = volume2/6.0;
         vol[fullerene] = volume;
-        bool divide = 0; 
+        
+        if (!isfinite(volume)){
+            printf("OH SHIT: non-finite volume %f, cell %d\n", volume, fullerene);
+            printf("Crash now :(\n");
+            asm("trap;");
+        }
+        
+        bool divide = 0;
+        if (!isfinite(volume)){
+            printf("Volume not finite %f Cell:%d\n", volume, fullerene);
+        }
+
+
+            
         if (volume > divVol){
             cell_div[fullerene] = 1;
         }
@@ -144,7 +150,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         if (checkSphericity){
             areaList[fullerene] = area; 
             float psi = 4.835975862049408 * powf(volume, 2.0/3.0)/area;
-            if ((1.0f - psi) > 0.1){
+            if ((1.0f - psi) > 0.2){ // why 0.2?
                 cell_div[fullerene] = 0;
                 //printf("cell %d division rejected\n", fullerene);
             }
