@@ -828,11 +828,8 @@ int main(int argc, char *argv[])
 #endif
 
         count_and_get_div();
-        if (num_cell_div)
-            printf("%d cells in division at t=%d\n", num_cell_div, step); 
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
-          printf("dividing cell %d\n", globalrank); 
           float norm[3];
 
 #ifdef TURNOFF_RAN
