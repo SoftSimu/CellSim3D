@@ -41,7 +41,7 @@ int PSCIRCLE(float X,float Y,FILE *outfile);
 int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271]);
 
 int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
-__global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+__global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_XP[], float d_YP[], float d_ZP[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
@@ -58,12 +58,23 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float threshDist, bool useWalls,
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod,
-                           bool constrainAngles, const angles3 d_theta0[]);
+                           bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList);
+
+__global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
+                          float *d_X, float *d_Y, float *d_Z,
+                          float *d_XM, float *d_YM, float *d_ZM,
+                          float *d_velListX, float *d_velListY, float *d_velListZ,
+                          float delta_t, float mass,
+                          float3 *d_forceList, int numCells);
+
+__global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
+                            float *d_X, float *d_Y, float *d_Z,
+                            float *d_XM, float *d_YM, float *d_ZM, int numCells);
 
 __global__ void bounding_boxes( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
-               float *d_X,  float *d_Y,  float *d_Z,
-               float *d_XM, float *d_YM, float *d_ZM,
+//               float *d_X,  float *d_Y,  float *d_Z,
+//               float *d_XM, float *d_YM, float *d_ZM,
                float *bounding_xyz,
                float *avex, float *avey, float *avez);
 

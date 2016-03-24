@@ -16,10 +16,11 @@
 #include <vector_functions.h>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#include <thrust/fill.h>
 //#include "helper_cuda.h"
 #include "postscript.h"
 #include "marsaglia.h"
-#include "IntegrationKernels.h"
+//#include "IntegrationKernels.h"
 #include "RandomVector.h"
 #include "VectorFunctions.hpp"
 
@@ -29,18 +30,8 @@
         cudaError_t e = cudaDeviceSynchronize();        \
         if (e!=cudaSuccess){                                            \
             printf("Cuda failure %s: %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
-            cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); \
-            cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); \
-            printf("time: %d\n", step);                                 \
-            for (int i = 0; i < No_of_C180s; i++){                      \
-                printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i], \
-                        4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]); \
-                if (volume[i] > divVol)                                 \
-                    printf(", I'm too big :(");                         \
-                printf("\n");                                           \
-          } \          
-          exit(0); \
-      }            \
+          exit(0);\
+      }\
     }
 
 float mass;                                        //  M
@@ -178,7 +169,9 @@ float  *X,  *Y,  *Z;     // host: atom positions
 float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
 float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
 float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
+float *d_XMM, *d_YMM, *d_ZMM; 
 
+float3 *d_forceList; 
 
 float* d_Fx;
 float* d_Fy;
@@ -201,7 +194,7 @@ float *Minx, *Maxx, *Miny, *Maxy, *Minz, *Maxz;
 float DL;
 int Xdiv, Ydiv, Zdiv;
 
-int *d_NoofNNlist;
+//int *d_NoofNNlist;
 int *d_NNlist;
 int *NoofNNlist;
 int *NNlist;
@@ -347,7 +340,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Maxy ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Minz ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Maxz ,         1024*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
+  //  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    32*1024*1024*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
@@ -367,7 +360,28 @@ int main(int argc, char *argv[])
   
   thrust::host_vector<angles3> theta0(192);
   thrust::device_vector<angles3> d_theta0V(192);
-  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]); 
+  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
+
+  thrust::device_vector<float3> d_forceListV(MaxNoofC180s*192);
+  thrust::fill(d_forceListV.begin(), d_forceListV.end(), make_float3(0.f, 0.f, 0.f));
+  d_forceList = thrust::raw_pointer_cast(&d_forceListV[0]);
+
+  thrust::device_vector<float> d_XMMV(MaxNoofC180s*192);
+  thrust::fill(d_XMMV.begin(), d_XMMV.end(), 0.f);
+  float *d_XMM = thrust::raw_pointer_cast(&d_XMMV[0]);
+  
+  thrust::device_vector<float> d_YMMV(MaxNoofC180s*192);
+  thrust::fill(d_YMMV.begin(), d_YMMV.end(), 0.f);
+  float *d_YMM = thrust::raw_pointer_cast(&d_YMMV[0]); 
+  
+  thrust::device_vector<float> d_ZMMV(MaxNoofC180s*192);
+  thrust::fill(d_ZMMV.begin(), d_ZMMV.end(), 0.f);
+  float *d_ZMM = thrust::raw_pointer_cast(&d_ZMMV[0]);
+
+  thrust::device_vector<int> d_NoofNNlistV(1024*1024*sizeof(int));
+  thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
+  int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
+
   
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -520,9 +534,10 @@ int main(int argc, char *argv[])
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
+  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_XP,d_YP,d_ZP,
                                      d_bounding_xyz, d_CMx, d_CMy, d_CMz);
 
+  CudaErrorCheck(); 
 
   reductionblocks = (No_of_C180s-1)/1024+1;
   minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
@@ -768,8 +783,7 @@ int main(int argc, char *argv[])
 #ifdef FORCE_DEBUG
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif
-          //printf("\n new step \n"); 
-      propagate<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+      CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                  d_XP, d_YP, d_ZP, d_X,  d_Y,  d_Z, d_XM, d_YM, d_ZM,
                                                  d_CMx, d_CMy, d_CMz,
                                                  R0, d_pressList, d_Youngs_mod , stiffness1, 
@@ -782,8 +796,15 @@ int main(int argc, char *argv[])
                                                  threshDist, useWalls,
                                                  d_velListX, d_velListY, d_velListZ,
                                                  useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                 constrainAngles, d_theta0); 
-      CudaErrorCheck(); 
+                                                 constrainAngles, d_theta0, d_forceList); 
+      CudaErrorCheck();
+      Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
+                                                d_X, d_Y, d_Z, 
+                                                d_XM, d_YM, d_ZM,
+                                                d_velListX, d_velListY, d_velListZ, 
+                                                delta_t, mass,
+                                                 d_forceList, No_of_C180s);
+      CudaErrorCheck();
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
@@ -833,8 +854,8 @@ int main(int argc, char *argv[])
           float norm[3];
 
 #ifdef TURNOFF_RAN
-          norm[0] = 1; 
-          norm[1] = 0; 
+          norm[0] = 0; 
+          norm[1] = 1; 
           norm[2] = 0; 
 #else
           if (useDivPlaneBasis)
@@ -910,9 +931,14 @@ int main(int argc, char *argv[])
       // ----------------------------------------- End Cell Death --------------
 
       bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
-                                         d_XP,d_YP,d_ZP,d_X,d_Y,d_Z,d_XM,d_YM,d_ZM,
+                                         d_XP,d_YP,d_ZP,
                                          d_bounding_xyz, d_CMx, d_CMy, d_CMz);
       CudaErrorCheck();
+      int numNodes = No_of_C180s*192; 
+      ForwardTime<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
+                                               d_X , d_Y , d_Z ,
+                                               d_XM, d_YM, d_ZM, No_of_C180s);
+      CudaErrorCheck(); 
 
       reductionblocks = (No_of_C180s-1)/1024+1;
       minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,

@@ -155,7 +155,7 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     return nodeForce;
 }
         
-__global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+__global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_XP[], float d_YP[], float d_ZP[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float d_XM[], float d_YM[], float d_ZM[],
@@ -172,7 +172,7 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[])
+                           bool constrainAngles, const angles3 d_theta0[], float3* d_forceList)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
@@ -516,6 +516,8 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
             if (abs(gap2) < threshDist && gap2*FZ < 0) FZ = -FZ;
         }
 
+        d_forceList[rank*192+atom] = make_float3(FX, FY, FZ); 
+
         // time propagation
         
         d_XP[rank*192+atom] =
@@ -533,4 +535,52 @@ __global__ void propagate( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
         d_velListZ[rank*192+atom] = (d_ZP[atomInd] - d_ZM[atomInd])/(2*delta_t);
 
     }
+}
+
+
+__global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
+                          float *d_X, float *d_Y, float *d_Z, 
+                          float *d_XM, float *d_YM, float *d_ZM,
+                          float *d_velListX, float *d_velListY, float *d_velListZ, 
+                          float delta_t, float mass,
+                          float3 *d_forceList, int numCells){
+    int cellInd = blockIdx.x;
+    int node = threadIdx.x; 
+    
+    if (cellInd < numCells && node < 180){
+        int nodeInd = cellInd*192 + node; 
+        float FX = d_forceList[nodeInd].x;
+        float FY = d_forceList[nodeInd].y;
+        float FZ = d_forceList[nodeInd].z;
+        d_XP[nodeInd] =
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FX+2*d_X[nodeInd]+(delta_t/(2*mass)-1.0)*d_XM[nodeInd]);
+        d_YP[nodeInd] =
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FY+2*d_Y[nodeInd]+(delta_t/(2*mass)-1.0)*d_YM[nodeInd]);
+        d_ZP[nodeInd] =
+            1.0/(1.0+delta_t/(2*mass))*
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]);
+
+        d_velListX[nodeInd] = (d_XP[nodeInd] - d_XM[nodeInd])/(2*delta_t); 
+        d_velListY[nodeInd] = (d_YP[nodeInd] - d_YM[nodeInd])/(2*delta_t); 
+        d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_ZM[nodeInd])/(2*delta_t);
+        
+        d_forceList[nodeInd] = make_float3(0.f, 0.f, 0.f); 
+    }
+}
+
+__global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
+                            float *d_X, float *d_Y, float *d_Z,
+                            float *d_XM, float *d_YM, float *d_ZM, int numCells){
+    
+    int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    d_XM[nodeInd] = d_X[nodeInd]; 
+    d_YM[nodeInd] = d_Y[nodeInd]; 
+    d_ZM[nodeInd] = d_Z[nodeInd];
+    
+    d_X[nodeInd] = d_XP[nodeInd];
+    d_Y[nodeInd] = d_YP[nodeInd];
+    d_Z[nodeInd] = d_ZP[nodeInd];
 }

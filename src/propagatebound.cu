@@ -7,8 +7,8 @@
 
 __global__ void bounding_boxes( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
-               float *d_X,  float *d_Y,  float *d_Z,
-               float *d_XM, float *d_YM, float *d_ZM,
+//               float *d_X,  float *d_Y,  float *d_Z,
+//               float *d_XM, float *d_YM, float *d_ZM,
                float *d_bounding_xyz, float *CMx,
 			   float *CMy, float *CMz)
 {
@@ -32,42 +32,42 @@ __global__ void bounding_boxes( int No_of_C180s,
 	  minz[tid] = d_ZP[rank*192+atom];
 	  maxz[tid] = d_ZP[rank*192+atom];
 
-	  // move present value to past value
-	  d_XM[rank*192+atom] =  d_X[rank*192+atom];
-	  d_YM[rank*192+atom] =  d_Y[rank*192+atom];
-	  d_ZM[rank*192+atom] =  d_Z[rank*192+atom];
+	  // // move present value to past value
+	  // d_XM[rank*192+atom] =  d_X[rank*192+atom];
+	  // d_YM[rank*192+atom] =  d_Y[rank*192+atom];
+	  // d_ZM[rank*192+atom] =  d_Z[rank*192+atom];
 
-	  // move future value to present value
-	  d_X[rank*192+atom] = d_XP[rank*192+atom];
-	  d_Y[rank*192+atom] = d_YP[rank*192+atom];
-	  d_Z[rank*192+atom] = d_ZP[rank*192+atom];
+	  // // move future value to present value
+	  // d_X[rank*192+atom] = d_XP[rank*192+atom];
+	  // d_Y[rank*192+atom] = d_YP[rank*192+atom];
+	  // d_Z[rank*192+atom] = d_ZP[rank*192+atom];
 
 
 	  while ( atom + 32 < 180 )
         {
 		  atom += 32;
 		  if ( minx[tid] > d_XP[rank*192+atom] )
-			minx[tid] = d_XP[rank*192+atom];
+		       minx[tid] = d_XP[rank*192+atom];
 		  if ( maxx[tid] < d_XP[rank*192+atom] )
-			maxx[tid] = d_XP[rank*192+atom];
+		       maxx[tid] = d_XP[rank*192+atom];
 		  if ( miny[tid] > d_YP[rank*192+atom] )
-			miny[tid] = d_YP[rank*192+atom];
+		       miny[tid] = d_YP[rank*192+atom];
 		  if ( maxy[tid] < d_YP[rank*192+atom] )
-			maxy[tid] = d_YP[rank*192+atom];
+		       maxy[tid] = d_YP[rank*192+atom];
 		  if ( minz[tid] > d_ZP[rank*192+atom] )
-			minz[tid] = d_ZP[rank*192+atom];
+		       minz[tid] = d_ZP[rank*192+atom];
 		  if ( maxz[tid] < d_ZP[rank*192+atom] )
-			maxz[tid] = d_ZP[rank*192+atom];
+		       maxz[tid] = d_ZP[rank*192+atom];
 
-		  // move present value to past value
-		  d_XM[rank*192+atom] =  d_X[rank*192+atom];
-		  d_YM[rank*192+atom] =  d_Y[rank*192+atom];
-		  d_ZM[rank*192+atom] =  d_Z[rank*192+atom];
+		  // // move present value to past value
+		  // d_XM[rank*192+atom] =  d_X[rank*192+atom];
+		  // d_YM[rank*192+atom] =  d_Y[rank*192+atom];
+		  // d_ZM[rank*192+atom] =  d_Z[rank*192+atom];
 
-		  // move future value to present value
-		  d_X[rank*192+atom]  = d_XP[rank*192+atom];
-		  d_Y[rank*192+atom]  = d_YP[rank*192+atom];
-		  d_Z[rank*192+atom]  = d_ZP[rank*192+atom];
+		  // // move future value to present value
+		  // d_X[rank*192+atom]  = d_XP[rank*192+atom];
+		  // d_Y[rank*192+atom]  = d_YP[rank*192+atom];
+		  // d_Z[rank*192+atom]  = d_ZP[rank*192+atom];
 
         }
 
@@ -213,7 +213,7 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
 
 
   int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
-
+//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
 
   if ( fullerene < No_of_C180s )
