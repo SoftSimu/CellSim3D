@@ -19,6 +19,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/fill.h>
 #include <thrust/sort.h>
+#include <thrust/extrema.h>
 //#include "helper_cuda.h"
 #include "postscript.h"
 #include "marsaglia.h"
@@ -402,9 +403,10 @@ int main(int argc, char *argv[])
   float *d_Zt = thrust::raw_pointer_cast(&d_ZtV[0]);
 
   thrust::device_vector<float> d_AdpErrorsV(192*MaxNoofC180s); 
-  thrust::fill(d_AdpErrorsV.begin(), d_AdpErrorsV.end(), -1); 
+  thrust::fill(d_AdpErrorsV.begin(), d_AdpErrorsV.end(), 0); 
   float *d_AdpErrors = thrust::raw_pointer_cast(&d_AdpErrorsV[0]); 
-  
+
+  thrust::host_vector<float> h_AdpErrors(192*MaxNoofC180s); 
   
   
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
@@ -586,7 +588,13 @@ int main(int argc, char *argv[])
       return -1;
   }
 
-  FILE* velFile = fopen("velocity2.xyz", "w"); 
+  FILE* velFile = fopen("velocity2.xyz", "w");
+
+#ifdef OUPUT_ADP_ERROR
+  FILE* timeFile = fopen("times", "w");
+  FILE* errFile = fopen("errors", "w"); 
+#endif 
+  
 
   if (binaryOutput){
       int t = MaxNoofC180s;
@@ -886,6 +894,25 @@ int main(int argc, char *argv[])
           thrust::sort(d_timeV.begin(), d_timeV.begin() + 192*No_of_C180s);
 
           dt_listV[step-1] = d_timeV[0];
+
+
+#ifdef OUPUT_ADP_ERROR
+          h_timeV = d_timeV; 
+          fprintf(timeFile, "%f\n", h_timeV[0]);
+          h_AdpErrors = d_AdpErrorsV;
+          
+          float avgErr = 0;
+          for (int i =0; i < 192*No_of_C180s; i++){
+              
+              avgErr += h_AdpErrors[i];
+              //fprintf(errFile, "%f\n", h_AdpErrors[i]); 
+          }
+          avgErr = avgErr/(192*No_of_C180s);
+          float minErr = *thrust::min_element(h_AdpErrors.begin(), h_AdpErrors.end() + 192*No_of_C180s);
+          float maxErr = *thrust::max_element(h_AdpErrors.begin(), h_AdpErrors.end() + 192*No_of_C180s);
+          fprintf(errFile, "%f, %f, %f\n", minErr, avgErr, maxErr);
+          
+#endif
           
       }
       else
@@ -1259,6 +1286,10 @@ int main(int argc, char *argv[])
 
   fclose(trajfile);
   fclose(MitIndFile);
+#ifdef OUPUT_ADP_ERROR
+  fclose(timeFile);
+  fclose(errFile);
+#endif
   cudaDeviceReset(); 
   // CloseBinaryFile(&bFA);
   return(0);
