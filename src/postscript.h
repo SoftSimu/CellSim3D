@@ -6,6 +6,7 @@ cudaDeviceProp getDevice(void);
 __global__ void  cell_division(int rank,
                                float *d_XP, float *d_YP, float *d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
+                               float *d_XM, float *d_YM, float *d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                int No_of_C180s, float *d_ran2, float repulsion_range);
 
@@ -42,12 +43,10 @@ int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271])
 
 int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
 __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
-                           float d_XP[], float d_YP[], float d_ZP[],
                            float d_X[],  float d_Y[],  float d_Z[],
-                           float d_XM[], float d_YM[], float d_ZM[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
                            float R0, float* d_pressList, float* d_Youngs_mod , float cellStiffness,
-                           float internal_damping, float delta_t,
+                           float internal_damping, const float *d_time,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -64,12 +63,13 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
-                          float delta_t, float mass,
+                          float *d_time, float mass,
                           float3 *d_forceList, int numCells);
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
-                            float *d_XM, float *d_YM, float *d_ZM, int numCells);
+                            float *d_XM, float *d_YM, float *d_ZM,
+                            int numCells);
 
 __global__ void bounding_boxes( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,

@@ -150,6 +150,7 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
                                        float X, float Y, float Z,
                                        float* d_X,  float* d_Y,  float* d_Z,
                                        float* d_XP, float* d_YP, float* d_ZP,
+                                       float* d_XM, float* d_YM, float* d_ZM,
                                        float planeNx, float planeNy, float planeNz){
              
     // redefine position of parent cell wrt to an origin that includes
@@ -175,12 +176,17 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
     d_Y[daughtInd*192+partInd]  = d_YP[daughtInd*192+partInd];
     d_Z[daughtInd*192+partInd]  = d_ZP[daughtInd*192+partInd];
 
+    d_XM[daughtInd*192+partInd]  = d_XP[daughtInd*192+partInd];
+    d_YM[daughtInd*192+partInd]  = d_YP[daughtInd*192+partInd];
+    d_ZM[daughtInd*192+partInd]  = d_ZP[daughtInd*192+partInd];    
+
 }
 
 
 __global__ void  cell_division(int rank,
                                float *d_XP, float *d_YP, float *d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
+                               float *d_XM, float *d_YM, float *d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz, 
                                int No_of_C180s, float *d_randNorm, float repulsion_range){
     int newrank = No_of_C180s;
@@ -224,6 +230,7 @@ __global__ void  cell_division(int rank,
                                X, Y, Z,
                                d_X, d_Y, d_Z, 
                                d_XP, d_YP, d_ZP,
+                               d_XM, d_YM, d_ZM,
                                planeNx, planeNy, planeNz);
         
         // Invert the normal
@@ -237,6 +244,7 @@ __global__ void  cell_division(int rank,
                                X, Y, Z,
                                d_X, d_Y, d_Z, 
                                d_XP, d_YP, d_ZP,
+                               d_XM, d_YM, d_ZM,
                                planeNx, planeNy, planeNz); 
          
     }
