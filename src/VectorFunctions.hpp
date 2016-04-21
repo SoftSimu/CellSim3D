@@ -3,6 +3,7 @@
 #ifndef VECTOR_FUNCTIONS_HPP
 #define VECTOR_FUNCTIONS_HPP
 #include <stdio.h>
+#define MAX_NN 256
 
 struct angles3{
     float aij, ajk, aik;

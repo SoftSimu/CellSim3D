@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include "postscript.h"
+#include "VectorFunctions.hpp"
+
 //#define PRINT_TOO_SHORT_ERROR
 
 __global__ void bounding_boxes( int No_of_C180s,
@@ -246,13 +248,11 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
 #ifdef PRINT_TOO_SHORT_ERROR
 			  if ( index > 32 )
 				{
-				  printf("Fullerene %d, NN-list too short\n", fullerene);
-                                  printf("Full %d, NN-list too short: ", fullerene);
+                                    printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+                                  // for ( int k = 0; k < 32; ++k )
+                                  //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
                                   
-                                  for ( int k = 0; k < 32; ++k )
-                                      printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
-                                  
-                                  printf("\n");
+                                  // printf("\n");
 				  continue;
 				}
 #endif

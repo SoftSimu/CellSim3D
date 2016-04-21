@@ -1,11 +1,10 @@
 #include "VectorFunctions.hpp"
 #include "AdaptiveTimeKernels.cuh"
-#define TOL 1e-8
+#include <cuda.h>
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z, 
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_XMM, float *d_YMM, float *d_ZMM,
-                          float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float *d_time, float mass,
                           float3 *d_forceList, int numCells, adp_coeffs a){
     
@@ -27,10 +26,6 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         d_XP[nodeInd] = posVecP.x; 
         d_YP[nodeInd] = posVecP.y; 
         d_ZP[nodeInd] = posVecP.z;
-
-        d_velListX[nodeInd] = (d_XP[nodeInd] - d_XM[nodeInd])/(2*delta_t); 
-        d_velListY[nodeInd] = (d_YP[nodeInd] - d_YM[nodeInd])/(2*delta_t); 
-        d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_ZM[nodeInd])/(2*delta_t);
     }
 }
 
@@ -38,12 +33,16 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
                             float *d_XM, float *d_YM, float *d_ZM, 
                             float *d_XMM, float *d_YMM, float *d_ZMM,
-                            int numCells){
+                            float *d_velListX, float *d_velListY, float *d_velListZ, 
+                            int numCells, float *d_time){
     
     int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
-    
+    float delta_t = d_time[0]; 
     if (nodeInd < 192*numCells){
-
+        
+        d_velListX[nodeInd] = (d_XP[nodeInd] - d_X[nodeInd])/(delta_t); 
+        d_velListY[nodeInd] = (d_YP[nodeInd] - d_Y[nodeInd])/(delta_t); 
+        d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_Z[nodeInd])/(delta_t);
         
         d_XMM[nodeInd] = d_XM[nodeInd]; 
         d_YMM[nodeInd] = d_YM[nodeInd]; 
@@ -63,11 +62,11 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
 __global__ void ComputeTimeUpdate(float *d_XP, float *d_YP, float *d_ZP, 
                                   float *d_Xt, float *d_Yt, float *d_Zt,
                                   float *d_AdpErrors, float *d_time, float dt_max,
-                                  float alpha, float beta, int numCells){
+                                  float alpha, float beta, int numCells, float dt_tol){
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     float delta_t = d_time[0]; 
 
-    if (index < 192*numCells && threadIdx.x<180){
+    if (index < 192*numCells){
         float3 Y1 = make_float3(d_XP[index], d_YP[index], d_ZP[index]);
         float3 Yt = make_float3(d_Xt[index], d_Yt[index], d_Zt[index]); 
 
@@ -75,6 +74,7 @@ __global__ void ComputeTimeUpdate(float *d_XP, float *d_YP, float *d_ZP,
         float e = abs(alpha/(beta-alpha))*abs(mag(Yt)-mag(Y1));
         
         d_AdpErrors[index] = e;
-        d_time[index] = min(dt_max, 0.9*sqrtf(TOL/e)); 
+        d_time[index] = min(dt_max, 0.9*sqrtf(dt_tol/e));
+        //printf("p %d, e %f\n", index, e); 
     }
 }

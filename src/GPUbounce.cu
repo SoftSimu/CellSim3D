@@ -1,7 +1,7 @@
 //#define FORCE_DEBUG
 //#define PRINT_VOLUMES
 //#define TURNOFF_RAN
-#define OUPUT_ADP_ERROR
+//#define OUTPUT_ADP_ERROR
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -33,9 +33,9 @@
 #define CudaErrorCheck() { \
         cudaError_t e = cudaDeviceSynchronize();        \
         if (e!=cudaSuccess){                                            \
-            printf("Cuda failure %s: %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
-          exit(0);\
-      }\
+                            printf("Cuda failure %s: %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
+                            exit(0);                                    \
+        }\
     }
 
 float mass;                                        //  M
@@ -345,8 +345,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Minz ,         1024*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Maxz ,         1024*sizeof(float))) return(-1);
   //  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    32*1024*1024*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    MAX_NN*MaxNoofC180s*sizeof(int))) return(-1); if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -590,7 +589,7 @@ int main(int argc, char *argv[])
 
   FILE* velFile = fopen("velocity2.xyz", "w");
 
-#ifdef OUPUT_ADP_ERROR
+#ifdef OUTPUT_ADP_ERROR
   FILE* timeFile = fopen("times", "w");
   FILE* errFile = fopen("errors", "w"); 
 #endif 
@@ -777,6 +776,11 @@ int main(int argc, char *argv[])
       d_theta0V = theta0; 
       CudaErrorCheck(); 
   }
+
+  // Different kind of pressure stuff
+
+  float r_CM_o = pow((3.0/4.0) * (1/3.14159) * divVol*2.0, 1.0/3);
+  
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -826,7 +830,7 @@ int main(int argc, char *argv[])
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_forceList); 
+                                                      constrainAngles, d_theta0, d_forceList, r_CM_o); 
       CudaErrorCheck();
       if (doAdaptive_dt){
           adp_coeffs a;
@@ -849,21 +853,12 @@ int main(int argc, char *argv[])
                                                      d_X, d_Y, d_Z, 
                                                      d_XM, d_YM, d_ZM,
                                                      d_XMM, d_YMM, d_ZMM,
-                                                     d_velListX, d_velListY, d_velListZ, 
                                                      d_time, mass,
                                                      d_forceList, No_of_C180s, a);
           CudaErrorCheck();
 
           a = getAdpCoeffs(!isPredictor, c1, c2); 
           
-          Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
-                                                     d_X, d_Y, d_Z, 
-                                                     d_XM, d_YM, d_ZM,
-                                                     d_XMM, d_YMM, d_ZMM,
-                                                     d_velListX, d_velListY, d_velListZ, 
-                                                     d_time, mass,
-                                                     d_forceList, No_of_C180s, a);
-          CudaErrorCheck();
 
           CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                           d_XP,  d_YP,  d_ZP,
@@ -878,7 +873,15 @@ int main(int argc, char *argv[])
                                                           threshDist, useWalls,
                                                           d_velListX, d_velListY, d_velListZ,
                                                           useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                          constrainAngles, d_theta0, d_forceList); 
+                                                          constrainAngles, d_theta0, d_forceList, r_CM_o); 
+          CudaErrorCheck();
+
+          Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
+                                                     d_X, d_Y, d_Z, 
+                                                     d_XM, d_YM, d_ZM,
+                                                     d_XMM, d_YMM, d_ZMM,
+                                                     d_time, mass,
+                                                     d_forceList, No_of_C180s, a);
           CudaErrorCheck();
 
           int numNodes = 192*No_of_C180s;
@@ -888,7 +891,7 @@ int main(int argc, char *argv[])
           ComputeTimeUpdate<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
                                                          d_Xt, d_Yt, d_Zt, 
                                                          d_AdpErrors, d_time, dt_max, 
-                                                         alpha, beta, No_of_C180s);
+                                                         alpha, beta, No_of_C180s, dt_tol);
           CudaErrorCheck();
 
           thrust::sort(d_timeV.begin(), d_timeV.begin() + 192*No_of_C180s);
@@ -896,22 +899,22 @@ int main(int argc, char *argv[])
           dt_listV[step-1] = d_timeV[0];
 
 
-#ifdef OUPUT_ADP_ERROR
+#ifdef OUTPUT_ADP_ERROR
           h_timeV = d_timeV; 
           fprintf(timeFile, "%f\n", h_timeV[0]);
           h_AdpErrors = d_AdpErrorsV;
           
           float avgErr = 0;
-          for (int i =0; i < 192*No_of_C180s; i++){
-              
-              avgErr += h_AdpErrors[i];
-              //fprintf(errFile, "%f\n", h_AdpErrors[i]); 
+          fprintf(errFile, "step %d,%d\n", step, No_of_C180s);
+          fprintf(timeFile, "step %d\n", step, No_of_C180s);
+          for (int c = 0; c < No_of_C180s; c++){
+              fprintf(errFile, "cell %d\n", c);
+              fprintf(timeFile, "cell %d\n", c); 
+              for (int i = 0; i < 192; i++){
+                  fprintf(errFile, "%f\n", h_AdpErrors[c*192 + i]); 
+                  fprintf(timeFile, "%f\n", h_timeV[c*192 + i]); 
+              }
           }
-          avgErr = avgErr/(192*No_of_C180s);
-          float minErr = *thrust::min_element(h_AdpErrors.begin(), h_AdpErrors.end() + 192*No_of_C180s);
-          float maxErr = *thrust::max_element(h_AdpErrors.begin(), h_AdpErrors.end() + 192*No_of_C180s);
-          fprintf(errFile, "%f, %f, %f\n", minErr, avgErr, maxErr);
-          
 #endif
           
       }
@@ -938,6 +941,12 @@ int main(int argc, char *argv[])
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol,
                                      checkSphericity, d_area);
+        // if (No_of_C180s > 2752){
+        //     cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+        //     for (int i = 0 ; i< No_of_C180s; i++){
+        //         printf("cell %d, volume %f\n", i, volume[i]);
+        //     }
+        // }
         CudaErrorCheck();
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
@@ -972,16 +981,15 @@ int main(int argc, char *argv[])
           globalrank = cell_div_inds[divCell];
           float norm[3];
 
-#ifdef TURNOFF_RAN
           norm[0] = 0; 
           norm[1] = 1; 
-          norm[2] = 0; 
-#else
+          norm[2] = 0;
+          
           if (useDivPlaneBasis)
               GetRandomVectorBasis(norm, divPlaneBasis);
           else
               GetRandomVector(norm);
-#endif
+          
           cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice);
           CudaErrorCheck();
           
@@ -1060,8 +1068,9 @@ int main(int argc, char *argv[])
           ForwardTime<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
                                                    d_X , d_Y , d_Z ,
                                                    d_XM, d_YM, d_ZM,
-                                                   d_XMM, d_YMM, d_ZMM, 
-                                                   No_of_C180s);
+                                                   d_XMM, d_YMM, d_ZMM,
+                                                   d_velListX, d_velListY, d_velListZ, 
+                                                   No_of_C180s, d_time);
       else
           ForwardTime<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
                                                    d_X , d_Y , d_Z ,
@@ -1286,7 +1295,7 @@ int main(int argc, char *argv[])
 
   fclose(trajfile);
   fclose(MitIndFile);
-#ifdef OUPUT_ADP_ERROR
+#ifdef OUTPUT_ADP_ERROR
   fclose(timeFile);
   fclose(errFile);
 #endif
@@ -1354,6 +1363,8 @@ int generate_random(int no_of_ran1_vectors)
   // Defined in marsaglia.h
   int seed_ij, seed_kl ,ij,kl;
 
+  
+
   ran2 = (float *)calloc(MaxNoofC180s+1,sizeof(float));
   CPUMemory += (MaxNoofC180s+1L)*sizeof(float);
 
@@ -1362,8 +1373,15 @@ int generate_random(int no_of_ran1_vectors)
   seed_ij = (int)current_time;
   localtime(&current_time);
   seed_kl = (int)current_time;
+  
   ij = seed_ij%31328;
   kl = seed_kl%30081;
+
+#ifdef TURNOFF_RAN
+  ij = 80;
+  kl = 97;
+#endif
+  
   rmarin(ij,kl);
 
   printf("RNG seeds: %d, %d\n", ij, kl); 

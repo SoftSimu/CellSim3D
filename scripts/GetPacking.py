@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # This script uses a lot of python magic
 # Please ask if there are is any confusion
 
@@ -29,7 +29,7 @@ storePaths = [ os.path.split(p)[0] for p in trajPaths]
 
 #storePaths = b[0]
 
-print storePaths
+print(storePaths)
 #sys.exit(12984)
 
 for storePath in storePaths:
@@ -49,7 +49,7 @@ else:
 
 def analyze(filePath, storePath, name = None):
     fileName = os.path.split(storePath)[1]
-    print filePath
+    print(filePath)
     if name == None:
         storePath  += '/' + 'flat/'
     else:
@@ -75,7 +75,7 @@ def analyze(filePath, storePath, name = None):
             if xLine == "" or timeStep >= endat:
                 break
             timeStep +=1
-            print "Processing time step %d of %s" % (timeStep, fileName)
+            print("Processing time step %d of %s" % (timeStep, fileName))
             yLine = comFile.readline().strip()
             X = np.array([float(f) for f in xLine.split(' ')])
             Y = np.array([float(f) for f in yLine.split(' ')])
@@ -139,7 +139,7 @@ def analyze(filePath, storePath, name = None):
             else:
                 # get all cells not in previous
                 newCells = U[-1*(U.shape[0] - U_prev.shape[0]) :]
-                print U_prev.shape, newCells.shape
+                print(U_prev.shape, newCells.shape)
                 inc = 1.0/newCells.shape[0]
                 newCellDistFracs = np.linalg.norm(newCells, axis=1)/maxDist
                 for r in rList:
@@ -152,11 +152,11 @@ def analyze(filePath, storePath, name = None):
 
 
 
-    print "Plotting %s polygon count..." % fileName
+    print("Plotting %s polygon count..." % fileName)
 
     timeRange=np.arange(len(polyCountEvo[6]))
 
-    for pt in xrange(4,9):
+    for pt in range(4,9):
         if sum(polyCountEvo[pt]) > 0:
             plt.plot(timeRange, [100*f for f in polyCountEvo[pt]], lw = 2, label='%s sided' % pt, alpha=0.7)
 
@@ -167,7 +167,7 @@ def analyze(filePath, storePath, name = None):
     plt.close()
 
 
-    print "Charting %s bars..." % fileName
+    print("Charting %s bars..." % fileName)
     # Generate bar charts
     plt.bar(np.array(polyCountEvo.keys()) - 0.5,
             [np.mean(polyCountEvo[key][-20:]) for key in polyCountEvo],
@@ -181,7 +181,7 @@ def analyze(filePath, storePath, name = None):
     plt.close()
 
 
-    print "Voronoi-ing %s..." % fileName
+    print("Voronoi-ing %s..." % fileName)
     # Make voronoi of last time step
     for region in voro.regions:
         if not -1 in region and len(region)!=0:
@@ -206,7 +206,7 @@ def analyze(filePath, storePath, name = None):
     plt.savefig(storePath + '%d_voronoi.png' % (timeStep))
     plt.close()
 
-    print "Mapping %s mitotic cells..." % fileName
+    print("Mapping %s mitotic cells..." % fileName)
     #Plot eh mitotic cells over time and r fraction
     # see http://stackoverflow.com/questions/8389636/creating-over-20-unique-legend-colors-using-matplotlib
     # and http://stackoverflow.com/questions/4700614/how-to-put-the-legend-out-of-the-plot
@@ -228,5 +228,5 @@ def analyze(filePath, storePath, name = None):
     plt.savefig(storePath + '%d_MitoticFractVSR.png' % timeStep)
     plt.close()
 
-for i in xrange(len(trajPaths)):
+for i in range(len(trajPaths)):
     analyze(trajPaths[i], storePaths[i])

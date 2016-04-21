@@ -170,7 +170,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], float3* d_forceList)
+                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
@@ -288,9 +288,9 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
 
             // pressure forces
-            FX += Pressure*NX;
-            FY += Pressure*NY;
-            FZ += Pressure*NZ;
+            // FX += Pressure*NX;
+            // FY += Pressure*NY;
+            // FZ += Pressure*NZ;
 
             // internal damping
             // FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
@@ -302,6 +302,22 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             FZ += -internal_damping*(d_velListZ[atomInd] - d_velListZ[rank*192+N1]);
 
         }
+
+        // new growth force
+
+        float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
+                                  d_Y[atomInd] - d_CMy[rank], 
+                                  d_Z[atomInd] - d_CMz[rank]);
+        float rr = mag(r_CM);
+
+        if (rr/r_CM_o < 0.5) rr = 0.5*r_CM_o;
+
+        float3 pForce = -Youngs_mod * (rr - r_CM_o)*r_CM/rr;
+
+        
+        FX += pForce.x; 
+        FY += pForce.y; 
+        FZ += pForce.z; 
 
         if (constrainAngles){
             float3 t = CalculateAngleForce(atom, d_C180_nn,
@@ -364,7 +380,9 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
             ++NooflocalNN;
 
-            if ( NooflocalNN > 10 ){
+            //printf("NooflocalNN %d\n", NooflocalNN);
+
+            if ( NooflocalNN > MAX_NN ){
                 printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
                 continue;
             }

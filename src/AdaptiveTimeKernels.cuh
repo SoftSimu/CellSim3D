@@ -1,26 +1,5 @@
 #ifndef ADAPTIVE_TIME_KERNELS
 #define ADAPTIVE_TIME_KERNELS
-
-// __host__ __device__ float get_pn2(float c1, float c2);
-
-// __host__ __device__ float get_pn1(float c1, float c2);
-
-// __host__ __device__ float get_pn0(float c1, float c2);
-
-// __host__ __device__ float get_pp1(float c1, float c2);
-
-// __host__ __device__ float get_cn2(float c1, float c2);
-
-// __host__ __device__ float get_cn1(float c1, float c2);
-
-// __host__ __device__ float get_c0(float c1, float c2);
-
-// __host__ __device__ float get_cp1(float c1, float c2);
-
-// __host__ __device__ float get_alpha(float c1, float c2);
-
-// __host__ __device__ float get_beta(float c1, float c2);
-
 // predictor stuff
 inline float get_pn2(float c1, float c2){
     return 2*(1-c1)/((c2-c1)*c2*(1+c2));
@@ -93,7 +72,6 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z, 
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_XMM, float *d_YMM, float *d_ZMM,
-                          float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float *d_time, float mass,
                           float3 *d_forceList, int numCells, adp_coeffs a);
 
@@ -101,11 +79,12 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
                             float *d_XM, float *d_YM, float *d_ZM, 
                             float *d_XMM, float *d_YMM, float *d_ZMM,
-                            int numCells);
+                            float *d_velListX, float *d_velListY, float *d_velListZ, 
+                            int numCells, float *d_time);
 
 __global__ void ComputeTimeUpdate(float *d_XP, float *d_YP, float *d_ZP, 
                                   float *d_Xt, float *d_Yt, float *d_Zt,
                                   float *d_AdpErrors, float *d_time, float dt_max,
-                                  float alpha, float beta, int numCells);
+                                  float alpha, float beta, int numCells, float dt_tol);
 
 #endif // ADAPTIVE_TIME_KERNELS
