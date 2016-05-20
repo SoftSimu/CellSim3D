@@ -3,6 +3,7 @@ import csv
 import sys
 import os
 import argparse
+import numpy as np
 
 sys.path.append("/home/pranav/dev/celldiv/scripts")
 import celldiv
@@ -70,8 +71,8 @@ if nSkip is not None:
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     for i in range(th.maxFrames):
-        f = th.ReadFrame(inc=nSkip).tolist()
-
+        f = th.ReadFrame(inc=nSkip)
+        f = np.vstack(f)
         faces = []
         for mi in range(int(len(f)/192)):
             for row in firstfaces:
