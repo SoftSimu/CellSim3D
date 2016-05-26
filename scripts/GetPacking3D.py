@@ -9,15 +9,17 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import Delaunay, delaunay_plot_2d, Voronoi
+from scipy.spatial import Delaunay
 from scipy.spatial.qhull import QhullError
 import os, sys, argparse
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.stats import binom
-from scipy.misc import factorial
+import csv
+from scipy.optimize import curve_fit
+from scipy.stats import lognorm
 
 sys.path.append("/home/pranav/dev/celldiv/scripts")
 import celldiv
+
+from scipy.spatial.qhull import QhullError
 
 desc="""
 This script will measure the polygonal packing of a 3D system of cells with
@@ -27,9 +29,11 @@ Voronoi Tesselation.
 parser = argparse.ArgumentParser(description=desc)
 
 parser.add_argument("--traj", nargs="+",
-                    help="Absolute or relative paths")
+                    help="One or more absolute or relative paths to trajectories")
 parser.add_argument("--endat", type=int,
                     help="time step to stop processing at")
+parser.add_argument("-k", "--skip", type=int, required=False,
+                    help="Frame skip rate")
 args = parser.parse_args()
 
 trajPaths = [os.path.abspath(p) for p in args.traj]
@@ -40,7 +44,12 @@ if args.endat is None:
 else:
     endat = args.endat
 
-def analyze(filePath, storePath, name=None):
+aRate = args.skip
+
+if args.skip is None:
+    aRate = 1
+
+def measurePacking(filePath, storePath, name=None):
     fileName = os.path.splitext(os.path.split(filePath)[1])[0]
     print("Processing %s" % filePath)
     if name == None:
@@ -53,87 +62,137 @@ def analyze(filePath, storePath, name=None):
     except:
         pass
 
-    print("Generating cell CoMs...")
+    dataPath = storePath + "data.dat"
     # Now read trajectory file and get the centre of masses of
     # all cells at every time step
-    with open(filePath, 'r') as trajFile:
-        step = 0
+    if os.path.isfile(dataPath):
+        if os.path.getmtime(dataPath) > os.path.getmtime(filePath):
+            print("{0} already processed.".format(filePath))
+            print("Skipping")
+            return dataPath
+
+    print("Generating cell CoMs...")
+
+    with celldiv.TrajHandle(filePath) as s,\
+         open(storePath + "data.dat", 'w') as f:
+
         while True:
-            line = trajFile.readline().strip()
-
-            if line == '':
+            try:
+                frame = s.ReadFrame(inc = aRate)
+            except:
+                pass
+            step = s.step
+            if s.fatalError:
                 break
-            CoMsx = np.array([float(c) for c in line.split(' ')])
-            CoMsy = np.array([float(c) for c in trajFile.readline().strip().split(' ')])
-            CoMsz = np.array([float(c) for c in trajFile.readline().strip().split(' ')])
 
-            CoMs = np.array([CoMsx, CoMsy, CoMsz]).T
-
-            # Normalize the system to have origin at centre of mass
-            CoMs = CoMs - np.mean(CoMs, axis=0)
-            nCells = CoMs.shape[0]
+            nCells = len(frame)
 
             if nCells > 3:
-                step += 1
-                # print("Doing Vor of", CoMs.shape[0], "cells at step", step)
-                # t = Voronoi(CoMs)
-                # count = [0]
-                # for reg in t.regions:
-                #     if len(reg)>0:
-                #         r = np.array(reg)
-                #         r = r[r>-1]
-                #         n = r.shape[0]
-                #         if n > len(count):
-                #             for i in range(len(count), n):
-                #                 count.append(0)
-
-                #         count[n-1] += 1/nCells
-
-                # plt.plot(count)
-                # plt.minorticks_on()
-                # plt.grid(b = True, which='minor', linestyle='--')
-                # plt.grid(b = True, which='major', linestyle='-')
-                # plt.savefig(storePath + "voro_step_%d.png" % step)
-                # plt.close()
+                CoMs = np.array([np.mean(cell, axis=0) for cell in frame])
+                sysCoM = np.mean(CoMs, axis=0)
+                CoMs -= sysCoM
 
                 print("Doing Del of", CoMs.shape[0], "cells at step", step)
-                d = Delaunay(CoMs)
-                indices, indptr = d.vertex_neighbor_vertices
-                count = []
+                try:
+                    d = Delaunay(CoMs)
+                    indices, indptr = d.vertex_neighbor_vertices
+                    count = []
+                    for p in range(nCells):
+                        n = len(indptr[indices[p]:indices[p+1]])
+                        if n > len(count):
+                            for i in range(len(count), n):
+                                count.append(0)
+                        count[n-1] += 1/nCells
+
+                    f.write(", ".join([str(c) for c in count]))
+                    f.write("\n")
+
+                except QhullError:
+                    print("delaunay failed, skipping")
+                    pass
+
+    return dataPath
+
+fig, ax = plt.subplots()
+figll, axll = plt.subplots()
+
+def logNormal(x, s):
+    return 1/(s*x*np.sqrt(2*np.pi) * np.exp(-0.5*(np.log(x)/s)**2))
+
+def fitfunc(x, m, f, mi, c, d):
+    return m*np.exp(-1 * ( (np.log(x + f*mi) - c)**2)/d)
 
 
-                for p in range(nCells):
-                    n = len(indptr[indices[p]:indices[p+1]])
-                    if n > len(count):
-                        for i in range(len(count), n):
-                            count.append(0)
-                    count[n-1] += 1/nCells
 
-                plt.plot(count, "-.")
-                mu = count.index(max(count))
-                N = len(count)
-                p = mu/N
+def fitPacking(dataPath, interval=10):
+    """Function to fit the resulting distribution of the packing. Assumes
+    that interval of 10 timesteps is enough.
+    """
+    if not os.path.isfile(dataPath):
+        print("Something went wrong with {0}, rerun".format(filePath))
+        return
 
-                P = np.zeros(N)
-                for n in range(N):
-                    P[n] = (factorial(N)/(factorial(n)*factorial(N-n))) * (p**n) * ((1-p)**(N-n))
+    # code for fitting the resulting distribution
 
+    # First get the average it st devs
+    data = []
+    with open(dataPath, "r") as dFile:
+        data = list(csv.reader(dFile))[(-1*interval):]
 
-                plt.plot(P, "--")
-                plt.minorticks_on()
-                # plt.grid(which='minor', linestyle='--')
-                # plt.grid(which='major', linestyle='-')
-                plt.savefig(storePath + "del_step_%d.png" % step)
-                plt.close()
-                aa = [str(c) for c in count]
-                with open("data.dat", 'w') as f:
-                    f.write(" ".join(aa))
+    data = [[float(v) for v in l] for l in data]
+    maxLen = max([len(l) for l in data])
 
+    for l in data:
+        if len(l) < maxLen:
+            for i in range(maxLen - len(l)):
+                l.append(0)
 
+    data = np.vstack(data)
+    mean = np.mean(data, axis=0)
+    stddev = np.std(data, axis=0)
+    y = mean
+    x = np.arange(y.shape[0])
+    m = y.max()
+    mi = np.argmax(m)
+    f = 0.3
+    c = 2.7
+    d = 0.04
+
+    guesses = np.array([m, f, mi, c, d])
+
+    p, pcov = curve_fit(fitfunc, xdata = x,
+                        ydata = y, p0=guesses)
+
+    xx = np.linspace(0, x.max(), 1000)
+
+    m, f, mi, c, d = p
+    print(p)
+    fit = fitfunc(xx, m, f, mi, c, d)
+
+    ax.errorbar(x, y, yerr=stddev, fmt='.')
+    l = "${max:.2f} \\times \\exp{{ \\left[ -\\frac{{1}}{{{den:.2f}}} \\left[ \ln\\left(x + {fmaxi:0.2f}\\right) - {cunt:0.2f}\\right]^2 \\right] }}$".format(max=m, fmaxi=f*mi, cunt=c, den=d)
+
+    #sys.exit()
+    ax.plot(xx, fit, '-', label=l)
+
+    axll.semilogy(x, y, '.')
+    axll.semilogy(xx, fit, '-')
 
 
 
 
 
 for i in range(len(trajPaths)):
-    analyze(trajPaths[i], storePaths[i])
+    fitPacking(dataPath = measurePacking(trajPaths[i], storePaths[i]))
+
+
+ax.set_xlabel("n")
+ax.set_ylabel("fraction")
+
+axll.set_xlabel("n")
+axll.set_ylabel("fraction")
+h, l = ax.get_legend_handles_labels()
+fig.legend(h, l)
+
+fig.savefig("fit.png")
+figll.savefig("llfit.png")
