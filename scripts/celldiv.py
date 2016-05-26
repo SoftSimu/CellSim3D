@@ -11,6 +11,54 @@ class IncompleteTrajectoryError(Exception):
         return repr(self.value)
 
 
+class TrajHandleBase(object):
+    def __init__(self, filePath, numNodes=192):
+        if type(self) is TrajHandleBase:
+            print("This class is not meant to be used directly. Use the \
+            TrajHandle class.")
+            raise NotImplementedError
+
+        import os
+        import sys
+        import numpy as np
+
+        trajPath = os.path.abspath(filePath)
+
+        self.fileExists = os.path.isfile(trajPath)
+
+        if not self.fileExists:
+            raise IOError("Couldn't find the trajectory file at %s" % trajPath)
+        else:
+            try:
+                self.Initialize(trajPath)
+            except:
+                   print("Something went wrong in:", sys.exec_info()[0])
+                   raise
+
+        self.fatalError = False
+
+    def __getFileHandle(self, trajPath):
+        raise NotImplementedError
+
+    def __setInitVars():
+        raise NotImplementedError
+
+    def initialize (self, trajPath):
+        self.fileSize = os.path.getsize(trajPath)
+        self.trajHandle = __getFileHandle(trajPath)
+        try:
+            self.params = __setInitVars()
+        except IncompleteTrajectoryError:
+            print("This trajectory file is a stub.")
+            self.closeHandle()
+            self.fatalError = True
+            raise
+
+
+    def closeHandle(self):
+        self.trajHandle.close()
+
+
 class TrajHandleBinary(object):
     """
     Class that handles everything about getting trajectories. I will
@@ -111,6 +159,7 @@ class TrajHandleBinary(object):
 
         if self.frameReadFailed or self.lastFrameNum == self.maxFrames:
             print("Can't read past frame %d" % self.currFrameNum)
+            self.lastFrameNum = self.currFrameNum
             return self.frame
         else:
             try:
@@ -123,26 +172,29 @@ class TrajHandleBinary(object):
                 step = self._GetArray(np.int32, 1)[0]
                 frameNum = self._GetArray(np.int32, 1)[0]
                 nCells = self._GetArray(np.int32, 1)[0]
-                frame  = np.empty((self.numPart*nCells, 3))
+                frame = [ np.zeros((192, 3)) for i in range(nCells)]
+
                 for i in range(nCells):
                     cellInd = self._GetArray(np.int32, 1)[0]
                     x = self._GetArray(np.float32, self.numPart)
                     y = self._GetArray(np.float32, self.numPart)
                     z = self._GetArray(np.float32, self.numPart)
 
-                    frame[i*self.numPart:(i+1)*self.numPart, 0] = x
-                    frame[i*self.numPart:(i+1)*self.numPart, 1] = y
-                    frame[i*self.numPart:(i+1)*self.numPart, 2] = z
+                    frame[i][:, 0] = x
+                    frame[i][:, 1] = y
+                    frame[i][:, 2] = z
 
                 self.frame = frame
                 self.nCellsLastFrame = nCells
 
                 self.lastFrameNum = self.currFrameNum
                 self.currFrameNum = frameNum
+                self.step = step
 
                 return self.frame
             except IncompleteTrajectoryError as e:
                 print ("Trajectory incomplete, maxFrames set to %d" % self.lastFrameNum)
+                self.fatalError = True
                 raise
 
     def close(self):
