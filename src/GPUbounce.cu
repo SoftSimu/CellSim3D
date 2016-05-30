@@ -335,7 +335,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
+//  if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Minx ,         1024*sizeof(float))) return(-1);
@@ -405,14 +405,19 @@ int main(int argc, char *argv[])
   thrust::fill(d_AdpErrorsV.begin(), d_AdpErrorsV.end(), 0); 
   float *d_AdpErrors = thrust::raw_pointer_cast(&d_AdpErrorsV[0]); 
 
-  thrust::host_vector<float> h_AdpErrors(192*MaxNoofC180s); 
+  thrust::host_vector<float> h_AdpErrors(192*MaxNoofC180s);
+
+  thrust::device_vector<float> d_volumeV(MaxNoofC180s);
+  thrust::host_vector<float> h_volume(MaxNoofC180s);
+  thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
+  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]); 
   
   
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  volume= (float *)calloc(MaxNoofC180s, sizeof(float));
+  //volume= (float *)calloc(MaxNoofC180s, sizeof(float));
   area= (float *)calloc(MaxNoofC180s, sizeof(float));
   cell_div = (char *)calloc(MaxNoofC180s, sizeof(char));
   cell_div_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
@@ -451,7 +456,6 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
-  cudaMemset(d_volume, 0, MaxNoofC180s*sizeof(float)); 
   cudaMemcpy(d_area, area, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
   // Set the Youngs_mod for the cells
@@ -941,34 +945,29 @@ int main(int argc, char *argv[])
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol,
                                      checkSphericity, d_area);
-        // if (No_of_C180s > 2752){
-        //     cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-        //     for (int i = 0 ; i< No_of_C180s; i++){
-        //         printf("cell %d, volume %f\n", i, volume[i]);
-        //     }
-        // }
         CudaErrorCheck();
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
       if (checkSphericity){
-          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          //cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          h_volume = d_volumeV; 
           cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
           printf("time: %d\n", step); 
           for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, volume[i], area[i],
-                      4.835975862049408*pow(volume[i], 2.0/3.0)/area[i]);
+              printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, h_volume[i], area[i],
+                      4.835975862049408*pow(h_volume[i], 2.0/3.0)/area[i]);
           
-              if (volume[i] > divVol)
+              if (h_volume[i] > divVol)
                   printf(", I'm too big :(");
           
               printf("\n"); 
           }
       } else{
-          cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          h_volume = d_volumeV; 
           for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f", i, volume[i]); 
+              printf ("Cell: %d, volume= %f", i, h_volume[i]); 
           
-              if (volume[i] > divVol)
+              if (h_volume[i] > divVol)
                   printf(", I'm too big :(");
           
               printf("\n"); 
@@ -977,6 +976,17 @@ int main(int argc, char *argv[])
 #endif
 
         count_and_get_div();
+
+#ifdef PRINT_VOLUMES
+        if (num_cell_div > 0){
+            printf("Dividing cells: ");
+            for (int i = 0; i<num_cell_div; i++){
+                printf("%d ", cell_div_inds[i]);
+            }
+          
+            printf("\n");
+        }
+#endif
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           globalrank = cell_div_inds[divCell];
           float norm[3];
