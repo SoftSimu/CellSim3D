@@ -1309,10 +1309,7 @@ int main(int argc, char *argv[])
   fclose(timeFile);
   fclose(errFile);
 #endif
-  cudaDeviceReset(); 
-  // CloseBinaryFile(&bFA);
   return(0);
-
 }
 
 
