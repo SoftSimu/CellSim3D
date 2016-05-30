@@ -286,17 +286,6 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             FY += +stiffness*(R-R0)/R0*deltaY/R;
             FZ += +stiffness*(R-R0)/R0*deltaZ/R;
 
-
-            // pressure forces
-            // FX += Pressure*NX;
-            // FY += Pressure*NY;
-            // FZ += Pressure*NZ;
-
-            // internal damping
-            // FX += -damp_const*(-deltaX-(d_XM[rank*192+atom]-d_XM[rank*192+N1]));
-            // FY += -damp_const*(-deltaY-(d_YM[rank*192+atom]-d_YM[rank*192+N1]));
-            // FZ += -damp_const*(-deltaZ-(d_ZM[rank*192+atom]-d_ZM[rank*192+N1]));
-
             FX += -internal_damping*(d_velListX[atomInd] - d_velListX[rank*192+N1]);
             FY += -internal_damping*(d_velListY[atomInd] - d_velListY[rank*192+N1]);
             FZ += -internal_damping*(d_velListZ[atomInd] - d_velListZ[rank*192+N1]);
@@ -308,12 +297,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
                                   d_Y[atomInd] - d_CMy[rank], 
                                   d_Z[atomInd] - d_CMz[rank]);
-        float rr = mag(r_CM);
-
-        if (rr/r_CM_o < 0.5) rr = 0.5*r_CM_o;
-
-        float3 pForce = -Youngs_mod * (rr - r_CM_o)*r_CM/rr;
-
+        float3 pForce = 3*Pressure*calcUnitVec(r_CM); 
         
         FX += pForce.x; 
         FY += pForce.y; 
@@ -322,7 +306,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         if (constrainAngles){
             float3 t = CalculateAngleForce(atom, d_C180_nn,
                                            d_X, d_Y, d_Z,
-                                           d_theta0, Youngs_mod, rank);
+                                           d_theta0, 1000 /*Youngs_mod*/, rank);
             FX += t.x; FY += t.y; FZ += t.z;
         }
         
@@ -412,9 +396,13 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
                 if ( R < attraction_range )
                 {
-                    FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
-                    FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
-                    FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                    // FX += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+                    // FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+                    // FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+
+                    FX += -500*(attraction_range-R)/R*deltaX;
+                    FY += -500*(attraction_range-R)/R*deltaY;
+                    FZ += -500*(attraction_range-R)/R*deltaZ;
 
                     // hinder rearrangements
 
@@ -438,10 +426,13 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                 if ( R < repulsion_range )
                 {
                     if (R < (repulsion_range-0.01)) R = repulsion_range-0.01; 
-                    FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-                    FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-                    FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                    // FX += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+                    // FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+                    // FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
 
+                    FX += +100000*(repulsion_range-R)/R*deltaX;
+                    FY += +100000*(repulsion_range-R)/R*deltaY;
+                    FZ += +100000*(repulsion_range-R)/R*deltaZ;
                     // if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
                     //      deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                     //      deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
