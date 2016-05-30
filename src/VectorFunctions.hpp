@@ -72,11 +72,17 @@ __host__ __device__ inline float3 operator*(const float3 b, const float a){
 }
 
 __host__ __device__ inline float3 operator/(const float3 b, const float a){
-    float3 c;
-    c.x = b.x/a;
-    c.y = b.y/a;
-    c.z = b.z/a;
-    return c;
+    // float3 c;
+    // c.x = b.x/a;
+    // c.y = b.y/a;
+    // c.z = b.z/a;
+    // return c;
+
+    return (1/a)*b;
+}
+
+__host__ __device__ inline float3 calcUnitVec(const float3 a){
+    return a/mag(a);
 }
 
 __host__ __device__ inline void print_float3(float3 a){
