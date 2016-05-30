@@ -115,6 +115,8 @@ def measurePacking(filePath, storePath, name=None):
 
 fig, ax = plt.subplots()
 figll, axll = plt.subplots()
+im = []
+cm = plt.get_cmap('inferno')
 
 def logNormal(x, s):
     return 1/(s*x*np.sqrt(2*np.pi) * np.exp(-0.5*(np.log(x)/s)**2))
@@ -123,11 +125,12 @@ def fitfunc(x, m, f, mi, c, d):
     return m*np.exp(-1 * ( (np.log(x + f*mi) - c)**2)/d)
 
 
-
-def fitPacking(dataPath, interval=10):
+mmax = 0
+def fitPacking(dataPath, col , interval=10):
     """Function to fit the resulting distribution of the packing. Assumes
     that interval of 10 timesteps is enough.
     """
+
     if not os.path.isfile(dataPath):
         print("Something went wrong with {0}, rerun".format(filePath))
         return
@@ -158,41 +161,57 @@ def fitPacking(dataPath, interval=10):
     c = 2.7
     d = 0.04
 
+    global mmax
+    mmax = y.max()
     guesses = np.array([m, f, mi, c, d])
 
     p, pcov = curve_fit(fitfunc, xdata = x,
                         ydata = y, p0=guesses)
 
-    xx = np.linspace(0, x.max(), 1000)
+    xx = np.linspace(0, x.max(), 100)
 
     m, f, mi, c, d = p
-    print(p)
     fit = fitfunc(xx, m, f, mi, c, d)
 
-    ax.errorbar(x, y, yerr=stddev, fmt='.')
-    l = "${max:.2f} \\times \\exp{{ \\left[ -\\frac{{1}}{{{den:.2f}}} \\left[ \ln\\left(x + {fmaxi:0.2f}\\right) - {cunt:0.2f}\\right]^2 \\right] }}$".format(max=m, fmaxi=f*mi, cunt=c, den=d)
+    #ax.errorbar(x, y, yerr=stddev, fmt='.', color=cm(col), alpha=0.6)
+    ax.plot(x, y,'.', lw = 2.5, color=cm(col), alpha=0.6)
 
-    #sys.exit()
-    ax.plot(xx, fit, '-', label=l)
+    # This line is hard to read. Honestly I don't see why any one would want
+    # to read it. So I'll leave it as it is. It is just latex markup combined
+    # with str.format and the fact that everything has to be escaped.
+    l = "${max:.2f} \\times \\exp{{ \\left[ -\\frac{{1}}{{{den:.2f}}} \\left[ \ln\\left(n + {fmaxi:0.2f}\\right) - {cunt:0.2f}\\right]^2 \\right] }}$".format(max=m, fmaxi=f*mi, cunt=c, den=d)
 
-    axll.semilogy(x, y, '.')
-    axll.semilogy(xx, fit, '-')
+
+    ax.plot(xx, fit, '-', label=l, lw=1.5, color=cm(col), alpha=0.6)
+
+    axll.semilogy(x, y, '.', lw=1.5, color=cm(col), alpha=0.6)
+    axll.semilogy(xx, fit, '-', label=l, lw=1.5, color=cm(col), alpha=0.6)
 
 
 
 
 
 for i in range(len(trajPaths)):
-    fitPacking(dataPath = measurePacking(trajPaths[i], storePaths[i]))
+    fitPacking(dataPath = measurePacking(trajPaths[i], storePaths[i]), col= i*1.0/len(trajPaths), interval=20)
 
 
 ax.set_xlabel("n")
 ax.set_ylabel("fraction")
+y = np.linspace(0, 1.1*mmax, 1000)
+x = 12*np.ones(1000)
+ax.plot(x, y, 'g-', lw=3.0, label="$n=12$")
 
 axll.set_xlabel("n")
 axll.set_ylabel("fraction")
+axll.set_ylim(1e-8, 1)
+
 h, l = ax.get_legend_handles_labels()
 fig.legend(h, l)
+fig.set_size_inches(10,5)
 
-fig.savefig("fit.png")
-figll.savefig("llfit.png")
+figll.set_size_inches(10, 5)
+h, l = axll.get_legend_handles_labels()
+figll.legend(h, l)
+
+fig.savefig("fit.svg")
+figll.savefig("llfit.svg")
