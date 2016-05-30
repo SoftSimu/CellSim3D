@@ -1014,13 +1014,7 @@ int main(int argc, char *argv[])
           CudaErrorCheck()
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
-          if (No_of_C180s >= MaxNoofC180s){
-              printf("ERROR: Population is %d, only allocated enough memory for %d\n",
-                     No_of_C180s, MaxNoofC180s);
-              printf("ERROR: Fatal error, crashing...\n");
-              return -69;
-          }
-          
+
           if (daughtSameStiffness){
               youngsModArray[No_of_C180s] = youngsModArray[globalrank];
               cudaMemcpy(d_Youngs_mod+No_of_C180s, youngsModArray+No_of_C180s,
@@ -1028,8 +1022,13 @@ int main(int argc, char *argv[])
               CudaErrorCheck();
           }
           
-
           ++No_of_C180s;
+          if (No_of_C180s >= MaxNoofC180s){
+              printf("ERROR: Population is %d, only allocated enough memory for %d\n",
+                     No_of_C180s, MaxNoofC180s);
+              printf("ERROR: Fatal error, crashing...\n");
+              return -69;
+          }
         }
         
         if (num_cell_div>0){
