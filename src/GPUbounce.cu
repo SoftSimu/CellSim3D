@@ -1201,7 +1201,7 @@ int main(int argc, char *argv[])
       if ( step%trajWriteInt == 0 )
       {
           //printf("   Writing trajectory to traj.xyz...\n");
-          frameCount++; 
+          frameCount = step; 
           cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
