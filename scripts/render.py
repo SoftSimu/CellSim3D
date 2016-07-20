@@ -68,6 +68,17 @@ if not nSkip:
 if nSkip is not None:
     print("Skipping over every %dth" % nSkip, "frame...")
 
+
+noClear = False
+if args.noclear is not None:
+    noClear = args.noclear
+
+sPath = os.path.splitext(filename)[0] + "/images/"
+
+if not noClear and os.path.exists(sPath):
+    for f in os.listdir(sPath):
+        os.remove(sPath+f)
+
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     for i in range(th.maxFrames):
