@@ -139,7 +139,10 @@ class TrajHandleBinary(object):
             for i in range(frameNum - offset - 1):
                 self.trajHandle.seek(2*self.intSize, os.SEEK_CUR)
                 nC = self._GetArray(np.int32, 1)[0]
-                self.trajHandle.seek(nC*(self.intSize + 3*self.numPart*self.floatSize),
+                i = 1
+                if self.variableStiffness:
+                    i+=1
+                self.trajHandle.seek(nC*(i*self.intSize + 3*self.numPart*self.floatSize),
                                      os.SEEK_CUR)
             return False
         elif self.currFrameNum > frameNum:
