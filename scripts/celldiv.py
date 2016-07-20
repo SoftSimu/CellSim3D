@@ -180,6 +180,10 @@ class TrajHandleBinary(object):
                     y = self._GetArray(np.float32, self.numPart)
                     z = self._GetArray(np.float32, self.numPart)
 
+                    if self.variableStiffness:
+                        cellType = self._GetArray(np.int32, 1)
+                        print(cellType)
+
                     frame[i][:, 0] = x
                     frame[i][:, 1] = y
                     frame[i][:, 2] = z

@@ -1979,7 +1979,7 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount){
     fwrite(&frameCount, sizeof(int), 1, trajFile); 
     fwrite(&No_of_C180s, sizeof(int), 1, trajFile);
     if (useDifferentStiffnesses){
-        char cellType = 0; 
+        int cellType = 0; 
         for (int c = 0; c < No_of_C180s; c++){
             fwrite(&c, sizeof(int), 1, trajFile);
             fwrite(X + (c*192), sizeof(float), 192, trajFile); 
@@ -1991,7 +1991,7 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount){
             else
                 cellType = 1; 
             
-            fwrite(&cellType, sizeof(char), 1, trajFile);
+            fwrite(&cellType, sizeof(int), 1, trajFile);
         }
     } else {
         for (int c = 0; c < No_of_C180s; c++){
