@@ -29,7 +29,11 @@
         "maxPressure": 65.0, // 0.065
         "minPressure": 50.0, // 0.050
         "growth_rate": 0.008, // 0.00004
-        "checkSphericity": 0
+        "checkSphericity": 0,
+        "constrainAngles": 1,
+        "doAdaptive_dt": 0,
+        "dt_max": 1e-4,
+        "dt_tol": 1e-8
     },
     // Now params related to cell counting
     // In theory, these params are not needed for the simulation to run.
