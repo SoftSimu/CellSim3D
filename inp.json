@@ -97,5 +97,7 @@
     // Rigid box parameters
     "boxParams":{
         "useRigidSimulationBox": 0,
+        "usePBCs": 0,
+        "boxLength": 5.0
     }
 }
