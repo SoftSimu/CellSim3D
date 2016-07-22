@@ -185,7 +185,6 @@ class TrajHandleBinary(object):
 
                     if self.variableStiffness:
                         cellType = self._GetArray(np.int32, 1)
-                        print(cellType)
 
                     frame[i][:, 0] = x
                     frame[i][:, 1] = y
