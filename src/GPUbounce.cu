@@ -1147,7 +1147,7 @@ int main(int argc, char *argv[])
                       if (!indexChosen){
                           chosenIndices[softCellCounter] = cellInd;
                           softCellCounter++;
-                          printf("%d, ", cellInd); 
+                          printf("%d ", cellInd); 
                       } else
                           indexChosen = false;
                       

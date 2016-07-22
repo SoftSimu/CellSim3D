@@ -39,6 +39,13 @@ parser.add_argument("-k", "--skip", type=int, required=False,
 parser.add_argument("-nc", "--noclear", type=bool, required=False,
                     help="specifying this will not clear the destination directory\
                     and restart rendering.")
+parser.add_argument("--min-cells", type=int, required=False,
+                    help='Start rendering when system has at least this many cells')
+
+parser.add_argument("--inds", type=int, required=False, nargs='+',
+                    help="Only render cells with these indices")
+parser.add_argument("-nf", "--num-frames", type=int, required=False,
+                    help="Only render these many frames.")
 
 args = parser.parse_args(argv)
 
@@ -65,7 +72,7 @@ nSkip = args.skip
 if not nSkip:
     nSkip = 1
 
-if nSkip is not None:
+if nSkip is not None and nSkip > 1:
     print("Skipping over every %dth" % nSkip, "frame...")
 
 
@@ -79,10 +86,28 @@ if not noClear and os.path.exists(sPath):
     for f in os.listdir(sPath):
         os.remove(sPath+f)
 
+cellInds = []
+minInd = 0
+
+if args.min_cells is not None:
+    minInd = args.min_cells
+
+if args.inds is not None:
+    minInd = max(args.inds)
+
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     for i in range(th.maxFrames):
         f = th.ReadFrame(inc=nSkip)
+
+        if len(f) < minInd:
+            print("Only ", len(f), "cells in frame ", th.currFrameNum,
+                  " skipping...")
+            continue
+
+        if args.inds is not None:
+            f = [f[a] for a in args.inds]
+
         f = np.vstack(f)
         faces = []
         for mi in range(int(len(f)/192)):
@@ -118,3 +143,5 @@ with celldiv.TrajHandle(filename) as th:
 
         bpy.ops.object.select_pattern(pattern='cellObject')
         bpy.ops.object.delete()                                     # delete mesh...
+        if args.num_frames is not None and frameCount >= args.num_frames:
+            break;
