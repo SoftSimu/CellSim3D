@@ -100,7 +100,7 @@ with celldiv.TrajHandle(filename) as th:
     for i in range(th.maxFrames):
         f = th.ReadFrame(inc=nSkip)
 
-        if len(f) < minInd:
+        if len(f) < minInd+1:
             print("Only ", len(f), "cells in frame ", th.currFrameNum,
                   " skipping...")
             continue
