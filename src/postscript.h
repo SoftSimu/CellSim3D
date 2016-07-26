@@ -1,6 +1,7 @@
 #include<cuda.h>
 #include<stdio.h>
 #include"VectorFunctions.hpp"
+#include<curand_kernel.h>
 cudaDeviceProp getDevice(void);
 
 __global__ void  cell_division(int rank,
@@ -57,7 +58,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls,
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod,
-                                bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList, float r_CM_o);
+                                bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList, float r_CM_o, curandState *rngState);
 
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
@@ -109,3 +110,5 @@ __global__ void CheckCellDivision(int No_of_C180s, int *C180_56,
                                   float *CMx , float *CMy, float *CMz, float *voll,
                                   int* d_C180_56,
                                   char* cell_div, float divVol, bool checkSpherecity);
+
+__global__ void DeviceRandInit(curandState *rngState, unsigned long long seed);

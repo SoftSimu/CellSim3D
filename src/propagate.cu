@@ -1,7 +1,14 @@
 #include<cuda.h>
 #include<vector_functions.h>
 #include<stdio.h>
+#include<curand_kernel.h>
 #include "VectorFunctions.hpp"
+
+__global__ void DeviceRandInit(curandState *rngState, unsigned long long seed){
+    size_t idx = threadIdx.x + blockIdx.x*blockDim.x;
+    curand_init(seed, idx, 0, &rngState[idx]);
+}
+
 
 
 #define check_float3(a){ \
@@ -170,7 +177,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o)
+                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, curandState *rngStates)
 {
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
@@ -181,6 +188,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             FX_sum = 0;
             FY_sum = 0;
             FZ_sum = 0;
+            curandState rngState = rngStates[threadIdx.x + blockDim.x*blockIdx.x];
         }
 
         __syncthreads();
@@ -297,11 +305,24 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
                                   d_Y[atomInd] - d_CMy[rank], 
                                   d_Z[atomInd] - d_CMz[rank]);
-        float3 pForce = 3*Pressure*calcUnitVec(r_CM); 
+        float3 gForce  = make_float3(0.f, 0.f, 0.f);
+
+        //pForce = 3*Pressure*calcUnitVec(r_CM);
+
+        // growth along microtubules
+        // microtubule eq. length changes during growth
+
+        float eq_len = 0.615;
+        float fluct = eq_len*0.2f; // magnitude of fluctution
         
-        FX += pForce.x; 
-        FY += pForce.y; 
-        FZ += pForce.z; 
+        //randomize eq_len
+        //eq_len = eq_len + ((2*fluct + 0.999999f)*curand_uniform(&rngState) - fluct);
+
+        gForce = -(1e4)*(mag(r_CM) - eq_len)*calcUnitVec(r_CM); 
+
+        FX += gForce.x; 
+        FY += gForce.y; 
+        FZ += gForce.z; 
 
         if (constrainAngles){
             float3 t = CalculateAngleForce(atom, d_C180_nn,

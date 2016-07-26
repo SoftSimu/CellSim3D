@@ -14,6 +14,7 @@
 #include <string>
 
 #include <cuda.h>
+#include <curand.h>
 #include <vector_functions.h>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
@@ -533,8 +534,7 @@ int main(int argc, char *argv[])
 
 
 
-  printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
-  printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
+
 
   cudaMemcpy(d_C180_nn,   C180_nn,   3*192*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
@@ -553,6 +553,20 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
 
 
+  // initialize device rng
+
+
+  thrust::device_vector<curandState> d_rngStatesV(MaxNoofC180s*192);
+  curandState* d_rngStates = thrust::raw_pointer_cast(&d_rngStatesV[0]);
+
+  uint seed = 42; 
+  
+  DeviceRandInit<<<MaxNoofC180s/1024+1, 1024>>>(d_rngStates, seed);
+
+  CudaErrorCheck();
+
+  
+  
   prevnoofblocks  = No_of_C180s;
   noofblocks      = No_of_C180s;
   threadsperblock = 192;
@@ -784,6 +798,11 @@ int main(int argc, char *argv[])
   // Different kind of pressure stuff
 
   float r_CM_o = pow((3.0/4.0) * (1/3.14159) * divVol*2.0, 1.0/3);
+
+
+  printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
+  printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
+
   
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
@@ -834,7 +853,7 @@ int main(int argc, char *argv[])
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_forceList, r_CM_o); 
+                                                      constrainAngles, d_theta0, d_forceList, r_CM_o, d_rngStates); 
       CudaErrorCheck();
       if (doAdaptive_dt){
           adp_coeffs a;
@@ -877,7 +896,7 @@ int main(int argc, char *argv[])
                                                           threshDist, useWalls,
                                                           d_velListX, d_velListY, d_velListZ,
                                                           useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                          constrainAngles, d_theta0, d_forceList, r_CM_o); 
+                                                          constrainAngles, d_theta0, d_forceList, r_CM_o, d_rngStates); 
           CudaErrorCheck();
 
           Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,

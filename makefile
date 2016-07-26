@@ -6,7 +6,7 @@ objDir = bin
 sources = $(wildcard src/*.cu)
 objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
 
-eflags = $(arch) -o $(objDir)/"CellDiv" $(objects) bin/jsoncpp.o -lm
+eflags = $(arch) -o $(objDir)/"CellDiv" $(objects) bin/jsoncpp.o -lm -lcurand
 opt = -O3
 
 debug: opt= -O0
