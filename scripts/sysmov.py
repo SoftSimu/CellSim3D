@@ -43,6 +43,11 @@ parser.add_argument("--out",
                     help="Output file name and format",
                     default="3d_CoM.mp4",
                     type=str)
+parser.add_argument("--k",
+                    help="Skip interval",
+                    type = int,
+                    default =1);
+
 parser.add_argument("--res",
                     help="16:9 resolution. E.g 720p for 1280x720, 1080p for 1920:1080",
                     default="1080p",
@@ -69,9 +74,9 @@ except:
 
 print("Trajectory read progress:")
 with cd.TrajHandle(trajPath) as th:
-    for i in tqdm(range(th.maxFrames)):
+    for i in tqdm(range(int(th.maxFrames/args.k))):
         try:
-            frame = th.ReadFrame()
+            frame = th.ReadFrame(inc=args.k)
             cc = np.array([np.mean(c, axis=0) for c in frame])
             CoM.append(np.mean(cc, axis=0))
             cellCoMs.append(cc)

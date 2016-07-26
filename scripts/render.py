@@ -97,32 +97,33 @@ if args.inds is not None:
 
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
-    for i in range(th.maxFrames):
-        f = th.ReadFrame(inc=nSkip)
+    for i in range(int(th.maxFrames/nSkip)):
+        try:
+            f = th.ReadFrame(inc=nSkip)
 
-        if len(f) < minInd+1:
-            print("Only ", len(f), "cells in frame ", th.currFrameNum,
-                  " skipping...")
-            continue
+            if len(f) < minInd+1:
+                print("Only ", len(f), "cells in frame ", th.currFrameNum,
+                      " skipping...")
+                continue
 
-        if args.inds is not None:
-            f = [f[a] for a in args.inds]
+            if args.inds is not None:
+                f = [f[a] for a in args.inds]
 
-        f = np.vstack(f)
-        faces = []
-        for mi in range(int(len(f)/192)):
-            for row in firstfaces:
-                faces.append([(v+mi*192) for v in row])
+            f = np.vstack(f)
+            faces = []
+            for mi in range(int(len(f)/192)):
+                for row in firstfaces:
+                    faces.append([(v+mi*192) for v in row])
 
 
-        mesh = bpy.data.meshes.new('cellMesh')
-        ob = bpy.data.objects.new('cellObject', mesh)
+            mesh = bpy.data.meshes.new('cellMesh')
+            ob = bpy.data.objects.new('cellObject', mesh)
 
-        bpy.context.scene.objects.link(ob)
-        mesh.from_pydata(f, [], faces)
-        mesh.update()
+            bpy.context.scene.objects.link(ob)
+            mesh.from_pydata(f, [], faces)
+            mesh.update()
 
-        if doSmooth:
+            if doSmooth:
                 bpy.ops.object.select_by_type(type='MESH')
                 bpy.context.scene.objects.active = bpy.data.objects['cellObject']
                 bpy.ops.object.editmode_toggle()
@@ -135,13 +136,15 @@ with celldiv.TrajHandle(filename) as th:
                 bpy.ops.object.select_all(action='TOGGLE')
                 bpy.ops.object.modifier_add(type='SUBSURF')
 
-        imagename = basename + "%d.png" % frameCount
-        frameCount += 1
-        bpy.context.scene.render.filepath = imagename
+            imagename = basename + "%d.png" % frameCount
+            frameCount += 1
+            bpy.context.scene.render.filepath = imagename
 
-        bpy.ops.render.render(write_still=True)  # render to file
+            bpy.ops.render.render(write_still=True)  # render to file
 
-        bpy.ops.object.select_pattern(pattern='cellObject')
-        bpy.ops.object.delete()                                     # delete mesh...
-        if args.num_frames is not None and frameCount >= args.num_frames:
-            break;
+            bpy.ops.object.select_pattern(pattern='cellObject')
+            bpy.ops.object.delete()                                     # delete mesh...
+
+        except celldiv.IncompleteTrajectoryError:
+            print ("Stopping...")
+            break

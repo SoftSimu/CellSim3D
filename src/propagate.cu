@@ -307,7 +307,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                                   d_Z[atomInd] - d_CMz[rank]);
         float3 gForce  = make_float3(0.f, 0.f, 0.f);
 
-        //pForce = 3*Pressure*calcUnitVec(r_CM);
+        //gForce = 3*Pressure*calcUnitVec(r_CM);
 
         // growth along microtubules
         // microtubule eq. length changes during growth
@@ -318,7 +318,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         //randomize eq_len
         //eq_len = eq_len + ((2*fluct + 0.999999f)*curand_uniform(&rngState) - fluct);
 
-        gForce = -(1e4)*(mag(r_CM) - eq_len)*calcUnitVec(r_CM); 
+        gForce = -(30e4)*(mag(r_CM) - eq_len)*calcUnitVec(r_CM); 
 
         FX += gForce.x; 
         FY += gForce.y; 
