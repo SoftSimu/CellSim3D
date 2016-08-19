@@ -21,7 +21,7 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         float3 posVecMM = make_float3(d_XMM[nodeInd], d_YMM[nodeInd], d_ZMM[nodeInd]);
 
         posVecP =  -1*(a.k0*posVec + a.kn1*posVecM + a.kn2*posVecMM)/a.k1 + 
-            delta_t*delta_t/a.k1*d_forceList[nodeInd];
+            ((delta_t*delta_t)/a.k1)*d_forceList[nodeInd];
 
         d_XP[nodeInd] = posVecP.x; 
         d_YP[nodeInd] = posVecP.y; 
@@ -66,15 +66,14 @@ __global__ void ComputeTimeUpdate(float *d_XP, float *d_YP, float *d_ZP,
     int index = blockIdx.x*blockDim.x + threadIdx.x;
     float delta_t = d_time[0]; 
 
-    if (index < 192*numCells){
+    if (index < 192*numCells && threadIdx.x < 180){
         float3 Y1 = make_float3(d_XP[index], d_YP[index], d_ZP[index]);
         float3 Yt = make_float3(d_Xt[index], d_Yt[index], d_Zt[index]); 
 
         // ask bart about this error computation
-        float e = abs(alpha/(beta-alpha))*abs(mag(Yt)-mag(Y1));
+        float e = abs(alpha/(beta-alpha))*mag(Yt-Y1);
         
         d_AdpErrors[index] = e;
-        d_time[index] = min(dt_max, 0.9*sqrtf(dt_tol/e));
-        //printf("p %d, e %f\n", index, e); 
+        d_time[index] = min(dt_max, 0.9*delta_t*sqrt(dt_tol/e));
     }
 }
