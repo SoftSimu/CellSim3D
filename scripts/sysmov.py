@@ -1,9 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import matplotlib
 
 matplotlib.use('Agg')
-
 
 import sys, os, argparse
 
