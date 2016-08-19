@@ -48,7 +48,8 @@ parser.add_argument("--k",
                     default =1);
 
 parser.add_argument("--res",
-                    help="16:9 resolution. E.g 720p for 1280x720, 1080p for 1920:1080",
+                    help="16:9 resolution. E.g 720p for 1280x720, \
+                    1080p for 1920:1080",
                     default="1080p",
                     type=str)
 
