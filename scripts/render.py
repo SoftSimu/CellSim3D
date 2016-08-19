@@ -88,12 +88,16 @@ if not noClear and os.path.exists(sPath):
 
 cellInds = []
 minInd = 0
+stopAt = float('inf')
 
 if args.min_cells is not None:
     minInd = args.min_cells
 
 if args.inds is not None:
     minInd = max(args.inds)
+
+if args.num_frames is not None:
+    stopAt = args.num_frames
 
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
@@ -144,6 +148,8 @@ with celldiv.TrajHandle(filename) as th:
 
             bpy.ops.object.select_pattern(pattern='cellObject')
             bpy.ops.object.delete()                                     # delete mesh...
+            if frameCount > stopAt:
+                break
 
         except celldiv.IncompleteTrajectoryError:
             print ("Stopping...")
