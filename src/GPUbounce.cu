@@ -1,7 +1,7 @@
 //#define FORCE_DEBUG
 //#define PRINT_VOLUMES
 #define TURNOFF_RAN
-//#define DEBUG_RAND
+#define DEBUG_RAND
 //#define OUTPUT_ADP_ERROR
 #include <stdio.h>
 #include <stdlib.h>
