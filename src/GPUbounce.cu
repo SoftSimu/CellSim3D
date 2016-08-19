@@ -976,7 +976,6 @@ int main(int argc, char *argv[])
 
        
 #ifdef DEBUG_RAND
-          h_randsV = d_randsV;
           thrust::copy_n(d_randsV.begin(), No_of_C180s*192, h_randsV.begin());
           printf("Rands at t %d\n", step);
           for (int i = 0; i < No_of_C180s*192; ++i){
