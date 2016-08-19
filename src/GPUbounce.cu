@@ -579,20 +579,6 @@ int main(int argc, char *argv[])
   DeviceRandInit<<<MaxNoofC180s/1024+1, 1024>>>(d_rngStates, d_seeds);
   CudaErrorCheck();
 
-  // thrust::host_vector<uint> h_seeds(MaxNoofC180s*192);
-  // thrust::fill(h_seeds.begin(), h_seeds.end(), 0);
-  // h_seeds = d_seedsV;
-  // std::cout << "seeds" << std::endl;
-  // for (int i = 0; i<MaxNoofC180s*192; ++i){
-  //     std::cout << h_seeds[i] << std::endl;
-  // }
-
-  // return -12;
-
-  curandDestroyGenerator(gen);
-
-  CudaErrorCheck();
-
   thrust::device_vector<float3> d_randsV(MaxNoofC180s*192);
   thrust::fill(d_randsV.begin(), d_randsV.end(), make_float3(0.f, 0.f, 0.f));
   float3 *d_rands = thrust::raw_pointer_cast(&d_randsV[0]);
