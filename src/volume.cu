@@ -137,7 +137,8 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         if (!isfinite(volume)){
             printf("OH SHIT: non-finite volume %f, cell %d\nvol2 %f\n", volume, fullerene, volume2);
             printf("Crash now :(\n");
-            asm("trap;");
+            //asm("trap;");
+            volume = 1.f;
         }
         
         bool divide = 0;
