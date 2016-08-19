@@ -1,6 +1,7 @@
 //#define FORCE_DEBUG
-#define PRINT_VOLUMES
-//#define TURNOFF_RAN
+//#define PRINT_VOLUMES
+#define TURNOFF_RAN
+//#define DEBUG_RAND
 //#define OUTPUT_ADP_ERROR
 #include <stdio.h>
 #include <stdlib.h>
@@ -559,12 +560,45 @@ int main(int argc, char *argv[])
   thrust::device_vector<curandState> d_rngStatesV(MaxNoofC180s*192);
   curandState* d_rngStates = thrust::raw_pointer_cast(&d_rngStatesV[0]);
 
-  uint seed = 42; 
+  unsigned long long seed = 42;
   
-  DeviceRandInit<<<MaxNoofC180s/1024+1, 1024>>>(d_rngStates, seed);
+  thrust::device_vector<uint> d_seedsV(MaxNoofC180s*192);
+  uint *d_seeds = thrust::raw_pointer_cast(&d_seedsV[0]);
+
+  
+  curandGenerator_t gen;
+  curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
+  CudaErrorCheck();
+
+  curandSetPseudoRandomGeneratorSeed(gen, seed);
+  CudaErrorCheck();
+
+  curandGenerate(gen, d_seeds, MaxNoofC180s*192);
+  CudaErrorCheck();
+  
+  DeviceRandInit<<<MaxNoofC180s/1024+1, 1024>>>(d_rngStates, d_seeds);
+  CudaErrorCheck();
+
+  // thrust::host_vector<uint> h_seeds(MaxNoofC180s*192);
+  // thrust::fill(h_seeds.begin(), h_seeds.end(), 0);
+  // h_seeds = d_seedsV;
+  // std::cout << "seeds" << std::endl;
+  // for (int i = 0; i<MaxNoofC180s*192; ++i){
+  //     std::cout << h_seeds[i] << std::endl;
+  // }
+
+  // return -12;
+
+  curandDestroyGenerator(gen);
 
   CudaErrorCheck();
 
+  thrust::device_vector<float3> d_randsV(MaxNoofC180s*192);
+  thrust::fill(d_randsV.begin(), d_randsV.end(), make_float3(0.f, 0.f, 0.f));
+  float3 *d_rands = thrust::raw_pointer_cast(&d_randsV[0]);
+
+  thrust::host_vector<float3> h_randsV(MaxNoofC180s*192);
+  thrust::fill(h_randsV.begin(), h_randsV.end(), make_float3(0.f, 0.f, 0.f));
   
   
   prevnoofblocks  = No_of_C180s;
@@ -640,6 +674,9 @@ int main(int argc, char *argv[])
       write_traj(0, trajfile);
   }
 
+  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                    d_XP, d_YP, d_ZP,
+                                    d_CMx, d_CMy, d_CMz);
   // Set up walls if needed
   if (useWalls == 1){
       // First we must make sure that the walls surround the
@@ -928,8 +965,8 @@ int main(int argc, char *argv[])
           h_AdpErrors = d_AdpErrorsV;
           
           float avgErr = 0;
-          fprintf(errFile, "step %d,%d\n", step, No_of_C180s);
-          fprintf(timeFile, "step %d\n", step, No_of_C180s);
+          fprintf(errFile, "step %d, %d\n", step, No_of_C180s);
+          fprintf(timeFile, "step %d, %d\n", step, No_of_C180s);
           for (int c = 0; c < No_of_C180s; c++){
               fprintf(errFile, "cell %d\n", c);
               fprintf(timeFile, "cell %d\n", c); 
@@ -941,15 +978,26 @@ int main(int argc, char *argv[])
 #endif
           
       }
-      else
+      else{
           Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
                                                      d_X, d_Y, d_Z,
                                                      d_XM, d_YM, d_ZM, 
                                                      d_velListX, d_velListY, d_velListZ, 
                                                      d_time, mass,
-                                                     d_forceList, No_of_C180s);          
+                                                     d_forceList, No_of_C180s, d_rngStates, d_rands);
           
-      CudaErrorCheck();
+          CudaErrorCheck();
+
+          h_randsV = d_randsV;
+#ifdef DEBUG_RAND
+          printf("Rands at t %d\n", step);
+          for (int i = 0; i < No_of_C180s*192; ++i){
+              float3 r = h_randsV[i];
+              printf("(%d, %d) : (%f, %f, %f)\n", i/192, i%192, r.x, r.y, r.z);
+          }
+#endif
+          
+      }
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_XP, d_YP, d_ZP,
@@ -1018,11 +1066,18 @@ int main(int argc, char *argv[])
               GetRandomVectorBasis(norm, divPlaneBasis);
           else
               GetRandomVector(norm);
+
+#ifdef TURNOFF_RAN
+          norm[0] = 0; 
+          norm[1] = 1; 
+          norm[2] = 0;
+#endif
           
           cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice);
           CudaErrorCheck();
           
           NDIV[globalrank] += 1;
+
           
           cell_division<<<1,256>>>(globalrank,
                                    d_XP, d_YP, d_ZP,
@@ -1219,7 +1274,7 @@ int main(int argc, char *argv[])
       if ( step%trajWriteInt == 0 )
       {
           //printf("   Writing trajectory to traj.xyz...\n");
-          frameCount = step; 
+          frameCount++; 
           cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);

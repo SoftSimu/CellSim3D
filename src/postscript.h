@@ -65,7 +65,7 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
                           float *d_time, float mass,
-                          float3 *d_forceList, int numCells);
+                          float3 *d_forceList, int numCells, curandState *rngStates, float3 *d_rands);
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
@@ -111,4 +111,4 @@ __global__ void CheckCellDivision(int No_of_C180s, int *C180_56,
                                   int* d_C180_56,
                                   char* cell_div, float divVol, bool checkSpherecity);
 
-__global__ void DeviceRandInit(curandState *rngState, unsigned long long seed);
+__global__ void DeviceRandInit(curandState *rngState, uint *d_seeds);
