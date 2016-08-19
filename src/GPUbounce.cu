@@ -974,12 +974,14 @@ int main(int argc, char *argv[])
           
           CudaErrorCheck();
 
-          h_randsV = d_randsV;
+       
 #ifdef DEBUG_RAND
+          h_randsV = d_randsV;
+          thrust::copy_n(d_randsV.begin(), No_of_C180s*192, h_randsV);
           printf("Rands at t %d\n", step);
           for (int i = 0; i < No_of_C180s*192; ++i){
               float3 r = h_randsV[i];
-              printf("(%d, %d) : (%f, %f, %f)\n", i/192, i%192, r.x, r.y, r.z);
+              printf("%d %d %f %f %f %f\n", i/192, i%192, r.x, r.y, r.z, mag(r));
           }
 #endif
           
