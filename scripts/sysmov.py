@@ -80,8 +80,8 @@ with cd.TrajHandle(trajPath) as th:
             cc = np.array([np.mean(c, axis=0) for c in frame])
             CoM.append(np.mean(cc, axis=0))
             cellCoMs.append(cc)
-        except cd.IncompleteTrajectoryError:
-            print("Trajectory is incomplete.")
+        except cd.IncompleteTrajectoryError as e:
+            print(e.value)
             print("Stopping")
             break
 
@@ -115,14 +115,17 @@ dur = (nFrames-1)*tPerFrame
 s = args.s
 
 ax = fig.add_subplot(1, 1, 1, projection='3d')
-xMax = s*np.max(CoM[:, 0])
-xMin = -1 * xMax
 
-yMax = s*np.max(CoM[:, 1])
-yMin = -1 * yMax
+maxes = np.max(np.vstack([np.max(np.vstack(f), axis=0) for f in cellCoMs]), axis=0)
+mins = np.min(np.vstack([np.min(np.vstack(f), axis=0) for f in cellCoMs]), axis=0)
+xMax = maxes[0]
+xMin = mins[0]
 
-zMax = s*np.max(CoM[:, 2])
-zMin = -1 * zMax
+yMax = maxes[1]
+yMin = mins[1]
+
+zMax = maxes[2]
+zMin = mins[2]
 
 ax.set_xlim3d([xMax, xMin])
 ax.set_ylim3d([yMax, yMin])
