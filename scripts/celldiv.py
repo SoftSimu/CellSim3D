@@ -10,6 +10,7 @@ class IncompleteTrajectoryError(Exception):
     def __str__(self):
         return repr(self.value)
 
+EndOfTrajectoryError = IncompleteTrajectoryError
 
 class TrajHandleBase(object):
     def __init__(self, filePath, numNodes=192):
@@ -159,11 +160,13 @@ class TrajHandleBinary(object):
             self.close()
             raise IncompleteTrajectoryError("Reading this trajectory failed.")
 
+        if self.lastFrameNum == self.maxFrames:
+            raise EndOfTrajectoryError("At end of trajectory.")
 
-        if self.frameReadFailed or self.lastFrameNum == self.maxFrames:
-            print("Can't read past frame %d" % self.currFrameNum)
+        if self.frameReadFailed:
             self.lastFrameNum = self.currFrameNum
-            return self.frame
+            raise IncompleteTrajectoryError("Can't read past frame %d" %
+                                            self.currFrameNum)
         else:
             try:
                 if frameNum is not None:
