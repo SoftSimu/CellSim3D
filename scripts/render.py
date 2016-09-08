@@ -30,22 +30,30 @@ parser.add_argument("trajPath", type=str,
                     help="Trajectory path. Absolute or relative.")
 
 parser.add_argument("-s", "--smooth", type=bool, required=False,
-                    help="Do smoothing (really expensive and doesn't look as good)")
+                    help="Do smoothing (really expensive and doesn't look as good)",
+                    default=False)
 
 parser.add_argument("-k", "--skip", type=int, required=False,
                     help="Trajectory frame skip rate. E.g. SKIP=10 will only \
-                    render every 10th frame.")
+                    render every 10th frame.",
+                    default=1)
 
 parser.add_argument("-nc", "--noclear", type=bool, required=False,
                     help="specifying this will not clear the destination directory\
-                    and restart rendering.")
+                    and restart rendering.",
+                    default=False)
+
 parser.add_argument("--min-cells", type=int, required=False,
-                    help='Start rendering when system has at least this many cells')
+                    help='Start rendering when system has at least this many cells',
+                    default=1)
 
 parser.add_argument("--inds", type=int, required=False, nargs='+',
-                    help="Only render cells with these indices")
+                    help="Only render cells with these indices",
+                    default=[])
+
 parser.add_argument("-nf", "--num-frames", type=int, required=False,
-                    help="Only render these many frames.")
+                    help="Only render these many frames.",
+                    default=sys.maxsize)
 
 args = parser.parse_args(argv)
 
@@ -54,9 +62,8 @@ firstfaces = []
 bpy.data.worlds["World"].horizon_color=[0.051, 0.051, 0.051]
 bpy.data.scenes["Scene"].render.alpha_mode='SKY'
 
-doSmooth = False
-if args.smooth:
-    doSmooth = True
+doSmooth = args.smooth
+if doSmooth:
     print("Doing smoothing. Consider avoiding this feature...")
 
 with open('C180_pentahexa.csv', newline='') as g:
@@ -69,16 +76,12 @@ filename = os.path.realpath(args.trajPath)
 basename = os.path.splitext(filename)[0] + "/images/CellDiv_"
 
 nSkip = args.skip
-if not nSkip:
-    nSkip = 1
 
-if nSkip is not None and nSkip > 1:
+if nSkip > 1:
     print("Skipping over every %dth" % nSkip, "frame...")
 
 
-noClear = False
-if args.noclear is not None:
-    noClear = args.noclear
+noClear = args.noclear
 
 sPath = os.path.splitext(filename)[0] + "/images/"
 
@@ -87,22 +90,17 @@ if not noClear and os.path.exists(sPath):
         os.remove(sPath+f)
 
 cellInds = []
-minInd = 0
-stopAt = float('inf')
+minInd = args.min_cells - 1
+if len(args.inds) > 0:
+    minInd = max(minInd, min(args.inds))
 
-if args.min_cells is not None:
-    minInd = args.min_cells
-
-if args.inds is not None:
-    minInd = max(args.inds)
-
-if args.num_frames is not None:
-    stopAt = args.num_frames
+stopAt = args.num_frames
 
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
-    for i in range(int(th.maxFrames/nSkip)):
-        try:
+    try:
+        for i in range(int(th.maxFrames/nSkip)):
+
             f = th.ReadFrame(inc=nSkip)
 
             if len(f) < minInd+1:
@@ -110,7 +108,7 @@ with celldiv.TrajHandle(filename) as th:
                       " skipping...")
                 continue
 
-            if args.inds is not None:
+            if len(args.inds) > 0:
                 f = [f[a] for a in args.inds]
 
             f = np.vstack(f)
@@ -151,6 +149,5 @@ with celldiv.TrajHandle(filename) as th:
             if frameCount > stopAt:
                 break
 
-        except celldiv.IncompleteTrajectoryError:
-            print ("Stopping...")
-            break
+    except celldiv.IncompleteTrajectoryError:
+        print ("Stopping...")
