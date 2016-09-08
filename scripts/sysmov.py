@@ -24,17 +24,17 @@ Creates snapshots of the movement  of the center of mass of the system of cells.
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument("trajPath", nargs=1, help="Path to the trajectory file.")
 
-parser.add_argument("--fps",
+parser.add_argument("-fps",
                     help="Optionally set the fps of the output video to this value",
                     default=20,
                     type=int)
 
-parser.add_argument("--s",
+parser.add_argument("-s",
                     help="Optionally set the scaling factor of the axes in the output video",
                     default=1,
                     type=float)
 
-parser.add_argument("--d",
+parser.add_argument("-d",
                     help="Directory relative to the root data directory to store the video.",
                     default="",
                     type=str)
@@ -42,7 +42,7 @@ parser.add_argument("--out",
                     help="Output file name and format",
                     default="3d_CoM.mp4",
                     type=str)
-parser.add_argument("--k",
+parser.add_argument("-k",
                     help="Skip interval",
                     type = int,
                     default =1);
