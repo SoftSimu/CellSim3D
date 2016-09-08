@@ -81,6 +81,19 @@ __host__ __device__ inline float3 operator/(const float3 b, const float a){
     return (1/a)*b;
 }
 
+__host__ __device__ inline bool operator==(const float3 &a, const float3 &b){
+    if (a.x == b.x &&
+        a.y == b.y &&
+        a.z == b.z)
+        return true;
+
+    return false;
+}
+
+__host__ __device__ inline bool operator!=(const float3 &a, const float3 &b){
+    return !(a==b);
+}
+
 __host__ __device__ inline float3 calcUnitVec(const float3 a){
     return a/mag(a);
 }
