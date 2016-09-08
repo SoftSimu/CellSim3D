@@ -58,14 +58,14 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls,
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod,
-                                bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList, float r_CM_o, curandState *rngState);
+                                bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList, float r_CM_o);
 
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
                           float *d_time, float mass,
-                          float3 *d_forceList, int numCells, curandState *rngStates, float3 *d_rands);
+                          float3 *d_forceList, int numCells, bool add_rands, curandState *rngStates, float rand_scale_factor);
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
@@ -111,4 +111,4 @@ __global__ void CheckCellDivision(int No_of_C180s, int *C180_56,
                                   int* d_C180_56,
                                   char* cell_div, float divVol, bool checkSpherecity);
 
-__global__ void DeviceRandInit(curandState *rngState, uint *d_seeds);
+__global__ void DeviceRandInit(curandState *rngState, uint *d_seeds, unsigned long long num);

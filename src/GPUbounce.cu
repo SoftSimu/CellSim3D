@@ -1,7 +1,7 @@
 //#define FORCE_DEBUG
 //#define PRINT_VOLUMES
-#define TURNOFF_RAN
-#define DEBUG_RAND
+//#define TURNOFF_RAN
+//#define DEBUG_RAND
 //#define OUTPUT_ADP_ERROR
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,11 +32,14 @@
 
 #include "json/json.h"
 
+
+void CudaFailure();
+
 #define CudaErrorCheck() { \
         cudaError_t e = cudaDeviceSynchronize();        \
         if (e!=cudaSuccess){                                            \
             printf("Cuda failure in %s, line %d, code %d %s\n", __FILE__, __LINE__, e, cudaGetErrorString(e)); \
-                            exit(0);                                    \
+            exit(0); \
         }\
     }
 
@@ -165,6 +168,15 @@ bool useRigidSimulationBox;
 bool usePBCs; 
 float* d_boxMin;
 
+// randomness parameters
+
+bool add_rands;
+unsigned long long rand_seed;
+int rand_dist;
+float rand_scale_factor;
+curandState *d_rngStates;
+unsigned int *d_seeds; 
+
 int No_of_threads; // ie number of staring cells
 int Side_length;
 int ex, ey;
@@ -239,8 +251,6 @@ int main(int argc, char *argv[])
   int noofblocks, threadsperblock, prevnoofblocks;
   int Orig_No_of_C180s, newcells;
   int reductionblocks;
-  //float PSS;
-  float s, theta, phi;
   FILE *outfile;
   FILE *trajfile; // pointer to xyz file
   cudaError_t myError;
@@ -533,10 +543,6 @@ int main(int argc, char *argv[])
   GPUMemory = totalGPUMem - freeGPUMem;
 
 
-
-
-
-
   cudaMemcpy(d_C180_nn,   C180_nn,   3*192*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_56,   C180_56,   7*92*sizeof(int),cudaMemcpyHostToDevice);
@@ -557,36 +563,44 @@ int main(int argc, char *argv[])
   // initialize device rng
 
 
-  thrust::device_vector<curandState> d_rngStatesV(MaxNoofC180s*192);
-  curandState* d_rngStates = thrust::raw_pointer_cast(&d_rngStatesV[0]);
 
-  unsigned long long seed = 42;
+
+    if (add_rands){
+      curandGenerator_t gen;
+      
+      if (cudaMalloc((void **)&d_rngStates, sizeof(curandState)*192*MaxNoofC180s) != cudaSuccess){
+          fprintf(stderr, "ERROR: Failed to allocate rng state memory in %s, at %d\n", __FILE__, __LINE__);
+          return 1;
+      }
+          
+
+      if (cudaMalloc((void **)&d_seeds, sizeof(unsigned int)*192*MaxNoofC180s) != cudaSuccess){
+          fprintf(stderr, "ERROR: Failed to allocate rng seeds in %s, at %d\n", __FILE__, __LINE__);
+          return 1;
+      }
+      
+
+      
+      
+      curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
+      CudaErrorCheck();
+
+      curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
+      CudaErrorCheck();
+
+      if (rand_seed > 0){
+          curandSetPseudoRandomGeneratorSeed(gen, rand_seed);
+          CudaErrorCheck();
+      }
+
+      curandGenerate(gen, d_seeds, MaxNoofC180s*192);
+      CudaErrorCheck();
   
-  thrust::device_vector<uint> d_seedsV(MaxNoofC180s*192);
-  uint *d_seeds = thrust::raw_pointer_cast(&d_seedsV[0]);
+      DeviceRandInit<<<(192*MaxNoofC180s)/1024 + 1, 1024>>>(d_rngStates, d_seeds, 192*MaxNoofC180s);
+      CudaErrorCheck();
+  }
 
-  
-  curandGenerator_t gen;
-  curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
-  CudaErrorCheck();
 
-  curandSetPseudoRandomGeneratorSeed(gen, seed);
-  CudaErrorCheck();
-
-  curandGenerate(gen, d_seeds, MaxNoofC180s*192);
-  CudaErrorCheck();
-  
-  DeviceRandInit<<<MaxNoofC180s/1024+1, 1024>>>(d_rngStates, d_seeds);
-  CudaErrorCheck();
-
-  thrust::device_vector<float3> d_randsV(MaxNoofC180s*192);
-  thrust::fill(d_randsV.begin(), d_randsV.end(), make_float3(0.f, 0.f, 0.f));
-  float3 *d_rands = thrust::raw_pointer_cast(&d_randsV[0]);
-
-  thrust::host_vector<float3> h_randsV(MaxNoofC180s*192);
-  thrust::fill(h_randsV.begin(), h_randsV.end(), make_float3(0.f, 0.f, 0.f));
-  
-  
   prevnoofblocks  = No_of_C180s;
   noofblocks      = No_of_C180s;
   threadsperblock = 192;
@@ -737,11 +751,12 @@ int main(int argc, char *argv[])
   // Setup simulation box, if needed (non-pbc)
   if (useRigidSimulationBox){
       printf("   Setup rigid (non-PBC) box...\n"); 
-      boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
+      boxLength = boxLength*ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
+      //if (boxLength < minBoxLength) boxLength = minBoxLength
       //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = floor(Minx[0] - 0.1);
-      boxMin[1] = floor(Minx[2] - 0.1);
-      boxMin[2] = floor(Minx[4] - 0.1);
+      boxMin[0] = floor(Minx[0]);
+      boxMin[1] = floor(Minx[2]);
+      boxMin[2] = floor(Minx[4]);
       printf("   Done!\n");
       printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
       printf("   Simulation box length = %f\n", boxLength);
@@ -876,7 +891,7 @@ int main(int argc, char *argv[])
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_forceList, r_CM_o, d_rngStates); 
+                                                      constrainAngles, d_theta0, d_forceList, r_CM_o); 
       CudaErrorCheck();
       if (doAdaptive_dt){
           adp_coeffs a;
@@ -919,7 +934,7 @@ int main(int argc, char *argv[])
                                                           threshDist, useWalls,
                                                           d_velListX, d_velListY, d_velListZ,
                                                           useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                          constrainAngles, d_theta0, d_forceList, r_CM_o, d_rngStates); 
+                                                          constrainAngles, d_theta0, d_forceList, r_CM_o); 
           CudaErrorCheck();
 
           Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
@@ -970,20 +985,9 @@ int main(int argc, char *argv[])
                                                      d_XM, d_YM, d_ZM, 
                                                      d_velListX, d_velListY, d_velListZ, 
                                                      d_time, mass,
-                                                     d_forceList, No_of_C180s, d_rngStates, d_rands);
+                                                     d_forceList, No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
           
           CudaErrorCheck();
-
-       
-#ifdef DEBUG_RAND
-          thrust::copy_n(d_randsV.begin(), No_of_C180s*192, h_randsV.begin());
-          printf("Rands at t %d\n", step);
-          for (int i = 0; i < No_of_C180s*192; ++i){
-              float3 r = h_randsV[i];
-              printf("%d %d %f %f %f %f\n", i/192, i%192, r.x, r.y, r.z, mag(r));
-          }
-#endif
-          
       }
       
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
@@ -1405,8 +1409,6 @@ int initialize_C180s(int Orig_No_of_C180s)
   }
   fclose(infil);
 
-  ranmar(ran2,Orig_No_of_C180s);
-
   for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
   {
       ey=rank%Side_length;
@@ -1418,8 +1420,19 @@ int initialize_C180s(int Orig_No_of_C180s)
           Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1;
           Z[rank*192+atom] = initz[atom] + zOffset;
       }
+
   }
 
+  if (useRigidSimulationBox){
+      ranmar(ran2, 2*Orig_No_of_C180s);
+      for (rank = 0; rank < Orig_No_of_C180s; ++rank){
+          for (atom=0; atom<180; ++atom){
+              X[rank*192 + atom] += ran2[rank] - 0.5;
+              Y[rank*192 + atom] += ran2[rank+1] - 0.5; 
+          }
+      }
+  }
+  
   return(0);
 }
 
@@ -1697,6 +1710,19 @@ int read_json_params(const char* inpFile){
         exit(-60); 
     }
 
+    Json::Value randParams = inpRoot.get("rand_params", Json::nullValue);
+
+    if (randParams == Json::nullValue){
+        printf("ERROR: Cannot load randomness parameters\n");
+        return -1;
+    }
+    else {
+        add_rands = randParams["add_rands"].asBool();
+        rand_seed = randParams["rand_seed"].asInt64();
+        rand_dist = randParams["rand_dist"].asInt();
+        rand_scale_factor = randParams["rand_scale_factor"].asFloat();
+    }
+
 
     printf("      mass                = %f\n",mass);
     printf("      spring equilibrium  = %f\n",R0);
@@ -1751,9 +1777,13 @@ int read_json_params(const char* inpFile){
     printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
     printf("      usePBCs             = %d\n", usePBCs);
     printf("      boxLength           = %f\n", boxLength);
-    printf("      dt_max              = %f\n", dt_max); 
-    printf("      dt_tol              = %f\n", dt_tol); 
     printf("      doAdaptive_dt       = %d\n", doAdaptive_dt); 
+    printf("      dt_max              = %f\n", dt_max); 
+    printf("      dt_tol              = %f\n", dt_tol);
+    printf("      add_rands           = %d\n", add_rands);
+    printf("      rand_seed           = %llu\n", rand_seed);
+    printf("      rand_scale_factor   = %f\n", rand_scale_factor);
+    
     
 
     if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){

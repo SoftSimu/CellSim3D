@@ -1,5 +1,5 @@
 // Input configuration for celldiv
-// This file follows the json format
+// This file follows the json format with support for c-style comments
 
 {
     // First we have the core parameters for the simulation
@@ -99,5 +99,15 @@
         "useRigidSimulationBox": 0,
         "usePBCs": 0,
         "boxLength": 5.0
+    },
+
+    "rand_params":{
+        "add_rands": 1,
+        "rand_seed": 42, // Use time if < 0
+        "rand_dist": 0, /*
+                          0 - uniform (default)
+                          Others to be impimented
+                        */
+        "rand_scale_factor": 0.001
     }
 }

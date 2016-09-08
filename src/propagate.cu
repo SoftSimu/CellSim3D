@@ -4,9 +4,13 @@
 #include<curand_kernel.h>
 #include "VectorFunctions.hpp"
 
-__global__ void DeviceRandInit(curandState *rngStates, uint *d_seeds){
+__global__ void DeviceRandInit(curandState *rngStates, uint *d_seeds, unsigned long long num){
     size_t idx = threadIdx.x + blockIdx.x*blockDim.x;
-    curand_init(d_seeds[idx], idx, 0, &rngStates[idx]);
+    if (idx < num){
+        curandState rS = rngStates[idx];
+        curand_init(d_seeds[idx], 0, 0 , &rS);
+        rngStates[idx] = rS; 
+    }
 }
 
 
@@ -177,7 +181,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, curandState *rngStates)
+                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -549,7 +553,8 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float *d_time, float mass,
-                          float3 *d_forceList, int numCells, curandState *rngStates, float3 *d_rands){
+                          float3 *d_forceList, int numCells, bool add_rands,
+                          curandState *rngStates, float rand_scale_factor){
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
     const float delta_t = d_time[0];
@@ -560,31 +565,38 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         float FX = d_forceList[nodeInd].x;
         float FY = d_forceList[nodeInd].y;
         float FZ = d_forceList[nodeInd].z;
-        curandState rngState = rngStates[nodeInd];
         
-        float3 r = 0.001*make_float3(curand_uniform(&rngState) - 0.5f,
-                                     curand_uniform(&rngState) - 0.5f,
-                                     curand_uniform(&rngState) - 0.5f);
-
-        d_rands[nodeInd] = r; 
         
         d_XP[nodeInd] =
             1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FX+2*d_X[nodeInd]+(delta_t/(2*mass)-1.0)*d_XM[nodeInd]) + r.x;
+            ((delta_t*delta_t/mass)*FX+2*d_X[nodeInd]+(delta_t/(2*mass)-1.0)*d_XM[nodeInd]);
         
         d_YP[nodeInd] =
             1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FY+2*d_Y[nodeInd]+(delta_t/(2*mass)-1.0)*d_YM[nodeInd]) + r.y;
+            ((delta_t*delta_t/mass)*FY+2*d_Y[nodeInd]+(delta_t/(2*mass)-1.0)*d_YM[nodeInd]);
         
         d_ZP[nodeInd] =
             1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]) + r.z;
+            ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]);
+
+
+
+        if (add_rands != 0){
+            curandState rngState = rngStates[nodeInd];
+            float3 r = rand_scale_factor*make_float3(curand_uniform(&rngState) - 0.5f,
+                                                     curand_uniform(&rngState) - 0.5f,
+                                                     curand_uniform(&rngState) - 0.5f);
+
+            d_XP[nodeInd] += r.x; 
+            d_YP[nodeInd] += r.y; 
+            d_ZP[nodeInd] += r.z; 
+            
+            rngStates[nodeInd] = rngState;
+        }
         
         d_velListX[nodeInd] = (d_XP[nodeInd] - d_XM[nodeInd])/(2*delta_t); 
         d_velListY[nodeInd] = (d_YP[nodeInd] - d_YM[nodeInd])/(2*delta_t); 
         d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_ZM[nodeInd])/(2*delta_t);
-
-        rngStates[nodeInd] = rngState;
     }
 }
 
