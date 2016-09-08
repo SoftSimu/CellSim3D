@@ -498,49 +498,45 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             // Wall repulsion
 
             float wallDist = d_Z[rank*192+atom] - wall1;
+
+            if (wallDist < 0) FZ += -10; 
             
-            if (abs(wallDist) <= threshDist){
-            //repulse
-                if (wallDist * FZ < 0) FZ = -FZ;
-            }
-
             wallDist = d_Z[rank*192+atom] - wall2;
-            if (abs(wallDist) <= threshDist){
-                
-                if (wallDist * FZ < 0) FZ = -FZ;
 
-            }
+            if (wallDist > 0) FZ += -10;
 
-            __syncthreads();
         }
 
         // add forces from simulation box if needed:
 
         if (useRigidSimulationBox){
             float gap1, gap2;
+            //boxLength = 0.5*boxLength;
             
             // X
             
             gap1 = d_X[atomInd] - d_boxMin[0];
-            gap2 = d_boxMin[0] + boxLength - d_X[atomInd];
+            gap2 = d_X[atomInd] - (d_boxMin[0] + boxLength); 
             
-            if (abs(gap1) < threshDist && gap1*FX < 0) FX = -FX;
-            if (abs(gap2) < threshDist && gap2*FX < 0) FX = -FX;
+            if (gap1 < 0) FX += -10*gap1;
+            if (gap2 > 0) FX += -10*gap2;
 
             // Y
 
             gap1 = d_Y[atomInd] - d_boxMin[1];
-            gap2 = d_boxMin[1] + boxLength - d_Y[atomInd];
+            gap2 = d_Y[atomInd] - (d_boxMin[1] + boxLength);
 
-            if (abs(gap1) < threshDist && gap1*FY < 0) FY = -FY;
-            if (abs(gap2) < threshDist && gap2*FY < 0) FY = -FY;
+
+            if (gap1 < 0) FY += -10*gap1; 
+            if (gap2 > 0) FY += -10*gap2; 
 
             // Z
             gap1 = d_Z[atomInd] - d_boxMin[2];
-            gap2 = d_boxMin[2] + boxLength - d_Z[atomInd];
+            // gap2 = d_Z[atomInd] - (d_boxMin[2] + boxLength);
+            gap2 = d_Z[atomInd] - (d_boxMin[2] + 1.0);
 
-            if (abs(gap1) < threshDist && gap1*FZ < 0) FZ = -FZ;
-            if (abs(gap2) < threshDist && gap2*FZ < 0) FZ = -FZ;
+            if (gap1 < 0) FZ += -10*gap1; 
+            if (gap2 > 0) FZ += -10*gap2; 
         }
 
         d_forceList[rank*192+atom] = make_float3(FX, FY, FZ); 
