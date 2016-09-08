@@ -173,12 +173,14 @@ class TrajHandleBinary(object):
                     if(self.GoToFrame(frameNum)):
                         return self.frame
 
-                self.GoToFrame(self.currFrameNum + inc)
+                if self.currFrameNum > 0:
+                    self.GoToFrame(self.currFrameNum + inc)
 
                 step = self._GetArray(np.int32, 1)[0]
                 frameNum = self._GetArray(np.int32, 1)[0]
                 nCells = self._GetArray(np.int32, 1)[0]
                 frame = [ np.zeros((192, 3)) for i in range(nCells)]
+                types = [0 for i in range(nCells)]
 
                 for i in range(nCells):
                     cellInd = self._GetArray(np.int32, 1)[0]
@@ -187,7 +189,7 @@ class TrajHandleBinary(object):
                     z = self._GetArray(np.float32, self.numPart)
 
                     if self.variableStiffness:
-                        cellType = self._GetArray(np.int32, 1)
+                        types[i] = self._GetArray(np.int32, 1)
 
                     frame[i][:, 0] = x
                     frame[i][:, 1] = y
@@ -199,6 +201,7 @@ class TrajHandleBinary(object):
                 self.lastFrameNum = self.currFrameNum
                 self.currFrameNum = frameNum
                 self.step = step
+                self.currTypes = types
 
                 return self.frame
             except IncompleteTrajectoryError as e:
