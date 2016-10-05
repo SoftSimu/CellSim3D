@@ -101,8 +101,10 @@ inline float getRmax2();
 
 inline int num_cells_far();
 
-__global__ void PressureUpdate (float* d_pressList, float maxPressure,
-                                float minPressure, float inc, int No_of_C180s);
+__global__ void PressureUpdate (float* d_pressList, float minPressure,
+                                float maxPressure, float inc, int No_of_C180s,
+                                bool useDifferentStiffnesses, float stiffness1,
+                                float* d_younds_mod, int step, int phase_count);
 
 __global__ void PressureReset (int* d_resetIndices, float* d_pressList,
                                float minPressure, int numResetCells);
