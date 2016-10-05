@@ -78,7 +78,7 @@ basename = os.path.splitext(filename)[0] + "/images/CellDiv_"
 nSkip = args.skip
 
 if nSkip > 1:
-    print("Skipping over every %dth" % nSkip, "frame...")
+    print("Rendering every %dth" % nSkip, "frame...")
 
 
 noClear = args.noclear
