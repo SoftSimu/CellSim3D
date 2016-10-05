@@ -21,11 +21,11 @@ $(objects): bin/%.o : src/%.cu
 	@mkdir -p $(@D)
 	$(compiler) $(oflags) -c $< -o $@
 
-CellDiv: $(objects) jsoncpp.o
+CellDiv: $(objects) bin/jsoncpp.o
 	$(compiler) $(eflags)
 
 # Third party libraries
-jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
+bin/jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
 	$(compiler) $(oflags) -c src/utils/jsoncpp.cpp -o $(objDir)/jsoncpp.o
 
 .PHONY: clean
