@@ -7,33 +7,35 @@
     // RESCALING
     "core": {
         "MaxNoofC180s": 10000,
-        "particle_mass": 0.04, // 0.00004
-        "repulsion_range": 0.2, // 1.0
-        "attraction_range": 0.3, // 1.5
+        "particle_mass": 0.04,
+        "repulsion_range": 0.2,
+        "attraction_range": 0.3,
         "repulsion_strength": 100.0,
         "attraction_strength": 0.5,
-        "Youngs_mod": 1000.0, // 1.0
-        "viscotic_damping": 15, // 0.015
-        "internal_damping": 100.0, // 0.1
-        "gamma_visc": 5, // 0.005
-        "division_Vol": 2.9, // 10.0
+        "Youngs_mod": 1000.0,
+        "stiffFactor1": 1.0,
+        "viscotic_damping": 15,
+        "internal_damping": 100.0,
+        "gamma_visc": 5,
+        "division_Vol": 2.9,
         "random_z_offset?": 0,
-        "z_offset": 0.0, // added to a random value if random_z_offset == 1
+        "z_offset": 0.0,
         "div_time_steps": 10000,
         "time_interval": 0.0001,
         "Restart": 0,
         "trajWriteInt": 100,
         "non_div_time_steps": 5000,
         "trajFileName": "traj_billiards.xyz",
-        "binaryOutput": 0,
-        "maxPressure": 65.0, // 0.065
-        "minPressure": 50.0, // 0.050
-        "growth_rate": 0.008, // 0.00004
-        "checkSphericity": 0,
+        "binaryOutput": 1,
+        "maxPressure": 65.0,
+        "minPressure": 50.0,
+        "growth_rate": 0.008,
+        "checkSphericity": 1,
         "constrainAngles": 1,
         "doAdaptive_dt": 0,
         "dt_max": 1e-4,
-        "dt_tol": 1e-8
+        "dt_tol": 1e-8,
+        "phase_count": 200000
     },
     // Now params related to cell counting
     // In theory, these params are not needed for the simulation to run.
@@ -81,29 +83,34 @@
 
     // Stiffness parameters
     "stiffnessParams":{
-        "useDifferentStiffnesses": 0, // below values must be changed if this is 1
-        "softYoungsMod": 800,
+       "useDifferentStiffnesses": 0, // below values must be changed if this is 1
+        "softStiffFactor": 0.8,
         "numberOfSofterCells": 0, // Don't use this param, it really sucks
                                   // fractionOfSofterCells is 10x better
         "fractionOfSofterCells": -1, // if this is > 0, numberOfSofterCells ignored
-        "daughtSameStiffness": 0,
-        "daughtSameStiffness": 0,
+        "daughtSameStiffness": 1,
         "duringGrowth": 0, // If this is true, everything below is ignored
         "closenessToCenter": 0, // cells within R*(1-ctc) will be softened, ctc=0.9 means very close
         "startAtPop": 2000,
-        "chooseRandomCellIndices": 0 // if this is one, closenessToCenter is ignored
+        "chooseRandomCellIndices": 0, // if this is one, closenessToCenter is ignored
+        "recalc_r0": 0
     },
 
     // Rigid box parameters
     "boxParams":{
         "useRigidSimulationBox": 0,
         "usePBCs": 0,
-        "boxLength": 5.0
+        "boxLength": 6.0,
+        "box_len_x": 20.0,
+        "box_len_y": 20.0,
+        "box_len_z": 20.0,
+        "flatbox": 0
     },
 
+
     "rand_params":{
-        "add_rands": 1,
-        "rand_seed": 42, // Use time if < 0
+        "add_rands": 0,
+        "rand_seed": -1, // Use time if < 0
         "rand_dist": 0, /*
                           0 - uniform (default)
                           Others to be impimented
