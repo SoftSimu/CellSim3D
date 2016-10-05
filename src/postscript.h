@@ -29,7 +29,9 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
                          char* cell_div, float divVol, bool checkSphericity,
-                         float* areaList);
+                         float* areaList, int phase_count, int step,
+                         float stiffness1, bool useDifferentStiffnesses, float* d_younds_mod,
+                         bool recalc_r0);
 
 int printboundingbox(int rank, float *bounding_xyz);
 int initialize_C180s(int Orig_No_of_C180s);

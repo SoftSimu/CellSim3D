@@ -6,7 +6,9 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
                          char* cell_div, float divVol, bool checkSphericity,
-                         float* areaList){
+                         float* areaList, int phase_count, int step,
+                         float stiffness1, bool useDifferentStiffnesses, float* d_younds_mod,
+                         bool recalc_r0){
     __shared__ float locX[192];
     __shared__ float locY[192];
     __shared__ float locZ[192];
@@ -156,8 +158,15 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                 //printf("cell %d division rejected\n", fullerene);
             }
         }
+
+        if (useDifferentStiffnesses){
+            if (recalc_r0){
+                if (d_younds_mod[fullerene] != stiffness1){
+                    cell_div[fullerene] = 0;
+                }
+            }
+        }
     }
-    
 }
 
 
