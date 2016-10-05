@@ -169,7 +169,7 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
 __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
+                           float* d_R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, const float *d_time,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
@@ -238,6 +238,9 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             printf("Crash now :(\n"); 
             asm("trap;"); 
         }
+
+        float R0 = d_R0[rank]; 
+
 
         stiffness = d_stiffness[rank];
         // printf("stiffness: %f\n", stiffness);

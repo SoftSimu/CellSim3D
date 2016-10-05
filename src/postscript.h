@@ -48,7 +48,7 @@ int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
 __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float R0, float* d_pressList, float* d_Youngs_mod , float cellStiffness,
+                           float* d_R0, float* d_pressList, float* d_Youngs_mod , float cellStiffness,
                            float internal_damping, const float *d_time,
                            float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
