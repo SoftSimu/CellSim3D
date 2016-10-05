@@ -3,6 +3,7 @@
 //#define TURNOFF_RAN
 //#define DEBUG_RAND
 //#define OUTPUT_ADP_ERROR
+//#degine RO_DEBUG
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -54,6 +55,8 @@ float Youngs_mod;
 float* d_Youngs_mod;
 float* youngsModArray; 
 bool useDifferentStiffnesses;
+bool recalc_r0; 
+int* d_indSoftCells;
 float softYoungsMod;
 int numberOfSofterCells;
 bool duringGrowth;
@@ -64,6 +67,8 @@ bool checkSphericity;
 
 bool chooseRandomCellIndices;
 float fractionOfSofterCells;
+int phase_count = INT_MAX; 
+
 
 float viscotic_damping, internal_damping;          //  C, DMP
 float gamma_visc;
@@ -92,7 +97,8 @@ char trajFileName[256];
 bool binaryOutput; 
 
 // equilibrium length of springs between fullerene atoms
-float R0  = 0.13517879937327418f;
+float R0  = 0.13517879937327418f; // why is this hard-coded?
+float* d_R0; 
 
 float L1  = 3.0f;       // the initial fullerenes are placed in
 // an X x Y grid of sizne L1 x L1
@@ -423,7 +429,15 @@ int main(int argc, char *argv[])
   thrust::host_vector<float> h_volume(MaxNoofC180s);
   thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
   d_volume = thrust::raw_pointer_cast(&d_volumeV[0]); 
-  
+
+
+  thrust::device_vector<float> d_R0V(MaxNoofC180s);
+  thrust::host_vector<float> h_R0V(MaxNoofC180s);
+  d_R0 = thrust::raw_pointer_cast(&d_R0V[0]);
+
+  thrust::fill(h_R0V.begin(), h_R0V.end(), R0);
+
+  d_R0V = h_R0V; 
   
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -484,17 +498,38 @@ int main(int argc, char *argv[])
           
           if (fractionOfSofterCells > 0){
               
-              int c = 0;
-              for (int i = 0; i < MaxNoofC180s; i++){
-                  float ran1[1];
-                  ranmar(ran1, 1);
-                  if (ran1[0] <= fractionOfSofterCells){
+              // for (int i = 0; i < MaxNoofC180s; i++){
+              //     float ran1[1];
+              //     ranmar(ran1, 1);
+              //     if (ran1[0] <= fractionOfSofterCells){
+              //         youngsModArray[i] = stiffness2;
+              //         c++; 
+              //     }
+              //     else
+              //         youngsModArray[i] = stiffness1;
+
+              int c = fractionOfSofterCells*No_of_C180s + 1;
+
+              CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                                d_XP, d_YP, d_ZP,
+                                                d_CMx, d_CMy, d_CMz);
+
+              cudaMemcpy(CMx, d_CMx, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+              cudaMemcpy(CMy, d_CMy, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+              cudaMemcpy(CMz, d_CMz, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+
+              float rMax = sqrt(getRmax2());
+              calc_sys_CM();
+              float f = closenessToCenter; 
+
+              for (int i =0; i < No_of_C180s; ++i){
+                  float r = mag(make_float3(CMx[i] - sysCMx, CMy[i] - sysCMy, CMz[i] - sysCMz));
+                  if (r/rMax >= f){
                       youngsModArray[i] = stiffness2;
-                      c++; 
                   }
-                  else
+                  else{
                       youngsModArray[i] = stiffness1;
-                  
+                  }
               }
               
               float fset = ((float)c)/((float)MaxNoofC180s);
@@ -833,6 +868,26 @@ int main(int argc, char *argv[])
       CudaErrorCheck(); 
   }
 
+  if (useDifferentStiffnesses && recalc_r0){
+
+      CalculateR0<<<No_of_C180s/1024 + 1, 1024>>>(d_R0,
+                                                  d_X, d_Y, d_Z,
+                                                  d_C180_nn,
+                                                  d_Youngs_mod,
+                                                  stiffness2,
+                                                  No_of_C180s);
+#ifdef RO_DEBUG
+      h_R0V = d_R0V;
+
+      cudaMemcpy(youngsModArray, d_Youngs_mod, sizeof(float)*MaxNoofC180s, cudaMemcpyDeviceToHost);
+      
+      for (int i =0; i < No_of_C180s; ++i){
+          std::cout << "Cell " << i << " R0 = "
+                    << h_R0V[i] << " E = " << youngsModArray[i] << std::endl;
+      }
+#endif
+  }
+
   // Different kind of pressure stuff
 
   float r_CM_o = pow((3.0/4.0) * (1/3.14159) * divVol*2.0, 1.0/3);
@@ -841,7 +896,7 @@ int main(int argc, char *argv[])
   printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
   printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
 
-  
+  bool phase = true; 
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -857,7 +912,9 @@ int main(int argc, char *argv[])
       else {
       rGrowth = rMax;
       }
-      PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s);
+      PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s,
+                                                       useDifferentStiffnesses, stiffness1, d_Youngs_mod, step,
+                                                       phase_count);
       CudaErrorCheck(); 
       
       if ( (step)%1000 == 0)
@@ -881,7 +938,7 @@ int main(int argc, char *argv[])
       CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                       d_X,  d_Y,  d_Z,
                                                       d_CMx, d_CMy, d_CMz,
-                                                      R0, d_pressList, d_Youngs_mod , stiffness1, 
+                                                      d_R0, d_pressList, d_Youngs_mod , stiffness1, 
                                                       internal_damping, d_time, d_bounding_xyz,
                                                       attraction_strength, attraction_range,
                                                       repulsion_strength, repulsion_range,
@@ -924,7 +981,7 @@ int main(int argc, char *argv[])
           CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                           d_XP,  d_YP,  d_ZP,
                                                           d_CMx, d_CMy, d_CMz,
-                                                          R0, d_pressList, d_Youngs_mod , stiffness1, 
+                                                          d_R0, d_pressList, d_Youngs_mod , stiffness1, 
                                                           internal_damping, d_time, d_bounding_xyz,
                                                           attraction_strength, attraction_range,
                                                           repulsion_strength, repulsion_range,
@@ -1002,7 +1059,9 @@ int main(int argc, char *argv[])
                                      d_XP, d_YP, d_ZP,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol,
-                                     checkSphericity, d_area);
+                                     checkSphericity, d_area, phase_count, step,
+                                     stiffness1, useDifferentStiffnesses, d_Youngs_mod,
+                                     recalc_r0);
         CudaErrorCheck();
 
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
@@ -1082,9 +1141,7 @@ int main(int argc, char *argv[])
 
           if (daughtSameStiffness){
               youngsModArray[No_of_C180s] = youngsModArray[globalrank];
-              cudaMemcpy(d_Youngs_mod+No_of_C180s, youngsModArray+No_of_C180s,
-                         sizeof(float), cudaMemcpyHostToDevice);
-              CudaErrorCheck();
+              
           }
           
           ++No_of_C180s;
@@ -1104,6 +1161,12 @@ int main(int argc, char *argv[])
 
             PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
             CudaErrorCheck();
+
+            if (daughtSameStiffness){
+                cudaMemcpy(d_Youngs_mod, youngsModArray,
+                           sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+                CudaErrorCheck();
+            }
         }
         totalFood -= num_cell_div*cellFoodConsDiv;
         
@@ -1286,6 +1349,30 @@ int main(int argc, char *argv[])
       if ( cudaSuccess != myError )
       {
           printf( "Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
+      }
+
+      if (step > phase_count && phase){
+          printf("In phase 2\n");
+          phase = false;
+          if (useDifferentStiffnesses && recalc_r0){
+              CalculateR0<<<No_of_C180s/1024 + 1, 1024>>>(d_R0,
+                                                          d_X, d_Y, d_Z,
+                                                          d_C180_nn,
+                                                          d_Youngs_mod,
+                                                          stiffness2,
+                                                          No_of_C180s);
+#ifdef RO_DEBUG
+              thrust::fill(h_R0V.begin(), h_R0V.end(), 0.f);
+              h_R0V = d_R0V;
+          
+              cudaMemcpy(youngsModArray, d_Youngs_mod, sizeof(float)*MaxNoofC180s, cudaMemcpyDeviceToHost);
+      
+              for (int i =0; i < No_of_C180s; ++i){
+                  std::cout << "Cell " << i << " R0 = "
+                            << h_R0V[i] << " E = " << youngsModArray[i] << std::endl;
+              }
+#endif
+          }
       }
   }
 
@@ -1612,7 +1699,8 @@ int read_json_params(const char* inpFile){
         constrainAngles = coreParams["constrainAngles"].asBool();
         dt_max = coreParams["dt_max"].asFloat();
         dt_tol = coreParams["dt_tol"].asFloat();
-        doAdaptive_dt = coreParams["doAdaptive_dt"].asBool(); 
+        doAdaptive_dt = coreParams["doAdaptive_dt"].asBool();
+        phase_count = coreParams["phase_count"].asInt();
     }
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);
@@ -1686,7 +1774,8 @@ int read_json_params(const char* inpFile){
         startAtPop = stiffnessParams["startAtPop"].asInt();
         fractionOfSofterCells = stiffnessParams["fractionOfSofterCells"].asFloat();
         chooseRandomCellIndices = stiffnessParams["chooseRandomCellIndices"].asBool();
-        daughtSameStiffness = stiffnessParams["daughtSameStiffness"].asBool(); 
+        daughtSameStiffness = stiffnessParams["daughtSameStiffness"].asBool();
+        recalc_r0 = stiffnessParams["recalc_r0"].asBool();
     }
 
     Json::Value boxParams = inpRoot.get("boxParams", Json::nullValue);
@@ -1774,15 +1863,21 @@ int read_json_params(const char* inpFile){
     printf("      fractionOfSofterCells   = %f\n", fractionOfSofterCells);
     printf("      chooseRandomCellIndices = %d\n", chooseRandomCellIndices);
     printf("      daughtSameStiffness = %d\n", daughtSameStiffness);
+    printf("      recalc_r0           = %d\n", recalc_r0);
     printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
     printf("      usePBCs             = %d\n", usePBCs);
     printf("      boxLength           = %f\n", boxLength);
+    printf("      box_len_x           = %f\n", boxMax.x);
+    printf("      box_len_y           = %f\n", boxMax.y);
+    printf("      box_len_z           = %f\n", boxMax.z);
+    printf("      flatbox             = %d\n", flatbox); 
     printf("      doAdaptive_dt       = %d\n", doAdaptive_dt); 
     printf("      dt_max              = %f\n", dt_max); 
     printf("      dt_tol              = %f\n", dt_tol);
     printf("      add_rands           = %d\n", add_rands);
     printf("      rand_seed           = %llu\n", rand_seed);
     printf("      rand_scale_factor   = %f\n", rand_scale_factor);
+    printf("      phase_count         = %d\n", phase_count);
     
     
 
