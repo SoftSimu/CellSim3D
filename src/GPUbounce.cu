@@ -1071,10 +1071,11 @@ int main(int argc, char *argv[])
           //cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
           h_volume = d_volumeV; 
           cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
           printf("time: %d\n", step); 
           for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f, area=%f, psi=%f", i, h_volume[i], area[i],
-                      4.835975862049408*pow(h_volume[i], 2.0/3.0)/area[i]);
+              printf ("Cell: %d, volume= %f, area=%f, psi=%f, p = %f" , i, h_volume[i], area[i],
+                      4.835975862049408*pow(h_volume[i], 2.0/3.0)/area[i], pressList[i]);
           
               if (h_volume[i] > divVol)
                   printf(", I'm too big :(");
@@ -1339,12 +1340,6 @@ int main(int argc, char *argv[])
               WriteBinaryTraj(step, trajfile, frameCount);
           else
               write_traj(step, trajfile);
-
-          // cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          // cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          // cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          
-          // write_vel(step, velFile); 
       }
 
       myError = cudaGetLastError();
