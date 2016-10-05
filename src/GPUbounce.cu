@@ -170,6 +170,8 @@ float wallWStart, wallWEnd;
 float wallLStart, wallLEnd;
 
 float boxLength, boxMin[3];
+float3 boxMax;
+bool flatbox; 
 bool useRigidSimulationBox;
 bool usePBCs; 
 float* d_boxMin;
@@ -948,7 +950,7 @@ int main(int argc, char *argv[])
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_forceList, r_CM_o); 
+                                                      constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax); 
       CudaErrorCheck();
       if (doAdaptive_dt){
           adp_coeffs a;
@@ -991,7 +993,7 @@ int main(int argc, char *argv[])
                                                           threshDist, useWalls,
                                                           d_velListX, d_velListY, d_velListZ,
                                                           useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                          constrainAngles, d_theta0, d_forceList, r_CM_o); 
+                                                          constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax); 
           CudaErrorCheck();
 
           Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
@@ -1496,30 +1498,40 @@ int initialize_C180s(int Orig_No_of_C180s)
   }
   fclose(infil);
 
-  for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
-  {
-      ey=rank%Side_length;
-      ex=rank/Side_length;
-
-      for ( atom = 0 ; atom < 180 ; ++atom)
-      {
-          X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1;
-          Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1;
-          Z[rank*192+atom] = initz[atom] + zOffset;
-      }
-
-  }
-
   if (useRigidSimulationBox){
-      ranmar(ran2, 2*Orig_No_of_C180s);
-      for (rank = 0; rank < Orig_No_of_C180s; ++rank){
-          for (atom=0; atom<180; ++atom){
-              X[rank*192 + atom] += ran2[rank] - 0.5;
-              Y[rank*192 + atom] += ran2[rank+1] - 0.5; 
+      float rands[Orig_No_of_C180s*3];
+      ranmar(rands, Orig_No_of_C180s*3);
+      
+      for (int cellInd = 0; cellInd < Orig_No_of_C180s; ++cellInd){
+          for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+              X[cellInd*192 + nodeInd] = initx[nodeInd] + rands[cellInd*3 + 0]*(boxMax.x - 1.f) + 1.f;
+              Y[cellInd*192 + nodeInd] = inity[nodeInd] + rands[cellInd*3 + 1]*(boxMax.y - 1.f) + 1.f;
+              if (flatbox == 1){
+                  Z[cellInd*192 + nodeInd] = initz[nodeInd] + boxMax.z/2;
+              }
+              else{
+                  Z[cellInd*192 + nodeInd] = initz[nodeInd] + rands[cellInd*3 + 2]*(boxMax.z - 1.f) + 1.f; 
+              }
           }
       }
+      
   }
-  
+  else{
+      for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
+      {
+          ey=rank%Side_length;
+          ex=rank/Side_length;
+
+          for ( atom = 0 ; atom < 180 ; ++atom)
+          {
+              X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1;
+              Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1;
+              Z[rank*192+atom] = initz[atom] + zOffset;
+          }
+
+      }
+  }
+
   return(0);
 }
 
@@ -1786,7 +1798,11 @@ int read_json_params(const char* inpFile){
     } else{
         useRigidSimulationBox = boxParams["useRigidSimulationBox"].asBool();
         usePBCs = boxParams["usePBCs"].asBool();
-        boxLength = boxParams["boxLength"].asFloat(); 
+        boxLength = boxParams["boxLength"].asFloat();
+        boxMax.x = boxParams["box_len_x"].asFloat();
+        boxMax.y = boxParams["box_len_y"].asFloat(); 
+        boxMax.z = boxParams["box_len_z"].asFloat();
+        flatbox = boxParams["flatbox"].asBool();
     }
     
     
