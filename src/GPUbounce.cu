@@ -290,7 +290,8 @@ int main(int argc, char *argv[])
   printf("%d\n", MaxNoofC180s); 
 
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
-  if ( No_of_threads > MaxNoofC180s || Side_length*Side_length != No_of_threads )
+  if ( No_of_threads > MaxNoofC180s // Side_length*Side_length != No_of_threads
+      )
   {
       printf("Usage: Celldiv no_of_threads\n");
       printf("       no_of_threads should be a square, n^2, < %d\n", MaxNoofC180s);
@@ -486,87 +487,7 @@ int main(int argc, char *argv[])
   
   cudaMemcpy(d_area, area, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
-  // Set the Youngs_mod for the cells
-  youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
-  if (useDifferentStiffnesses){
-      
-      if (!duringGrowth){
-          
-          for (int i = 0; i < MaxNoofC180s; i++){
-              youngsModArray[i] = stiffness1;
-          }
-          
-      } else {
-          
-          if (fractionOfSofterCells > 0){
-              
-              // for (int i = 0; i < MaxNoofC180s; i++){
-              //     float ran1[1];
-              //     ranmar(ran1, 1);
-              //     if (ran1[0] <= fractionOfSofterCells){
-              //         youngsModArray[i] = stiffness2;
-              //         c++; 
-              //     }
-              //     else
-              //         youngsModArray[i] = stiffness1;
 
-              int c = fractionOfSofterCells*No_of_C180s + 1;
-
-              CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                                d_XP, d_YP, d_ZP,
-                                                d_CMx, d_CMy, d_CMz);
-
-              cudaMemcpy(CMx, d_CMx, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-              cudaMemcpy(CMy, d_CMy, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-              cudaMemcpy(CMz, d_CMz, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-
-              float rMax = sqrt(getRmax2());
-              calc_sys_CM();
-              float f = closenessToCenter; 
-
-              for (int i =0; i < No_of_C180s; ++i){
-                  float r = mag(make_float3(CMx[i] - sysCMx, CMy[i] - sysCMy, CMz[i] - sysCMz));
-                  if (r/rMax >= f){
-                      youngsModArray[i] = stiffness2;
-                  }
-                  else{
-                      youngsModArray[i] = stiffness1;
-                  }
-              }
-              
-              float fset = ((float)c)/((float)MaxNoofC180s);
-              if ( abs(fset - fractionOfSofterCells) > 1e-1 )
-                  printf("WARNING: %.2f %% cells set to softer, %.2f %% requested\n",
-                         fset*100, fractionOfSofterCells*100);
-              
-          } else if (numberOfSofterCells > 0){
-              
-              if (!chooseRandomCellIndices){
-                  printf("ERROR: Cell indices can only be chose randomly during growth\n");
-                  return -11;
-              }
-              
-              for (int i = 0; i < numberOfSofterCells; i++){
-                  youngsModArray[i] = stiffness2; 
-              }
-
-               for (int i = numberOfSofterCells; i < MaxNoofC180s; i++){
-                  youngsModArray[i] = stiffness1; 
-              }
-              
-          }
-          
-      }
-  } else if (!useDifferentStiffnesses){
-      
-      for (int i = 0; i < MaxNoofC180s; i++){
-          youngsModArray[i] = stiffness1;
-      }
-  }
-
-  
-  cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck();
         
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
@@ -597,9 +518,86 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
 
 
+
+  // Set the Youngs_mod for the cells
+  youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
+  for (int i =  0; i < MaxNoofC180s; ++i){
+      youngsModArray[i] = stiffness1; 
+  }
+  
+  if (useDifferentStiffnesses){
+      printf("Making some cells softer... \n");
+      if (closenessToCenter > 0.f && closenessToCenter < 1.f){
+          printf("Only making cells within %f of max radius softer\n", closenessToCenter);
+          CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                            d_XP, d_YP, d_ZP,
+                                            d_CMx, d_CMy, d_CMz);
+          
+          cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+          float3 sysCM = make_float3(0.f, 0.f, 0.f);
+
+          for(int i =0; i < No_of_C180s; ++i){
+              sysCM = sysCM + make_float3(CMx[i], CMy[i], CMz[i]);
+          }
+
+          sysCM = sysCM/No_of_C180s; 
+          
+          printf("COM = (%f, %f, %f)\n", sysCM.x, sysCM.y, sysCM.z);
+
+          float rMax = 0;
+          float mags[No_of_C180s];
+          
+          for (int i =0; i < No_of_C180s; ++i){
+              float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
+              mags[i] = mag(pos);
+              rMax = max(rMax, mags[i]);
+          }
+          int c = 0; 
+          for (int i = 0; i < No_of_C180s; ++i){
+              if (mags[i]/rMax <= closenessToCenter){
+                  youngsModArray[i] = stiffness2;
+                  ++c; 
+              }
+          }
+
+          printf("Made %d cells softer\n", c);
+          
+      } else {
+
+          printf("Choosing softer cells randomly\n");
+          int c = numberOfSofterCells;
+          if (fractionOfSofterCells > 0.f && fractionOfSofterCells < 1.f){
+              c = round(fractionOfSofterCells*(float)No_of_C180s);
+          }
+
+          if (c > No_of_C180s){
+              printf("ERROR: Too many softer cells requested\n");
+              return 12516;
+          }
+
+          if (useRigidSimulationBox){
+              for (int i =0; i < c; ++i){
+                  youngsModArray[i] = stiffness2; 
+              }
+          } else {
+              float rands[1];
+              for (int i =0; i < c; ++i){
+                  ranmar(rands, 1);
+                  int ind = round(rands[0]*No_of_C180s);
+                  youngsModArray[ind] = stiffness2; 
+              }
+          }
+          printf("Made %d cells softer\n", c);
+      }
+  }
+
+  cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  
   // initialize device rng
-
-
 
 
     if (add_rands){
@@ -1145,6 +1143,8 @@ int main(int argc, char *argv[])
           if (daughtSameStiffness){
               youngsModArray[No_of_C180s] = youngsModArray[globalrank];
               
+          } else {
+              youngsModArray[No_of_C180s] = stiffness1; 
           }
           
           ++No_of_C180s;
@@ -1165,11 +1165,10 @@ int main(int argc, char *argv[])
             PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
             CudaErrorCheck();
 
-            if (daughtSameStiffness){
-                cudaMemcpy(d_Youngs_mod, youngsModArray,
-                           sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-                CudaErrorCheck();
-            }
+            cudaMemcpy(d_Youngs_mod, youngsModArray,
+                       sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+            CudaErrorCheck();
+
         }
         totalFood -= num_cell_div*cellFoodConsDiv;
         
@@ -1494,22 +1493,67 @@ int initialize_C180s(int Orig_No_of_C180s)
   fclose(infil);
 
   if (useRigidSimulationBox){
-      float rands[Orig_No_of_C180s*3];
-      ranmar(rands, Orig_No_of_C180s*3);
-      
-      for (int cellInd = 0; cellInd < Orig_No_of_C180s; ++cellInd){
-          for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-              X[cellInd*192 + nodeInd] = initx[nodeInd] + rands[cellInd*3 + 0]*(boxMax.x - 1.f) + 1.f;
-              Y[cellInd*192 + nodeInd] = inity[nodeInd] + rands[cellInd*3 + 1]*(boxMax.y - 1.f) + 1.f;
-              if (flatbox == 1){
-                  Z[cellInd*192 + nodeInd] = initz[nodeInd] + boxMax.z/2;
-              }
-              else{
-                  Z[cellInd*192 + nodeInd] = initz[nodeInd] + rands[cellInd*3 + 2]*(boxMax.z - 1.f) + 1.f; 
+      float rCheck = ceil(powf(0.75*(1.f/3.14159)*divVol, 1.f/3.f));
+      printf("Check radius = %f\n", rCheck);
+      float3 allCMs[Orig_No_of_C180s];
+
+      float vol = 0;
+      int k = 0;
+      if (flatbox == 1){
+          vol = boxMax.x*boxMax.y;
+          k = ceil(vol/(rCheck*rCheck*4));
+      } else {
+          vol = boxMax.x*boxMax.y*boxMax.z;
+          k = ceil(vol/(rCheck*rCheck*rCheck*8));
+      }
+
+      if (k <= Orig_No_of_C180s){
+          fprintf(stderr, "ERROR: Simulation box is too small\n");
+          fprintf(stderr, "       Big enough for %d\n", k);
+          return 27;
+      }
+
+      int c = 0;
+      float rands[3];
+      while (true){
+          ranmar(rands, 3);
+          float3 CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
+                                  rands[1]*(boxMax.y - 1.f)  + 1.f,
+                                  0.f);
+          if (flatbox == 1){
+              CM.z = boxMax.z/2;
+          } else {
+              CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
+          }
+
+          bool farEnough = true; 
+          for (int nInd = 0; nInd < c; ++nInd){
+              if (mag(allCMs[nInd] - CM) < 2*rCheck ||
+                  CM.x+rCheck > boxMax.x ||
+                  CM.y+rCheck > boxMax.y ||
+                  CM.z+rCheck > boxMax.z){
+                  farEnough = false;
+                  break;
               }
           }
+          
+          if (farEnough){
+              allCMs[c] = CM; 
+              c++;
+          }
+          
+          if (c == Orig_No_of_C180s){
+              break;
+          }
       }
-      
+
+      for (int cellInd = 0; cellInd < Orig_No_of_C180s; ++cellInd){
+          for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+              X[cellInd*192 + nodeInd] = initx[nodeInd] + allCMs[cellInd].x;
+              Y[cellInd*192 + nodeInd] = inity[nodeInd] + allCMs[cellInd].y;
+              Z[cellInd*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
+          }
+      }
   }
   else{
       for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
