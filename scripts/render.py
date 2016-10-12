@@ -54,12 +54,18 @@ parser.add_argument("--inds", type=int, required=False, nargs='+',
 parser.add_argument("-nf", "--num-frames", type=int, required=False,
                     help="Only render these many frames.",
                     default=sys.maxsize)
+parser.add_argument("-w", "--white", type=bool, required=False, default=False,
+                    help='Render with white background if this is set')
 
 args = parser.parse_args(argv)
 
 imageindex = 0
 firstfaces = []
 bpy.data.worlds["World"].horizon_color=[0.051, 0.051, 0.051]
+
+if args.white:
+    bpy.data.worlds["World"].horizon_color=[1,1,1]
+
 bpy.data.scenes["Scene"].render.alpha_mode='SKY'
 
 doSmooth = args.smooth
@@ -141,6 +147,7 @@ with celldiv.TrajHandle(filename) as th:
             imagename = basename + "%d.png" % frameCount
             frameCount += 1
             bpy.context.scene.render.filepath = imagename
+
 
             bpy.ops.render.render(write_still=True)  # render to file
 
