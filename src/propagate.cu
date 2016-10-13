@@ -181,7 +181,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, float3 boxMax)
+                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -365,7 +365,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         if ( startz >= Zdiv ) startz = Zdiv-1;
 
         int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
-
+        float3 contactForce = make_float3(0.f, 0.f, 0.f);
         // interfullerene attraction and repulsion
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
@@ -422,9 +422,10 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                     // FY += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
                     // FZ += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
 
-                    FX += -500*(attraction_range-R)/R*deltaX;
-                    FY += -500*(attraction_range-R)/R*deltaY;
-                    FZ += -500*(attraction_range-R)/R*deltaZ;
+                    contactForce.x += -500*(attraction_range-R)/R*deltaX;
+                    contactForce.y += -500*(attraction_range-R)/R*deltaY;
+                    contactForce.z += -500*(attraction_range-R)/R*deltaZ;
+                    
 
                     // hinder rearrangements
 
@@ -441,9 +442,9 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                     float vTauY = v_ijy - vijDotn*NY;
                     float vTauZ = v_ijz - vijDotn*NZ; 
 
-                    FX -= viscotic_damping*vTauX;
-                    FY -= viscotic_damping*vTauY;
-                    FZ -= viscotic_damping*vTauZ;
+                    contactForce.x -= viscotic_damping*vTauX;
+                    contactForce.y -= viscotic_damping*vTauY;
+                    contactForce.z -= viscotic_damping*vTauZ;
                 }
                 if ( R < repulsion_range )
                 {
@@ -452,9 +453,9 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                     // FY += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
                     // FZ += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
 
-                    FX += +100000*(repulsion_range-R)/R*deltaX;
-                    FY += +100000*(repulsion_range-R)/R*deltaY;
-                    FZ += +100000*(repulsion_range-R)/R*deltaZ;
+                    contactForce.x += +100000*(repulsion_range-R)/R*deltaX;
+                    contactForce.y += +100000*(repulsion_range-R)/R*deltaY;
+                    contactForce.z += +100000*(repulsion_range-R)/R*deltaZ;
                     // if ( deltaX*(d_CMx[rank]-d_CMx[nn_rank])  +
                     //      deltaY*(d_CMy[rank]-d_CMy[nn_rank])  +
                     //      deltaZ*(d_CMz[rank]-d_CMz[nn_rank]) < 0.0f )
@@ -466,6 +467,14 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             }
 
         }
+
+        d_contactForces.x[atomInd] = contactForce.x;
+        d_contactForces.y[atomInd] = contactForce.y;
+        d_contactForces.z[atomInd] = contactForce.z;
+
+        FX += contactForce.x;
+        FY += contactForce.y;
+        FZ += contactForce.z; 
 
 #ifdef FORCE_DEBUG
 

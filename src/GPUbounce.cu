@@ -67,7 +67,9 @@ bool checkSphericity;
 
 bool chooseRandomCellIndices;
 float fractionOfSofterCells;
-int phase_count = INT_MAX; 
+int phase_count = INT_MAX;
+bool write_cont_force=false;
+char forces_file[256];
 
 
 float viscotic_damping, internal_damping;          //  C, DMP
@@ -387,6 +389,19 @@ int main(int argc, char *argv[])
   thrust::fill(d_forceListV.begin(), d_forceListV.end(), make_float3(0.f, 0.f, 0.f));
   d_forceList = thrust::raw_pointer_cast(&d_forceListV[0]);
 
+  
+  R3NVectors d_contactForcesV;
+  hR3NVectors h_contactForcesV;
+
+  InitR3NVecs(d_contactForcesV, 192*MaxNoofC180s);
+  
+  InitR3NVecs(h_contactForcesV, 192*MaxNoofC180s);
+
+  R3Nptrs d_contactForces;
+
+  setR3Nptrs(d_contactForces, d_contactForcesV);
+  
+
   thrust::device_vector<float> d_XMMV(MaxNoofC180s*192);
   thrust::fill(d_XMMV.begin(), d_XMMV.end(), 0.f);
   float *d_XMM = thrust::raw_pointer_cast(&d_XMMV[0]);
@@ -494,7 +509,8 @@ int main(int argc, char *argv[])
   size_t freeGPUMem;
 
   if ( cudaSuccess != cudaMemGetInfo ( &freeGPUMem, &totalGPUMem ) ) {
-      printf("Couldn't read GPU Memory status\nExiting...");
+      printf("Couldn't read GPU Memory status\nExiting...\n");
+      CudaErrorCheck();
       exit(1);
   }
 
@@ -673,6 +689,8 @@ int main(int argc, char *argv[])
       printf("Failed to open %s \n", trajFileName);
       return -1;
   }
+
+  FILE* forceFile = fopen(forces_file, "w"); 
 
   FILE* velFile = fopen("velocity2.xyz", "w");
 
@@ -948,7 +966,7 @@ int main(int argc, char *argv[])
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax); 
+                                                      constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax, d_contactForces); 
       CudaErrorCheck();
       if (doAdaptive_dt){
           adp_coeffs a;
@@ -991,7 +1009,7 @@ int main(int argc, char *argv[])
                                                           threshDist, useWalls,
                                                           d_velListX, d_velListY, d_velListZ,
                                                           useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                          constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax); 
+                                                          constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax, d_contactForces); 
           CudaErrorCheck();
 
           Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
@@ -1339,6 +1357,11 @@ int main(int argc, char *argv[])
               WriteBinaryTraj(step, trajfile, frameCount);
           else
               write_traj(step, trajfile);
+
+          if (write_cont_force == true){
+              CopyR3NvecsToHost(h_contactForcesV, d_contactForcesV, 192*No_of_C180s);
+              writeForces(forceFile, step, No_of_C180s, h_contactForcesV);
+          }
       }
 
       myError = cudaGetLastError();
@@ -1451,6 +1474,7 @@ int main(int argc, char *argv[])
   free(velListZ); 
 
   fclose(trajfile);
+  fclose(forceFile);
   fclose(MitIndFile);
 #ifdef OUTPUT_ADP_ERROR
   fclose(timeFile);
@@ -1752,6 +1776,8 @@ int read_json_params(const char* inpFile){
         dt_tol = coreParams["dt_tol"].asFloat();
         doAdaptive_dt = coreParams["doAdaptive_dt"].asBool();
         phase_count = coreParams["phase_count"].asInt();
+        write_cont_force = coreParams["write_cont_force"].asBool();
+        std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
     }
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);
@@ -2334,3 +2360,23 @@ inline int num_cells_far(){
   return farCellCount;
 
 }
+
+void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces){
+    if(forceFile == NULL){
+        printf("ERROR: forces file not available\n");
+        exit(1);
+    }
+
+    fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ\n");
+
+    for (int c =0; c < num_cells; ++c){
+        for (int n = 0; n < 192; ++n){
+            fprintf(forceFile, "%d,%d,%d,%d,%d,%.6f,%.6f,%.6f\n",
+                    t_step, num_cells, c, n, c*192+n,
+                    h_contactForces.x[c*192 + n],
+                    h_contactForces.y[c*192 + n],
+                    h_contactForces.z[c*192 + n]);
+        }
+    }
+}
+
