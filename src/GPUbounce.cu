@@ -1609,15 +1609,19 @@ int generate_random(int no_of_ran1_vectors)
 
   ran2 = (float *)calloc(MaxNoofC180s+1,sizeof(float));
   CPUMemory += (MaxNoofC180s+1L)*sizeof(float);
-
-  time_t current_time;
-  time(&current_time);
-  seed_ij = (int)current_time;
-  localtime(&current_time);
-  seed_kl = (int)current_time;
+  if (rand_seed < 0){
+      time_t current_time;
+      time(&current_time);
+      seed_ij = (int)current_time;
+      localtime(&current_time);
+      seed_kl = (int)current_time;
   
-  ij = seed_ij%31328;
-  kl = seed_kl%30081;
+      ij = seed_ij%31328;
+      kl = seed_kl%30081;
+  } else {
+      ij = rand_seed;
+      kl = rand_seed*100;
+  }
 
 #ifdef TURNOFF_RAN
   ij = 80;
