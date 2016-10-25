@@ -21,3 +21,5 @@ graphs/*
 ./bin/*
 *.bak*
 *.gz
+*.csv
+*.h5
