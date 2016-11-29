@@ -23,9 +23,6 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         locX[tid] = X[192*fullerene+tid] -CMx[fullerene];
         locY[tid] = Y[192*fullerene+tid] -CMy[fullerene];
         locZ[tid] = Z[192*fullerene+tid] -CMz[fullerene];
-        // if (fullerene > 2751){
-        //     printf("full %d node %d (%f, %f, %f)\n", fullerene, tid, locX[tid], locY[tid], locZ[tid]);
-        // }
     }
 
 
@@ -139,7 +136,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         if (!isfinite(volume)){
             printf("OH SHIT: non-finite volume %f, cell %d\nvol2 %f\n", volume, fullerene, volume2);
             printf("Crash now :(\n");
-            //asm("trap;");
+            asm("trap;");
             volume = 1.f;
         }
         
