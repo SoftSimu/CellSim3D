@@ -121,4 +121,4 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
                             int* d_C180_nn,
                             float* d_youngsModArray, float stiffness2, int No_of_C180s);
 
-void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces);
+void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces, hR3NVectors& h_velocitiesV);

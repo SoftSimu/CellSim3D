@@ -372,9 +372,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    MAX_NN*MaxNoofC180s*sizeof(int))) return(-1); if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return(-1);
+  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fx, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -456,7 +456,25 @@ int main(int argc, char *argv[])
 
   thrust::fill(h_R0V.begin(), h_R0V.end(), R0);
 
-  d_R0V = h_R0V; 
+  d_R0V = h_R0V;
+
+  // velocities
+
+  hR3NVectors h_velocitiesV;
+  InitR3NVecs(h_velocitiesV, 192*MaxNoofC180s); 
+
+  R3NVectors d_velocitiesV;
+  InitR3NVecs(d_velocitiesV, 192*MaxNoofC180s);
+
+  R3Nptrs d_velList;
+
+  setR3Nptrs(d_velList, d_velocitiesV);
+
+  d_velListX = d_velList.x;
+  d_velListY = d_velList.y;
+  d_velListZ = d_velList.z;
+
+      
   
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -521,6 +539,21 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_C180_nn,   C180_nn,   3*192*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_56,   C180_56,   7*92*sizeof(int),cudaMemcpyHostToDevice);
+
+  cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_XM, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_YM, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ZM, 0, 192*MaxNoofC180s*sizeof(float));
+
+
+  cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_CMy, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
 
   cudaMemcpy(d_XP, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
   cudaMemcpy(d_YP, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
@@ -691,7 +724,12 @@ int main(int argc, char *argv[])
       return -1;
   }
 
-  FILE* forceFile = fopen(forces_file, "w"); 
+  FILE* forceFile = fopen(forces_file, "w");
+
+  if (write_cont_force){
+      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V\n");
+      writeForces(forceFile, 0, No_of_C180s, h_contactForcesV, h_velocitiesV);
+  }
 
   FILE* velFile = fopen("velocity2.xyz", "w");
 
@@ -820,32 +858,6 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck(); 
 
-  if (ranZOffset){
-      float f = 0.7; 
-      if (useRigidSimulationBox)
-          f *= boxLength;
-      
-      float randoms[No_of_C180s];
-      ranmar(randoms, No_of_C180s);
-
-      
-      for (int c = 0; c < No_of_C180s; c++){
-          for (int p = 0; p< 192; p++){
-              X[c*192 + p] = X[c*192 + p] + randoms[c]*f; 
-              Y[c*192 + p] = Y[c*192 + p] + randoms[c]*f; 
-              Z[c*192 + p] = Z[c*192 + p] + randoms[c]*f; 
-          }
-      }
-        cudaMemcpy(d_XP, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_YP, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_ZP, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_X,  X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_Y,  Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_Z,  Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_XM, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_YM, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-        cudaMemcpy(d_ZM, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  }
 
   // Code to set up pbc things
   if (usePBCs){
@@ -1361,7 +1373,8 @@ int main(int argc, char *argv[])
 
           if (write_cont_force == true){
               CopyR3NvecsToHost(h_contactForcesV, d_contactForcesV, 192*No_of_C180s);
-              writeForces(forceFile, step, No_of_C180s, h_contactForcesV);
+              CopyR3NvecsToHost(h_velocitiesV, d_velocitiesV, 192*No_of_C180s);
+              writeForces(forceFile, step, No_of_C180s, h_contactForcesV, h_velocitiesV);
           }
       }
 
@@ -1891,6 +1904,7 @@ int read_json_params(const char* inpFile){
         boxMax.y = boxParams["box_len_y"].asFloat(); 
         boxMax.z = boxParams["box_len_z"].asFloat();
         flatbox = boxParams["flatbox"].asBool();
+        rand_pos = boxParams["rand_pos"].asBool();
     }
     
     
@@ -2384,21 +2398,29 @@ inline int num_cells_far(){
 
 }
 
-void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces){
+void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces, hR3NVectors& h_velocities){
     if(forceFile == NULL){
         printf("ERROR: forces file not available\n");
         exit(1);
     }
 
-    fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ\n");
-
     for (int c =0; c < num_cells; ++c){
         for (int n = 0; n < 192; ++n){
-            fprintf(forceFile, "%d,%d,%d,%d,%d,%.6f,%.6f,%.6f\n",
+            fprintf(forceFile, "%d,%d,%d,%d,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
                     t_step, num_cells, c, n, c*192+n,
                     h_contactForces.x[c*192 + n],
                     h_contactForces.y[c*192 + n],
-                    h_contactForces.z[c*192 + n]);
+                    h_contactForces.z[c*192 + n],
+                    mag(make_float3(h_contactForces.x[c*192 + n],
+                                    h_contactForces.y[c*192 + n],
+                                    h_contactForces.z[c*192 + n])),
+                    h_velocities.x[c*192+n],
+                    h_velocities.y[c*192+n],
+                    h_velocities.z[c*192+n],
+                    mag(make_float3(h_velocities.x[c*192+n],
+                                    h_velocities.y[c*192+n],
+                                    h_velocities.z[c*192+n])));
+                        
         }
     }
 }
