@@ -37,7 +37,7 @@
 void CudaFailure();
 
 #define CudaErrorCheck() { \
-        cudaError_t e = cudaDeviceSynchronize();        \
+        cudaError_t e = cudaPeekAtLastError();        \
         if (e!=cudaSuccess){                                            \
             printf("Cuda failure in %s, line %d, code %d %s\n", __FILE__, __LINE__, e, cudaGetErrorString(e)); \
             exit(0); \
