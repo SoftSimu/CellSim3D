@@ -177,11 +177,12 @@ bool flatbox;
 bool useRigidSimulationBox;
 bool usePBCs; 
 float* d_boxMin;
+bool rand_pos; 
 
 // randomness parameters
 
 bool add_rands;
-unsigned long long rand_seed;
+int rand_seed;
 int rand_dist;
 float rand_scale_factor;
 curandState *d_rngStates;
@@ -1539,43 +1540,61 @@ int initialize_C180s(int Orig_No_of_C180s)
 
       int c = 0;
       float rands[3];
-      while (true){
-          ranmar(rands, 3);
-          float3 CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
-                                  rands[1]*(boxMax.y - 1.f)  + 1.f,
-                                  0.f);
-          if (flatbox == 1){
-              CM.z = boxMax.z/2;
-          } else {
-              CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
-          }
+      if (rand_pos){
+          while (true){
+              ranmar(rands, 3);
+              float3 CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
+                                      rands[1]*(boxMax.y - 1.f)  + 1.f,
+                                      0.f);
+              if (flatbox == 1){
+                  CM.z = boxMax.z/2;
+              } else {
+                  CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
+              }
 
-          bool farEnough = true; 
-          for (int nInd = 0; nInd < c; ++nInd){
-              if (mag(allCMs[nInd] - CM) < 2*rCheck ||
-                  CM.x+rCheck > boxMax.x ||
-                  CM.y+rCheck > boxMax.y ||
-                  CM.z+rCheck > boxMax.z){
-                  farEnough = false;
+              bool farEnough = true; 
+              for (int nInd = 0; nInd < c; ++nInd){
+                  if (mag(allCMs[nInd] - CM) < 2*rCheck ||
+                      CM.x+rCheck > boxMax.x ||
+                      CM.y+rCheck > boxMax.y ||
+                      CM.z+rCheck > boxMax.z){
+                      farEnough = false;
+                      break;
+                  }
+              }
+          
+              if (farEnough){
+                  allCMs[c] = CM; 
+                  c++;
+              }
+          
+              if (c == Orig_No_of_C180s){
                   break;
               }
           }
-          
-          if (farEnough){
-              allCMs[c] = CM; 
-              c++;
-          }
-          
-          if (c == Orig_No_of_C180s){
-              break;
-          }
-      }
 
-      for (int cellInd = 0; cellInd < Orig_No_of_C180s; ++cellInd){
-          for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-              X[cellInd*192 + nodeInd] = initx[nodeInd] + allCMs[cellInd].x;
-              Y[cellInd*192 + nodeInd] = inity[nodeInd] + allCMs[cellInd].y;
-              Z[cellInd*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
+          for (int cellInd = 0; cellInd < Orig_No_of_C180s; ++cellInd){
+              for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+                  X[cellInd*192 + nodeInd] = initx[nodeInd] + allCMs[cellInd].x;
+                  Y[cellInd*192 + nodeInd] = inity[nodeInd] + allCMs[cellInd].y;
+                  Z[cellInd*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
+              }
+          }
+      } else {
+          Side_length = (int)sqrt(Orig_No_of_C180s);
+          
+          for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
+          {
+              ey=rank%Side_length;
+              ex=rank/Side_length;
+
+              for ( atom = 0 ; atom < 180 ; ++atom)
+              {
+                  X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1 + boxMax.x/2.f;
+                  Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1 + boxMax.y/2.f;
+                  Z[rank*192+atom] = initz[atom] + boxMax.z/2.f;
+              }
+
           }
       }
   }
@@ -1892,7 +1911,7 @@ int read_json_params(const char* inpFile){
     }
     else {
         add_rands = randParams["add_rands"].asBool();
-        rand_seed = randParams["rand_seed"].asInt64();
+        rand_seed = randParams["rand_seed"].asInt();
         rand_dist = randParams["rand_dist"].asInt();
         rand_scale_factor = randParams["rand_scale_factor"].asFloat();
     }
@@ -1960,7 +1979,7 @@ int read_json_params(const char* inpFile){
     printf("      dt_max              = %f\n", dt_max); 
     printf("      dt_tol              = %f\n", dt_tol);
     printf("      add_rands           = %d\n", add_rands);
-    printf("      rand_seed           = %llu\n", rand_seed);
+    printf("      rand_seed           = %d\n", rand_seed);
     printf("      rand_scale_factor   = %f\n", rand_scale_factor);
     printf("      phase_count         = %d\n", phase_count);
     
