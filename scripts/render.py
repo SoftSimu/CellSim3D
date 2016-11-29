@@ -29,9 +29,8 @@ parser = argparse.ArgumentParser(description=helpString)
 parser.add_argument("trajPath", type=str,
                     help="Trajectory path. Absolute or relative.")
 
-parser.add_argument("-s", "--smooth", type=bool, required=False,
-                    help="Do smoothing (really expensive and doesn't look as good)",
-                    default=False)
+parser.add_argument("-s", "--smooth", action='store_true',
+                    help="Do smoothing (really expensive and doesn't look as good)")
 
 parser.add_argument("-k", "--skip", type=int, required=False,
                     help="Trajectory frame skip rate. E.g. SKIP=10 will only \
@@ -52,25 +51,44 @@ parser.add_argument("--inds", type=int, required=False, nargs='+',
                     default=[])
 
 parser.add_argument("-nf", "--num-frames", type=int, required=False,
-                    help="Only render these many frames.",
+                    help="Only render this many frames.",
                     default=sys.maxsize)
-parser.add_argument("-w", "--white", type=bool, required=False, default=False,
-                    help='Render with white background if this is set')
+
+parser.add_argument("-r", "--res", type=int, default=1, required=False,
+                    help='Renders images with resolution RES*1080p. RES>=1. \
+                    Use 2 for 4k. A high number will devour your RAM.')
+
+parser.add_argument("-cc", "--cell-color", type=float, nargs=3, required=False,
+                    default=[0.284, 0.15, 0.6],
+                    help="RGB values of cell color. From 0.0 to 1.0")
+
+parser.add_argument("-bc", "--background-color", type=float, nargs=3,
+                    required=False, default=[1,1,1],
+                    help="RGB values of cell color. From 0.0 to 1.0")
+
+parser.add_argument("-si", "--specular-intensity", type=float, required=False,
+                    default = 0.0,
+                    help="Set specular-intensity (shininess). From 0.0 to 1.0")
 
 args = parser.parse_args(argv)
 
 imageindex = 0
 firstfaces = []
-bpy.data.worlds["World"].horizon_color=[0.051, 0.051, 0.051]
-
-if args.white:
-    bpy.data.worlds["World"].horizon_color=[1,1,1]
+bpy.data.worlds["World"].horizon_color=args.background_color
 
 bpy.data.scenes["Scene"].render.alpha_mode='SKY'
 
 doSmooth = args.smooth
 if doSmooth:
     print("Doing smoothing. Consider avoiding this feature...")
+
+
+if (args.res < 1):
+    print("ERROR: invalid resolution factor")
+    sys.exit()
+
+bpy.data.scenes["Scene"].render.resolution_x*=args.res
+bpy.data.scenes["Scene"].render.resolution_y*=args.res
 
 with open('C180_pentahexa.csv', newline='') as g:
     readerfaces = csv.reader(g, delimiter=',')
@@ -102,6 +120,9 @@ if len(args.inds) > 0:
 
 stopAt = args.num_frames
 
+# Set material color
+bpy.data.materials['Material'].diffuse_color = args.cell_color
+bpy.data.materials['Material'].specular_intensity = args.specular_intensity
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     try:
@@ -118,6 +139,8 @@ with celldiv.TrajHandle(filename) as th:
                 f = [f[a] for a in args.inds]
 
             f = np.vstack(f)
+            # adjust to CoM
+            f -= np.mean(f, axis=0)
             faces = []
             for mi in range(int(len(f)/192)):
                 for row in firstfaces:
@@ -144,10 +167,15 @@ with celldiv.TrajHandle(filename) as th:
                 bpy.ops.object.select_all(action='TOGGLE')
                 bpy.ops.object.modifier_add(type='SUBSURF')
 
+            bpy.ops.object.select_by_type(type='MESH')
+            bpy.context.scene.objects.active = bpy.data.objects['cellObject']
+            bpy.context.scene.objects.active = bpy.data.objects['Cube']
+            bpy.ops.object.make_links_data(type='MATERIAL')
+            bpy.ops.object.select_all(action='TOGGLE')
+
             imagename = basename + "%d.png" % frameCount
             frameCount += 1
             bpy.context.scene.render.filepath = imagename
-
 
             bpy.ops.render.render(write_still=True)  # render to file
 
