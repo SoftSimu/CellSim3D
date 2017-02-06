@@ -22,6 +22,11 @@ parser.add_argument("-k", "--skip",
                     type = int,
                     default = 1)
 
+parser.add_argument("-s", "--step",
+                    help="Trajectory frame skip rate",
+                    type = int,
+                    default = 1)
+
 #parser.add_argument('dt', type=float)
 
 parser.add_argument('csv')
@@ -48,13 +53,23 @@ args=parser.parse_args()
 # plt.plot(keList, lw=1.5, label="calculated")
 
 
-d = pd.read_csv(args.csv)[["step", "V"]].as_matrix()
+d = pd.read_csv(args.csv, usecols=["step", "F", "V"]).as_matrix()
 keList2 = []
-for s in tqdm(range(0, int(d[:,0].max()), 100*args.skip)):
+FList=[]
+VList =[]
+for s in tqdm(range(0, int(d[:,0].max()), args.step*args.skip)):
     V = d[d[:, 0] == s, 1]
+    F = d[d[:, 0] == s, 2]
     keList2.append(np.sum(0.5*V**2))
+    FList.append(np.sum(F))
 
-plt.plot(keList2, lw=1.5, label="read")
-plt.gca().set_yscale('log')
+plt.plot(keList2, '.', lw=1.5, label="velocity")
 plt.legend()
+plt.gca().set_yscale('log')
 plt.savefig('ke.png')
+plt.cla()
+plt.semilogy(FList, '.', label="force")
+plt.savefig('force.png')
+plt.cla()
+# plt.plot(VList, '.', label="volumes")
+# plt.savefig('vol.png')

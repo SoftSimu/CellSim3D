@@ -230,7 +230,12 @@ with cd.TrajHandle(trajPath) as th:
                     ref_force = max(avgCellForces)
 
                 for x,y,f in zip(Xs0, Ys0, avgCellForces):
-                    ax.fill(x,y,color = cmap(f/ref_force))
+                    # sort the angle
+                    cx = x - np.mean(x)
+                    cy = y - np.mean(y)
+                    thetas = np.arctan(cy/cx)
+                    inds = np.argsort(thetas)
+                    ax.fill(x[inds],y[inds],color = cmap(f/ref_force))
 
             fig.savefig(storePath + outName[0] + "%s" % i + outName[1])
 

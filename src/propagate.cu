@@ -195,7 +195,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces)
+                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* volList, const float div_vol)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -253,7 +253,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             asm("trap;"); 
         }
 
-        float R0 = d_R0[rank]; 
+        float R0=0;
 
 
         stiffness = d_stiffness[rank];
@@ -313,6 +313,8 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
+            R0 = d_R0[i*192 + atom];
+
             // spring forces
             FX += +stiffness*(R-R0)/R0*deltaX/R;
             FY += +stiffness*(R-R0)/R0*deltaY/R;
@@ -330,10 +332,12 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                                   d_Y[atomInd] - d_CMy[rank], 
                                   d_Z[atomInd] - d_CMz[rank]);
         float3 gForce  = make_float3(0.f, 0.f, 0.f);
+        float ro = cbrtf(div_vol);
 
-        gForce = 3*Pressure*calcUnitVec(r_CM);
+        //gForce = 3*Pressure*calcUnitVec(r_CM);
 
-        //gForce = -(1e3)*(mag(r_CM) - eq_len)*calcUnitVec(r_CM); 
+        //gForce = -10*(volList[rank] - div_vol)*calcUnitVec(r_CM);
+        gForce = -100*(mag(r_CM) - ro)*calcUnitVec(r_CM);
 
         FX += gForce.x; 
         FY += gForce.y; 
@@ -516,15 +520,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         FY += -1 * gamma_visc * velY;
         FZ += -1 * gamma_visc * velZ;
 
-        if (useWalls == 1){ //deprecated
-            // Wall repulsion
-
-            float wallDist = d_Z[rank*192+atom] - wall1;
-
-        }
-
         // add forces from simulation box if needed:
-
         if (useRigidSimulationBox){
             float gap1, gap2; 
             gap1 = d_X[atomInd];
@@ -555,7 +551,10 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             if (abs(gap2) < threshDist && -gap2*FZ < 0) FZ = -FZ; 
         }
 
-        d_forceList[rank*192+atom] = make_float3(FX, FY, FZ); 
+        d_forceList[rank*192+atom] = make_float3(FX, FY, FZ);
+        d_contactForces.x[atomInd] = FX;
+        d_contactForces.y[atomInd] = FY;
+        d_contactForces.z[atomInd] = FZ;
     }
 }
 
@@ -579,19 +578,25 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         float FZ = d_forceList[nodeInd].z;
         
         
-        d_XP[nodeInd] =
-            1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FX+2*d_X[nodeInd]+(delta_t/(2*mass)-1.0)*d_XM[nodeInd]);
+        // d_XP[nodeInd] =
+        //     1.0/(1.0+delta_t/(2*mass))*
+        //     ((delta_t*delta_t/mass)*FX+2*d_X[nodeInd]+(delta_t/(2*mass)-1.0)*d_XM[nodeInd]);
         
-        d_YP[nodeInd] =
-            1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FY+2*d_Y[nodeInd]+(delta_t/(2*mass)-1.0)*d_YM[nodeInd]);
+        // d_YP[nodeInd] =
+        //     1.0/(1.0+delta_t/(2*mass))*
+        //     ((delta_t*delta_t/mass)*FY+2*d_Y[nodeInd]+(delta_t/(2*mass)-1.0)*d_YM[nodeInd]);
         
-        d_ZP[nodeInd] =
-            1.0/(1.0+delta_t/(2*mass))*
-            ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]);
+        // d_ZP[nodeInd] =
+        //     1.0/(1.0+delta_t/(2*mass))*
+        //     ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]);
 
+        d_XP[nodeInd] = (FX/mass)*delta_t*delta_t + 2*d_X[nodeInd] - d_XM[nodeInd];
+        d_YP[nodeInd] = (FY/mass)*delta_t*delta_t + 2*d_Y[nodeInd] - d_YM[nodeInd];
+        d_ZP[nodeInd] = (FZ/mass)*delta_t*delta_t + 2*d_Z[nodeInd] - d_ZM[nodeInd];
 
+        d_velListX[nodeInd] = (d_XP[nodeInd] - d_XM[nodeInd])/(2*delta_t); 
+        d_velListY[nodeInd] = (d_YP[nodeInd] - d_YM[nodeInd])/(2*delta_t); 
+        d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_ZM[nodeInd])/(2*delta_t);
 
         if (add_rands != 0){
             curandState rngState = rngStates[nodeInd];
@@ -605,10 +610,6 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
             
             rngStates[nodeInd] = rngState;
         }
-        
-        d_velListX[nodeInd] = (d_XP[nodeInd] - d_XM[nodeInd])/(2*delta_t); 
-        d_velListY[nodeInd] = (d_YP[nodeInd] - d_YM[nodeInd])/(2*delta_t); 
-        d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_ZM[nodeInd])/(2*delta_t);
     }
 }
 
@@ -619,6 +620,15 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
     
     const int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
     if (nodeInd < 192*numCells){
+        // if (d_XP[nodeInd] != d_XM[nodeInd] ||
+        //     d_YP[nodeInd] != d_YM[nodeInd] || 
+        //     d_ZP[nodeInd] != d_ZM[nodeInd] ){
+        //     printf("%.20f != %.20f or\n%.20f != %.20f or\n%.20f != %.20f\nnodeInd=%d\n",
+        //            d_XP[nodeInd], d_XM[nodeInd],
+        //            d_YP[nodeInd], d_YM[nodeInd],
+        //            d_ZP[nodeInd], d_ZM[nodeInd], nodeInd);
+        //     asm("trap;");
+        // }
 
         d_XM[nodeInd] = d_X[nodeInd]; 
         d_YM[nodeInd] = d_Y[nodeInd]; 
@@ -627,5 +637,18 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
         d_X[nodeInd] = d_XP[nodeInd];
         d_Y[nodeInd] = d_YP[nodeInd];
         d_Z[nodeInd] = d_ZP[nodeInd];
+    }
+}
+
+
+__global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
+                                 float sysCMx, float sysCMy, float sysCMz, int numParts){
+    
+    int partInd = blockIdx.x*blockDim.x + threadIdx.x;
+
+    if (partInd < numParts){
+        d_X[partInd] -= sysCMx;
+        d_Y[partInd] -= sysCMy;
+        d_Z[partInd] -= sysCMz;
     }
 }
