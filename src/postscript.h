@@ -121,7 +121,9 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
                             int* d_C180_nn,
                             float* d_youngsModArray, float stiffness2, int No_of_C180s);
 
-void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces, hR3NVectors& h_velocitiesV);
+void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces);
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
                                  float sysCMx, float sysCMy, float sysCMz, int numParts);
+__global__ void VelocityUpdate(float* d_VX, float* d_VY, float* d_VZ,
+                               float3* fList, float3* gList, float dt, long int num_nodes);

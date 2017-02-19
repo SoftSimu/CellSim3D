@@ -315,7 +315,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
             R0 = d_R0[i*192 + atom];
 
-            // spring forces
+            //spring forces
             FX += +stiffness*(R-R0)/R0*deltaX/R;
             FY += +stiffness*(R-R0)/R0*deltaY/R;
             FZ += +stiffness*(R-R0)/R0*deltaZ/R;
@@ -338,7 +338,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
         //gForce = -10*(volList[rank] - div_vol)*calcUnitVec(r_CM);
         gForce = -100*(mag(r_CM) - ro)*calcUnitVec(r_CM);
-
+        
         FX += gForce.x; 
         FY += gForce.y; 
         FZ += gForce.z; 
@@ -490,9 +490,9 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
         d_contactForces.y[atomInd] = contactForce.y;
         d_contactForces.z[atomInd] = contactForce.z;
 
-        FX += contactForce.x;
-        FY += contactForce.y;
-        FZ += contactForce.z; 
+        // FX += contactForce.x;
+        // FY += contactForce.y;
+        // FZ += contactForce.z; 
 
 #ifdef FORCE_DEBUG
 
@@ -516,6 +516,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
 
 #endif
         // add friction
+        //printf("cell %d node %d velX %f\n", rank, atomInd, velX);
         FX += -1 * gamma_visc * velX;
         FY += -1 * gamma_visc * velY;
         FZ += -1 * gamma_visc * velZ;
@@ -590,13 +591,9 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         //     1.0/(1.0+delta_t/(2*mass))*
         //     ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]);
 
-        d_XP[nodeInd] = (FX/mass)*delta_t*delta_t + 2*d_X[nodeInd] - d_XM[nodeInd];
-        d_YP[nodeInd] = (FY/mass)*delta_t*delta_t + 2*d_Y[nodeInd] - d_YM[nodeInd];
-        d_ZP[nodeInd] = (FZ/mass)*delta_t*delta_t + 2*d_Z[nodeInd] - d_ZM[nodeInd];
-
-        d_velListX[nodeInd] = (d_XP[nodeInd] - d_XM[nodeInd])/(2*delta_t); 
-        d_velListY[nodeInd] = (d_YP[nodeInd] - d_YM[nodeInd])/(2*delta_t); 
-        d_velListZ[nodeInd] = (d_ZP[nodeInd] - d_ZM[nodeInd])/(2*delta_t);
+        d_XP[nodeInd] = d_X[nodeInd] + delta_t*d_velListX[nodeInd] + 0.5*(FX/mass)*delta_t*delta_t;
+        d_YP[nodeInd] = d_Y[nodeInd] + delta_t*d_velListY[nodeInd] + 0.5*(FY/mass)*delta_t*delta_t;
+        d_ZP[nodeInd] = d_Z[nodeInd] + delta_t*d_velListZ[nodeInd] + 0.5*(FZ/mass)*delta_t*delta_t;
 
         if (add_rands != 0){
             curandState rngState = rngStates[nodeInd];
@@ -610,6 +607,25 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
             
             rngStates[nodeInd] = rngState;
         }
+    }
+}
+
+__global__ void VelocityUpdate(float* d_VX, float* d_VY, float* d_VZ,
+                               float3* fList, float3* gList, float dt, long int num_nodes){
+    long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+
+    if (nodeInd < num_nodes){
+        float FX = fList[nodeInd].x;
+        float FY = fList[nodeInd].y;
+        float FZ = fList[nodeInd].z;
+        
+        float GX = gList[nodeInd].x;
+        float GY = gList[nodeInd].y;
+        float GZ = gList[nodeInd].z;
+        
+        d_VX[nodeInd] = d_VX[nodeInd] + 0.5*(FX+GX);
+        d_VY[nodeInd] = d_VY[nodeInd] + 0.5*(FY+GY);
+        d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*(FZ+GZ);
     }
 }
 
