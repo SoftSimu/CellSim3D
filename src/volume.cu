@@ -69,8 +69,6 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         float n3 = 0.0f;
         float faceArea = 0.0f;
 
-        float face[7*3];
-
         float3 p0 = make_float3(avX, avY, avZ); 
         float3 p1, p2;
 
@@ -140,9 +138,6 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             volume = 1.f;
         }
         
-        bool divide = 0;
-
-            
         if (volume > divVol){
             cell_div[fullerene] = 1;
         }
@@ -164,113 +159,4 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             }
         }
     }
-}
-
-
-__global__ void NewVolumes( int No_of_C180s, int *C180_56,
-                            float *X,    float *Y,   float *Z,
-                            float *CMx , float *CMy, float *CMz, float *voll,
-                            char* cell_div, float divVol)
-{
-    __shared__ float locX[180];
-    __shared__ float locY[180];
-    __shared__ float locZ[180];
-    __shared__ float volume;
-
-    int blockInd = blockIdx.x;
-    int cellInd = threadIdx.x;
-
-    for (int i = 0; i < 180; i++){
-        locX[i] = X[cellInd*192+i] - CMx[cellInd];
-        locY[i] = Y[cellInd*192+i] - CMy[cellInd];
-        locZ[i] = Z[cellInd*192+i] - CMz[cellInd];
-    }
-    
-    float vol = 0.0f;
-    float area = 0.0f;
-    int N1, N2, N3, N4, N5, N6, N7;
-    float CMFx, CMFy, CMFz;
-    float b1x, b1y, b1z;
-    float b2x, b2y, b2z;
-
-    float volFace = 0.0f;
-    float CPx, CPy, CPz; 
-    
-    for (int face = 0; face < 92; face++){
-        N1 = C180_56[7*face+1];
-        N2 = C180_56[7*face+2];
-        N3 = C180_56[7*face+3];
-        N4 = C180_56[7*face+4];
-        N5 = C180_56[7*face+5];
-        N6 = C180_56[7*face+6];
-        
-        CMFx = 1/6.0 * (locX[N1] + locX[N2] + locX[N3] +
-                        locX[N4] + locX[N5] + locX[N6]);
-        
-        CMFy = 1/6.0 * (locY[N1] + locY[N2] + locY[N3] +
-                        locY[N4] + locY[N5] + locY[N6]);
-        
-        CMFz = 1/6.0 * (locZ[N1] + locZ[N2] + locZ[N3] +
-                        locZ[N4] + locZ[N5] + locZ[N6]);
-
-        // each face makes a hex-prism (extruded hexagon)
-        // the volume of which can be estimated by volume of 3
-        // parallelipipeds
-        // volume defined as u.(v x w) where u, v, w define length, width
-        // height vectors of the piped.
-
-        b1x = locX[N1] - locX[N2]; 
-        b1y = locY[N1] - locY[N2]; 
-        b1z = locZ[N1] - locZ[N2]; 
-
-        b2x = locX[N3] - locX[N2];
-        b2y = locY[N3] - locY[N2];
-        b2z = locZ[N3] - locZ[N2];
-
-        CPx = b1y*b2x - b1z*b2y;
-        CPy = b1x*b2z - b1z*b2x;
-        CPz = b1x*b2y - b1y*b2x;
-
-        area += sqrt(CPx*CPx + CPy*CPy + CPz*CPz); 
-        
-        volFace += fabs(CMFx*CPx - CMFy*CPy + CMFz*CPz);
-        
-        
-        b1x = locX[N3] - locX[N4]; 
-        b1y = locY[N3] - locY[N4]; 
-        b1z = locZ[N3] - locZ[N4]; 
-
-        b2x = locX[N5] - locX[N4];
-        b2y = locY[N5] - locY[N4];
-        b2z = locZ[N5] - locZ[N4];
-        
-        CPx = b1y*b2x - b1z*b2y;
-        CPy = b1x*b2z - b1z*b2x;
-        CPz = b1x*b2y - b1y*b2x;
-
-        area += sqrt(CPx*CPx + CPy*CPy + CPz*CPz); 
-        
-        volFace += fabs(CMFx*CPx - CMFy*CPy + CMFz*CPz);        
-        
-
-        b1x = locX[N5] - locX[N6]; 
-        b1y = locY[N5] - locY[N6]; 
-        b1z = locZ[N5] - locZ[N6]; 
-        
-        b2x = locX[N1] - locX[N6];
-        b2y = locY[N1] - locY[N6];
-        b2z = locZ[N1] - locZ[N6];
-        
-        CPx = b1y*b2x - b1z*b2y;
-        CPy = b1x*b2z - b1z*b2x;
-        CPz = b1x*b2y - b1y*b2x;
-
-        area += sqrt(CPx*CPx + CPy*CPy + CPz*CPz); 
-        
-        volFace += fabs(CMFx*CPx - CMFy*CPy + CMFz*CPz);
-        
-        vol += volFace;
-    }
-
-    
 }
