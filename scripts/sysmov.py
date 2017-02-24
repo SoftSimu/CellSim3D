@@ -21,7 +21,8 @@ from tqdm import tqdm
 desc="""
 Creates snapshots of the movement  of the center of mass of the system of cells.
 """
-parser = argparse.ArgumentParser(description=desc)
+parser = argparse.ArgumentParser(description=desc,
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("trajPath", nargs=1, help="Path to the trajectory file.")
 
 parser.add_argument("-fps",
@@ -52,6 +53,10 @@ parser.add_argument("--res",
                     1080p for 1920:1080",
                     default="1080p",
                     type=str)
+parser.add_argument("-m", "--movie",
+                    help="Make a movie in 3D",
+                    default=False)
+
 
 args = parser.parse_args()
 
@@ -156,7 +161,7 @@ if CoM.shape[0] > 1:
 else:
     frameFunc = make3DFrame
 
-print ("Making movie...")
-
-animation = mpy.VideoClip(frameFunc, duration=dur)
-animation.write_videofile(storPath + outName, fps=fps)
+if args.movie:
+    print ("Making movie...")
+    animation = mpy.VideoClip(frameFunc, duration=dur)
+    animation.write_videofile(storPath + outName, fps=fps)

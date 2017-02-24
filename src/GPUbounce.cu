@@ -100,7 +100,9 @@ bool binaryOutput;
 
 // equilibrium length of springs between fullerene atoms
 float R0  = 0.13517879937327418f; // why is this hard-coded?
-float* d_R0; 
+float* d_R0;
+float* h_R0;
+
 
 float L1  = 3.0f;       // the initial fullerenes are placed in
 // an X x Y grid of sizne L1 x L1
@@ -200,7 +202,11 @@ float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
 float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
 float *d_XMM, *d_YMM, *d_ZMM; 
 
-float3 *d_forceList; 
+float3 *d_fList;
+float3 *d_gList;
+
+R3Nptrs d_contactForces;
+R3Nptrs h_contactForces;
 
 float* d_Fx;
 float* d_Fy;
@@ -253,7 +259,9 @@ long int GPUMemory;
 long int CPUMemory;
 
 
-int frameCount = 1; 
+int frameCount = 1;
+
+bool correct_com = false; 
 
 int main(int argc, char *argv[])
 {
@@ -277,9 +285,9 @@ int main(int argc, char *argv[])
 
   printf("CellDiv version 0.9\n");
 
-  if ( argc != 3 )
+  if ( argc !=4 )
   {
-      printf("Usage: CellDiv no_of_threads inpFile.json\n");
+      printf("Usage: CellDiv no_of_threads inpFile.json gpuid\n");
       return(0);
   }
 
@@ -307,10 +315,13 @@ int main(int argc, char *argv[])
   GPUMemory = 0L;
   CPUMemory = 0L;
 
+  h_R0 = (float *)calloc(192*3, sizeof(float));
+
   //if ( read_global_params()               != 0 ) return(-1);
-  if ( read_fullerene_nn()                != 0 ) return(-1);
+  
   if ( generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
+  if ( read_fullerene_nn()                != 0 ) return(-1);
   NDIV = (int *)calloc(MaxNoofC180s,sizeof(int));
   CPUMemory += MaxNoofC180s*sizeof(int);
   for ( i = 0; i < No_of_threads; ++i ) NDIV[i] = 1;
@@ -337,7 +348,10 @@ int main(int argc, char *argv[])
   CPUMemory += (long)MaxNoofC180s * sizeof(char);
 
   cudaDeviceProp deviceProp = getDevice();
-  cudaSetDevice(0); 
+  if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
+      printf("Could not set to divice %d\n", 2);
+      return -1;
+  }
 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
@@ -380,28 +394,73 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1); 
+  if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_R0, 192*3*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc((void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return -1; 
+  if ( cudaSuccess != cudaMalloc((void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return -1; 
+  if ( cudaSuccess != cudaMalloc((void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+
+  cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
+  cudaMemset(d_C180_sign, 0, 180*sizeof(int));
+
+  cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_XM, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_YM, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ZM, 0, 192*MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+
+  cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_CMy, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+
+  cudaMemset(d_R0, 0, 3*192*sizeof(float));
+  cudaMemset(d_pressList, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Youngs_mod, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_bounding_xyz, 0, MaxNoofC180s*6*sizeof(float));
+  cudaMemset(d_Minx, 0, 1024*sizeof(float));
+  cudaMemset(d_Maxx, 0, 1024*sizeof(float));
+  cudaMemset(d_Miny, 0, 1024*sizeof(float));
+  cudaMemset(d_Maxy, 0, 1024*sizeof(float));
+  cudaMemset(d_Minz, 0, 1024*sizeof(float));
+  cudaMemset(d_Maxz, 0, 1024*sizeof(float));
+  CudaErrorCheck();
+
+  cudaMemset(d_velListX, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_velListY, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_velListZ, 0, 192*MaxNoofC180s*sizeof(float));
+
+  cudaMemset(d_area, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+
+  cudaMemset(d_boxMin, 0, 3*sizeof(float));
+  cudaMemset(d_contactForces.x, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_contactForces.y, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   
   thrust::host_vector<angles3> theta0(192);
   thrust::device_vector<angles3> d_theta0V(192);
   angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
 
-  thrust::device_vector<float3> d_forceListV(MaxNoofC180s*192);
-  thrust::fill(d_forceListV.begin(), d_forceListV.end(), make_float3(0.f, 0.f, 0.f));
-  d_forceList = thrust::raw_pointer_cast(&d_forceListV[0]);
-
+  thrust::device_vector<float3> d_fListV(MaxNoofC180s*192);
+  thrust::fill(d_fListV.begin(), d_fListV.end(), make_float3(0.f, 0.f, 0.f));
+  d_fList = thrust::raw_pointer_cast(&d_fListV[0]);
   
-  R3NVectors d_contactForcesV;
-  hR3NVectors h_contactForcesV;
+  thrust::device_vector<float3> d_gListV(MaxNoofC180s*192);
+  thrust::fill(d_gListV.begin(), d_gListV.end(), make_float3(0.f, 0.f, 0.f));
+  d_gList = thrust::raw_pointer_cast(&d_gListV[0]);
 
-  InitR3NVecs(d_contactForcesV, 192*MaxNoofC180s);
-  
-  InitR3NVecs(h_contactForcesV, 192*MaxNoofC180s);
-
-  R3Nptrs d_contactForces;
-
-  setR3Nptrs(d_contactForces, d_contactForcesV);
-  
+  h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_contactForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
 
   thrust::device_vector<float> d_XMMV(MaxNoofC180s*192);
   thrust::fill(d_XMMV.begin(), d_XMMV.end(), 0.f);
@@ -450,31 +509,18 @@ int main(int argc, char *argv[])
   d_volume = thrust::raw_pointer_cast(&d_volumeV[0]); 
 
 
-  thrust::device_vector<float> d_R0V(MaxNoofC180s);
-  thrust::host_vector<float> h_R0V(MaxNoofC180s);
-  d_R0 = thrust::raw_pointer_cast(&d_R0V[0]);
+  // thrust::device_vector<float> d_R0V(MaxNoofC180s);
+  // thrust::host_vector<float> h_R0V(MaxNoofC180s);
+  // d_R0 = thrust::raw_pointer_cast(&d_R0V[0]);
+  // thrust::fill(h_R0V.begin(), h_R0V.end(), R0);
+  // d_R0V = h_R0V;
 
-  thrust::fill(h_R0V.begin(), h_R0V.end(), R0);
-
-  d_R0V = h_R0V;
+  if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
 
   // velocities
 
-  hR3NVectors h_velocitiesV;
-  InitR3NVecs(h_velocitiesV, 192*MaxNoofC180s); 
+  
 
-  R3NVectors d_velocitiesV;
-  InitR3NVecs(d_velocitiesV, 192*MaxNoofC180s);
-
-  R3Nptrs d_velList;
-
-  setR3Nptrs(d_velList, d_velocitiesV);
-
-  d_velListX = d_velList.x;
-  d_velListY = d_velList.y;
-  d_velListZ = d_velList.z;
-
-      
   
   bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -511,18 +557,10 @@ int main(int argc, char *argv[])
   velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
 
-  cudaMemcpy(d_velListX, velListX, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_velListY, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_velListZ, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-
-  cudaMemcpy(d_Fx, velListX, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Fy, velListY, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Fz, velListZ, 192*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
-  cudaMemcpy(d_area, area, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice); 
 
+  
 
-        
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
   size_t freeGPUMem;
@@ -540,34 +578,22 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_56,   C180_56,   7*92*sizeof(int),cudaMemcpyHostToDevice);
 
-  cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_XM, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_YM, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_ZM, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_XM, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_YM, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ZM, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
 
+  float tempX[192*No_of_C180s];
 
-  cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
-  cudaMemset(d_CMy, 0, MaxNoofC180s*sizeof(float));
-  cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
-
-  cudaMemcpy(d_XP, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YP, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZP, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_X,  X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Y,  Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Z,  Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_XM, X, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YM, Y, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZM, Z, 192*MaxNoofC180s*sizeof(float),cudaMemcpyHostToDevice);
 
   cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
 
-
+  CudaErrorCheck();
 
   // Set the Youngs_mod for the cells
   youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -692,7 +718,11 @@ int main(int argc, char *argv[])
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_XP,d_YP,d_ZP,
+  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                    d_X, d_Y, d_Z,
+                                    d_CMx, d_CMy, d_CMz);
+  
+  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_X,d_Y,d_Z,
                                      d_bounding_xyz, d_CMx, d_CMy, d_CMz);
 
   CudaErrorCheck(); 
@@ -726,55 +756,45 @@ int main(int argc, char *argv[])
 
   FILE* forceFile = fopen(forces_file, "w");
 
-  if (write_cont_force){
-      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V\n");
-      writeForces(forceFile, 0, No_of_C180s, h_contactForcesV, h_velocitiesV);
-  }
-
   FILE* velFile = fopen("velocity2.xyz", "w");
 
 #ifdef OUTPUT_ADP_ERROR
   FILE* timeFile = fopen("times", "w");
   FILE* errFile = fopen("errors", "w"); 
 #endif 
+
+
+  if (correct_com == true){
+      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                        d_X, d_Y, d_Z,
+                                        d_CMx, d_CMy, d_CMz);
+      cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+      cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+      cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+      calc_sys_CM();
+      //printf("sysCMx = %f, sysCMy = %f, sysCmz = %f\n", sysCMx, sysCMy, sysCMz);
+      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
+                                                             sysCMx, sysCMy, sysCMz,
+                                                             No_of_C180s*192);
+          
+      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP,
+                                                             sysCMx, sysCMy, sysCMz,
+                                                             No_of_C180s*192);
+
+      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XM, d_YM, d_ZM,
+                                                             sysCMx, sysCMy, sysCMz,
+                                                             No_of_C180s*192);
+      CudaErrorCheck(); 
+  }
+  
   
 
-  if (binaryOutput){
-      int t = MaxNoofC180s;
-      fwrite(&t, sizeof(int), 1, trajfile);
-      
-      t = (int)useDifferentStiffnesses;
-      fwrite(&t, sizeof(int), 1, trajfile);
-      
-      t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      fwrite(&t, sizeof(int), 1, trajfile);
-      
-    
-      WriteBinaryTraj(0, trajfile, 1); 
-  } else {
-      fprintf(trajfile, "Header Start:\n");
-      fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
-
-      fprintf(trajfile, "Using variable stiffness:\n");
-      if (useDifferentStiffnesses)
-          fprintf(trajfile, "True\n");
-      else
-          fprintf(trajfile, "False\n");
-
-      fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
-      fprintf(trajfile, "Header End\n");
-      write_traj(0, trajfile);
-  }
-
-  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                    d_XP, d_YP, d_ZP,
-                                    d_CMx, d_CMy, d_CMz);
   // Set up walls if needed
   if (useWalls == 1){
       // First we must make sure that the walls surround the
       // starting system.
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_XP, d_YP, d_ZP,
+                                        d_X, d_Y, d_Z,
                                         d_CMx, d_CMy, d_CMz);
       cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -899,38 +919,127 @@ int main(int argc, char *argv[])
       CudaErrorCheck(); 
   }
 
-  if (useDifferentStiffnesses && recalc_r0){
+  // if (useDifferentStiffnesses && recalc_r0){
 
-      CalculateR0<<<No_of_C180s/1024 + 1, 1024>>>(d_R0,
-                                                  d_X, d_Y, d_Z,
-                                                  d_C180_nn,
-                                                  d_Youngs_mod,
-                                                  stiffness2,
-                                                  No_of_C180s);
-#ifdef RO_DEBUG
-      h_R0V = d_R0V;
+//       CalculateR0<<<No_of_C180s/1024 + 1, 1024>>>(d_R0,
+//                                                   d_X, d_Y, d_Z,
+//                                                   d_C180_nn,
+//                                                   d_Youngs_mod,
+//                                                   stiffness2,
+//                                                   No_of_C180s);
+// #ifdef RO_DEBUG
+//       h_R0V = d_R0V;
 
-      cudaMemcpy(youngsModArray, d_Youngs_mod, sizeof(float)*MaxNoofC180s, cudaMemcpyDeviceToHost);
+//       cudaMemcpy(youngsModArray, d_Youngs_mod, sizeof(float)*MaxNoofC180s, cudaMemcpyDeviceToHost);
       
-      for (int i =0; i < No_of_C180s; ++i){
-          std::cout << "Cell " << i << " R0 = "
-                    << h_R0V[i] << " E = " << youngsModArray[i] << std::endl;
-      }
-#endif
-  }
+//       for (int i =0; i < No_of_C180s; ++i){
+//           std::cout << "Cell " << i << " R0 = "
+//                     << h_R0V[i] << " E = " << youngsModArray[i] << std::endl;
+//       }
+// #endif
+  
+//   }
 
   // Different kind of pressure stuff
 
   float r_CM_o = pow((3.0/4.0) * (1/3.14159) * divVol*2.0, 1.0/3);
 
 
-  printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/1000000.0);
-  printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/1000000.0);
 
-  bool phase = true; 
+  printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/(1024*1024.0));
+  printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/(1024*1024.0));
+
+  bool phase = false;
+
+  // initial conditions
+
+  // X[10] *= 1.1;
+
+  // cudaMemcpy(d_X, X, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+
+  // for (int i = 0; i < 192*No_of_C180s; ++i){
+  //     tempX[i] = 10;
+  // }
+
+  // cudaMemcpy(d_velListX, tempX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+
+  CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+                                                  d_X,  d_Y,  d_Z,
+                                                  d_CMx, d_CMy, d_CMz,
+                                                  d_R0, d_pressList, d_Youngs_mod , stiffness1, 
+                                                  internal_damping, d_time, d_bounding_xyz,
+                                                  attraction_strength, attraction_range,
+                                                  repulsion_strength, repulsion_range,
+                                                  viscotic_damping, mass,
+                                                  Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                  wall1, wall2,
+                                                  threshDist, useWalls,
+                                                  d_velListX, d_velListY, d_velListZ,
+                                                  useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                  constrainAngles, d_theta0, d_fList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
+  CudaErrorCheck();
+
+
+  if (binaryOutput){
+      int t = MaxNoofC180s;
+      fwrite(&t, sizeof(int), 1, trajfile);
+      
+      t = (int)useDifferentStiffnesses;
+      fwrite(&t, sizeof(int), 1, trajfile);
+      
+      t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      fwrite(&t, sizeof(int), 1, trajfile);
+      
+    
+      WriteBinaryTraj(0, trajfile, 1); 
+  } else {
+      fprintf(trajfile, "Header Start:\n");
+      fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+
+      fprintf(trajfile, "Using variable stiffness:\n");
+      if (useDifferentStiffnesses) 
+          fprintf(trajfile, "True\n");
+      else
+          fprintf(trajfile, "False\n");
+
+      fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
+      fprintf(trajfile, "Header End\n");
+      write_traj(0, trajfile);
+  }
+
+  if (write_cont_force){
+      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V,X,Y,Z\n");
+      
+      cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      
+      cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      writeForces(forceFile, 0, No_of_C180s);
+  }
+
+  //return 0;
+
+
+  int numNodes = No_of_C180s*192;
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
+      numNodes = No_of_C180s*192;
+      Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
+                                           d_X, d_Y, d_Z,
+                                           d_XM, d_YM, d_ZM, 
+                                           d_velListX, d_velListY, d_velListZ, 
+                                           d_time, mass,
+                                           d_fList, No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
+      CudaErrorCheck();
+
+      // save previous step forces in g
+      cudaMemcpy(d_gList, d_fList, 192*No_of_C180s*sizeof(float3), cudaMemcpyDeviceToDevice);
+      CudaErrorCheck();
+      
       if (doPopModel == 1){
             rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
             // dr = -rGrowth(a + b*rGrowth)
@@ -944,8 +1053,8 @@ int main(int argc, char *argv[])
       rGrowth = rMax;
       }
       PressureUpdate <<<No_of_C180s/512 + 1, 512>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s,
-                                                       useDifferentStiffnesses, stiffness1, d_Youngs_mod, step,
-                                                       phase_count);
+                                                     useDifferentStiffnesses, stiffness1, d_Youngs_mod, step,
+                                                     phase_count);
       CudaErrorCheck(); 
       
       if ( (step)%1000 == 0)
@@ -965,7 +1074,6 @@ int main(int argc, char *argv[])
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif
 
-      
       CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                       d_X,  d_Y,  d_Z,
                                                       d_CMx, d_CMy, d_CMz,
@@ -979,107 +1087,112 @@ int main(int argc, char *argv[])
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax, d_contactForces); 
+                                                      constrainAngles, d_theta0, d_fList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
       CudaErrorCheck();
-      if (doAdaptive_dt){
-          adp_coeffs a;
-          bool isPredictor = true;
-
-          if (step < 2) // first iteration
-              c1 = 1, c2 = 2;
-          else{
-              c1 = dt_listV[step-2]/d_timeV[0];
-              c2 = (dt_listV[step-2]+dt_listV[step-1])/d_timeV[0];
-              if (!isfinite(c1) || !isfinite(c2)){
-                  printf("I DUN GOOFED\n");
-                  printf("Adaptive time coeffs c1 %f, c2 %f\n", c1, c2);
-                  return -69;
-              }
-          }
-
-          a = getAdpCoeffs(isPredictor, c1, c2); 
-          Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
-                                                     d_X, d_Y, d_Z, 
-                                                     d_XM, d_YM, d_ZM,
-                                                     d_XMM, d_YMM, d_ZMM,
-                                                     d_time, mass,
-                                                     d_forceList, No_of_C180s, a);
-          CudaErrorCheck();
-
-          a = getAdpCoeffs(!isPredictor, c1, c2); 
-          
-
-          CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                          d_XP,  d_YP,  d_ZP,
-                                                          d_CMx, d_CMy, d_CMz,
-                                                          d_R0, d_pressList, d_Youngs_mod , stiffness1, 
-                                                          internal_damping, d_time, d_bounding_xyz,
-                                                          attraction_strength, attraction_range,
-                                                          repulsion_strength, repulsion_range,
-                                                          viscotic_damping, mass,
-                                                          Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                          wall1, wall2,
-                                                          threshDist, useWalls,
-                                                          d_velListX, d_velListY, d_velListZ,
-                                                          useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                          constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax, d_contactForces); 
-          CudaErrorCheck();
-
-          Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
-                                                     d_X, d_Y, d_Z, 
-                                                     d_XM, d_YM, d_ZM,
-                                                     d_XMM, d_YMM, d_ZMM,
-                                                     d_time, mass,
-                                                     d_forceList, No_of_C180s, a);
-          CudaErrorCheck();
-
-          int numNodes = 192*No_of_C180s;
-          float alpha = get_alpha(c1, c2);
-          float beta = get_beta(c1, c2);
-          
-          ComputeTimeUpdate<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
-                                                         d_Xt, d_Yt, d_Zt, 
-                                                         d_AdpErrors, d_time, dt_max, 
-                                                         alpha, beta, No_of_C180s, dt_tol);
-          CudaErrorCheck();
-
-          thrust::sort(d_timeV.begin(), d_timeV.begin() + 192*No_of_C180s);
-
-          dt_listV[step-1] = d_timeV[0];
 
 
-#ifdef OUTPUT_ADP_ERROR
-          h_timeV = d_timeV; 
-          fprintf(timeFile, "%f\n", h_timeV[0]);
-          h_AdpErrors = d_AdpErrorsV;
-          
-          float avgErr = 0;
-          fprintf(errFile, "step %d, %d\n", step, No_of_C180s);
-          fprintf(timeFile, "step %d, %d\n", step, No_of_C180s);
-          for (int c = 0; c < No_of_C180s; c++){
-              fprintf(errFile, "cell %d\n", c);
-              fprintf(timeFile, "cell %d\n", c); 
-              for (int i = 0; i < 192; i++){
-                  fprintf(errFile, "%f\n", h_AdpErrors[c*192 + i]); 
-                  fprintf(timeFile, "%f\n", h_timeV[c*192 + i]); 
-              }
-          }
-#endif
-          
-      }
-      else{
-          Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
-                                                     d_X, d_Y, d_Z,
-                                                     d_XM, d_YM, d_ZM, 
-                                                     d_velListX, d_velListY, d_velListZ, 
-                                                     d_time, mass,
-                                                     d_forceList, No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
-          
-          CudaErrorCheck();
-      }
       
+      // if (doAdaptive_dt){
+//           adp_coeffs a;
+//           bool isPredictor = true;
+
+//           if (step < 2) // first iteration
+//               c1 = 1, c2 = 2;
+//           else{
+//               c1 = dt_listV[step-2]/d_timeV[0];
+//               c2 = (dt_listV[step-2]+dt_listV[step-1])/d_timeV[0];
+//               if (!isfinite(c1) || !isfinite(c2)){
+//                   printf("I DUN GOOFED\n");
+//                   printf("Adaptive time coeffs c1 %f, c2 %f\n", c1, c2);
+//                   return -69;
+//               }
+//           }
+
+//           a = getAdpCoeffs(isPredictor, c1, c2); 
+//           Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
+//                                                      d_X, d_Y, d_Z, 
+//                                                      d_XM, d_YM, d_ZM,
+//                                                      d_XMM, d_YMM, d_ZMM,
+//                                                      d_time, mass,
+//                                                      d_forceList, No_of_C180s, a);
+//           CudaErrorCheck();
+
+//           a = getAdpCoeffs(!isPredictor, c1, c2); 
+          
+
+//           CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+//                                                           d_XP,  d_YP,  d_ZP,
+//                                                           d_CMx, d_CMy, d_CMz,
+//                                                           d_R0, d_pressList, d_Youngs_mod , stiffness1, 
+//                                                           internal_damping, d_time, d_bounding_xyz,
+//                                                           attraction_strength, attraction_range,
+//                                                           repulsion_strength, repulsion_range,
+//                                                           viscotic_damping, mass,
+//                                                           Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+//                                                           wall1, wall2,
+//                                                           threshDist, useWalls,
+//                                                           d_velListX, d_velListY, d_velListZ,
+//                                                           useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+//                                                           constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
+//           CudaErrorCheck();
+
+//           Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
+//                                                      d_X, d_Y, d_Z, 
+//                                                      d_XM, d_YM, d_ZM,
+//                                                      d_XMM, d_YMM, d_ZMM,
+//                                                      d_time, mass,
+//                                                      d_forceList, No_of_C180s, a);
+//           CudaErrorCheck();
+
+//           int numNodes = 192*No_of_C180s;
+//           float alpha = get_alpha(c1, c2);
+//           float beta = get_beta(c1, c2);
+          
+//           ComputeTimeUpdate<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
+//                                                          d_Xt, d_Yt, d_Zt, 
+//                                                          d_AdpErrors, d_time, dt_max, 
+//                                                          alpha, beta, No_of_C180s, dt_tol);
+//           CudaErrorCheck();
+
+//           thrust::sort(d_timeV.begin(), d_timeV.begin() + 192*No_of_C180s);
+
+//           dt_listV[step-1] = d_timeV[0];
+
+
+// #ifdef OUTPUT_ADP_ERROR
+//           h_timeV = d_timeV; 
+//           fprintf(timeFile, "%f\n", h_timeV[0]);
+//           h_AdpErrors = d_AdpErrorsV;
+          
+//           float avgErr = 0;
+//           fprintf(errFile, "step %d, %d\n", step, No_of_C180s);
+//           fprintf(timeFile, "step %d, %d\n", step, No_of_C180s);
+//           for (int c = 0; c < No_of_C180s; c++){
+//               fprintf(errFile, "cell %d\n", c);
+//               fprintf(timeFile, "cell %d\n", c); 
+//               for (int i = 0; i < 192; i++){
+//                   fprintf(errFile, "%f\n", h_AdpErrors[c*192 + i]); 
+//                   fprintf(timeFile, "%f\n", h_timeV[c*192 + i]); 
+//               }
+//           }
+// #endif
+          
+//       }
+      //else{
+          
+          //}
+
+      VelocityUpdate<<<noofblocks, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
+                                                  d_fList, d_gList, delta_t, numNodes);
+      CudaErrorCheck();
+
+      ForwardTime<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
+                                               d_X , d_Y , d_Z ,
+                                               d_XM, d_YM, d_ZM,
+                                               No_of_C180s);
+          
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_XP, d_YP, d_ZP,
+                                        d_X, d_Y, d_Z,
                                         d_CMx, d_CMy, d_CMz);
       CudaErrorCheck();
       if (step <= Time_steps && rGrowth > 0){
@@ -1087,7 +1200,7 @@ int main(int argc, char *argv[])
 
 
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
-                                     d_XP, d_YP, d_ZP,
+                                     d_X, d_Y, d_Z,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, divVol,
                                      checkSphericity, d_area, phase_count, step,
@@ -1160,11 +1273,11 @@ int main(int argc, char *argv[])
           
           NDIV[globalrank] += 1;
 
-          
+          // TODO: Give daugter cells parent's velocities
           cell_division<<<1,256>>>(globalrank,
                                    d_XP, d_YP, d_ZP,
                                    d_X, d_Y, d_Z,
-                                   d_XP, d_YP, d_ZP,
+                                   d_XM, d_YM, d_ZM,
                                    d_CMx, d_CMy, d_CMz,
                                    No_of_C180s, d_ran2, repulsion_range);
           CudaErrorCheck()
@@ -1229,23 +1342,12 @@ int main(int argc, char *argv[])
       // ----------------------------------------- End Cell Death --------------
 
       bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
-                                         d_XP,d_YP,d_ZP,
+                                         d_X,d_Y,d_Z,
                                          d_bounding_xyz, d_CMx, d_CMy, d_CMz);
       CudaErrorCheck();
-      int numNodes = No_of_C180s*192;
       
-      if (doAdaptive_dt)
-          ForwardTime<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
-                                                   d_X , d_Y , d_Z ,
-                                                   d_XM, d_YM, d_ZM,
-                                                   d_XMM, d_YMM, d_ZMM,
-                                                   d_velListX, d_velListY, d_velListZ, 
-                                                   No_of_C180s, d_time);
-      else
-          ForwardTime<<<numNodes/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP, 
-                                                   d_X , d_Y , d_Z ,
-                                                   d_XM, d_YM, d_ZM,
-                                                   No_of_C180s);
+      
+
           
       reductionblocks = (No_of_C180s-1)/1024+1;
       minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
@@ -1358,6 +1460,18 @@ int main(int argc, char *argv[])
 
       }
 
+      if (correct_com == true){
+          cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          calc_sys_CM();
+          //printf("sysCMx = %f, sysCMy = %f, sysCmz = %f\n", sysCMx, sysCMy, sysCMz);
+          CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
+                                                                 sysCMx, sysCMy, sysCMz,
+                                                                 No_of_C180s*192);
+          CudaErrorCheck(); 
+      }
+
       if ( step%trajWriteInt == 0 )
       {
           //printf("   Writing trajectory to traj.xyz...\n");
@@ -1372,9 +1486,19 @@ int main(int argc, char *argv[])
               write_traj(step, trajfile);
 
           if (write_cont_force == true){
-              CopyR3NvecsToHost(h_contactForcesV, d_contactForcesV, 192*No_of_C180s);
-              CopyR3NvecsToHost(h_velocitiesV, d_velocitiesV, 192*No_of_C180s);
-              writeForces(forceFile, step, No_of_C180s, h_contactForcesV, h_velocitiesV);
+
+              cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              
+              cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              
+              cudaMemcpy(X, d_X, 192*No_of_C180s, cudaMemcpyDeviceToHost);
+              cudaMemcpy(Y, d_Y, 192*No_of_C180s, cudaMemcpyDeviceToHost);
+              cudaMemcpy(Z, d_Z, 192*No_of_C180s, cudaMemcpyDeviceToHost);
+              writeForces(forceFile, step, No_of_C180s);
           }
       }
 
@@ -1744,6 +1868,26 @@ int read_fullerene_nn(void)
 
   fclose(infil);
 
+  printf("Calculating equilibrium bond lengths\n");
+
+  for (int i = 0; i < 180; ++i){
+      int N1 = C180_nn[0 + i];
+      int N2 = C180_nn[192 + i];
+      int N3 = C180_nn[384 + i];
+
+      float3 a, b; 
+      a = make_float3(X[i], Y[i], Z[i]);
+
+      b = make_float3(X[N1], Y[N1], Z[N1]);
+      h_R0[0 + i] = mag(a-b);
+
+      b = make_float3(X[N2], Y[N2], Z[N2]);
+      h_R0[192 + i] = mag(a-b);
+
+      b = make_float3(X[N3], Y[N3], Z[N3]);
+      h_R0[384 + i] = mag(a-b);
+  }
+
   return(0);
 }
 
@@ -1814,6 +1958,8 @@ int read_json_params(const char* inpFile){
         phase_count = coreParams["phase_count"].asInt();
         write_cont_force = coreParams["write_cont_force"].asBool();
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
+        correct_com = coreParams["correct_com"].asBool();
+                                 
     }
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);
@@ -1996,6 +2142,7 @@ int read_json_params(const char* inpFile){
     printf("      rand_seed           = %d\n", rand_seed);
     printf("      rand_scale_factor   = %f\n", rand_scale_factor);
     printf("      phase_count         = %d\n", phase_count);
+    printf("      correct_com         = %d\n", correct_com);
     
     
 
@@ -2398,15 +2545,15 @@ inline int num_cells_far(){
 
 }
 
-void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces, hR3NVectors& h_velocities){
+void writeForces(FILE* forceFile, int t_step, int num_cells){
     if(forceFile == NULL){
         printf("ERROR: forces file not available\n");
         exit(1);
     }
 
     for (int c =0; c < num_cells; ++c){
-        for (int n = 0; n < 192; ++n){
-            fprintf(forceFile, "%d,%d,%d,%d,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
+        for (int n = 0; n < 180; ++n){
+            fprintf(forceFile, "%d,%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
                     t_step, num_cells, c, n, c*192+n,
                     h_contactForces.x[c*192 + n],
                     h_contactForces.y[c*192 + n],
@@ -2414,12 +2561,16 @@ void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_cont
                     mag(make_float3(h_contactForces.x[c*192 + n],
                                     h_contactForces.y[c*192 + n],
                                     h_contactForces.z[c*192 + n])),
-                    h_velocities.x[c*192+n],
-                    h_velocities.y[c*192+n],
-                    h_velocities.z[c*192+n],
-                    mag(make_float3(h_velocities.x[c*192+n],
-                                    h_velocities.y[c*192+n],
-                                    h_velocities.z[c*192+n])));
+                    velListX[c*192+n],
+                    velListY[c*192+n],
+                    velListZ[c*192+n],
+                    mag(make_float3(velListX[c*192+n],
+                                    velListY[c*192+n],
+                                    velListZ[c*192+n])),
+                    X[c*192+n],
+                    Y[c*192+n],
+                    Z[c*192+n]
+                );
                         
         }
     }

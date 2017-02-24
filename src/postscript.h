@@ -60,7 +60,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls,
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod,
-                                bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces);
+                                bool constrainAngles, const angles3 d_theta0[], float3 *d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* d_volList, const float div_vol);
 
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
@@ -121,4 +121,9 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
                             int* d_C180_nn,
                             float* d_youngsModArray, float stiffness2, int No_of_C180s);
 
-void writeForces(FILE* forceFile, int t_step, int num_cells, hR3NVectors& h_contactForces, hR3NVectors& h_velocitiesV);
+void writeForces(FILE* forceFile, int t_step, int num_cells);
+
+__global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
+                                 float sysCMx, float sysCMy, float sysCMz, int numParts);
+__global__ void VelocityUpdate(float* d_VX, float* d_VY, float* d_VZ,
+                               float3* fList, float3* gList, float dt, long int num_nodes);

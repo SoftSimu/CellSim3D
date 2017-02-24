@@ -8,10 +8,10 @@ __global__ void PressureUpdate (float* d_pressList, float minPressure,
                                 int phase_count){
 
     int cellInd = blockIdx.x*blockDim.x + threadIdx.x;
-    float pressure = d_pressList[cellInd];
+    
 
     if (cellInd < No_of_C180s){
-        
+        float pressure = d_pressList[cellInd];
         if (useDifferentStiffnesses == true){
             if (step < phase_count){
                 if (d_pressList[cellInd] < maxPressure){
