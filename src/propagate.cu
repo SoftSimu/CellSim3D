@@ -195,7 +195,7 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], float3* d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* volList, const float div_vol)
+                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* volList, const float div_vol)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -541,7 +541,10 @@ __global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sig
             if (abs(gap2) < threshDist && -gap2*FZ < 0) FZ = -FZ; 
         }
 
-        d_forceList[rank*192+atom] = make_float3(FX, FY, FZ);
+        d_forceList.x[atomInd] = FX;
+        d_forceList.y[atomInd] = FY;
+        d_forceList.z[atomInd] = FZ;
+
         d_contactForces.x[atomInd] = FX;
         d_contactForces.y[atomInd] = FY;
         d_contactForces.z[atomInd] = FZ;
@@ -554,7 +557,7 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float *d_time, float mass,
-                          float3 *d_forceList, int numCells, bool add_rands,
+                          R3Nptrs d_forceList, int numCells, bool add_rands,
                           curandState *rngStates, float rand_scale_factor){
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
@@ -563,23 +566,11 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
     if (cellInd < numCells && node < 180){
         int nodeInd = cellInd*192 + node;
         const float dt = d_time[0];
-        float FX = d_forceList[nodeInd].x;
-        float FY = d_forceList[nodeInd].y;
-        float FZ = d_forceList[nodeInd].z;
+        float FX = d_forceList.x[nodeInd];
+        float FY = d_forceList.y[nodeInd];
+        float FZ = d_forceList.z[nodeInd];
         
         
-        // d_XP[nodeInd] =
-        //     1.0/(1.0+delta_t/(2*mass))*
-        //     ((delta_t*delta_t/mass)*FX+2*d_X[nodeInd]+(delta_t/(2*mass)-1.0)*d_XM[nodeInd]);
-        
-        // d_YP[nodeInd] =
-        //     1.0/(1.0+delta_t/(2*mass))*
-        //     ((delta_t*delta_t/mass)*FY+2*d_Y[nodeInd]+(delta_t/(2*mass)-1.0)*d_YM[nodeInd]);
-        
-        // d_ZP[nodeInd] =
-        //     1.0/(1.0+delta_t/(2*mass))*
-        //     ((delta_t*delta_t/mass)*FZ+2*d_Z[nodeInd]+(delta_t/(2*mass)-1.0)*d_ZM[nodeInd]);
-
         d_XP[nodeInd] = d_X[nodeInd] + dt*d_velListX[nodeInd] + 0.5*FX*dt*dt/mass;
         d_YP[nodeInd] = d_Y[nodeInd] + dt*d_velListY[nodeInd] + 0.5*FY*dt*dt/mass;
         d_ZP[nodeInd] = d_Z[nodeInd] + dt*d_velListZ[nodeInd] + 0.5*FZ*dt*dt/mass;
@@ -600,17 +591,17 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
 }
 
 __global__ void VelocityUpdate(float* d_VX, float* d_VY, float* d_VZ,
-                               float3* fList, float3* gList, float dt, long int num_nodes){
+                               R3Nptrs fList, R3Nptrs gList, float dt, long int num_nodes){
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
     if (nodeInd < num_nodes){
-        float FX = fList[nodeInd].x;
-        float FY = fList[nodeInd].y;
-        float FZ = fList[nodeInd].z;
+        float FX = fList.x[nodeInd];
+        float FY = fList.y[nodeInd];
+        float FZ = fList.z[nodeInd];
         
-        float GX = gList[nodeInd].x;
-        float GY = gList[nodeInd].y;
-        float GZ = gList[nodeInd].z;
+        float GX = gList.x[nodeInd];
+        float GY = gList.y[nodeInd];
+        float GZ = gList.z[nodeInd];
         
         d_VX[nodeInd] = d_VX[nodeInd] + 0.5*(FX+GX)*dt;
         d_VY[nodeInd] = d_VY[nodeInd] + 0.5*(FY+GY)*dt;

@@ -202,8 +202,8 @@ float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
 float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
 float *d_XMM, *d_YMM, *d_ZMM; 
 
-float3 *d_fList;
-float3 *d_gList;
+R3Nptrs d_fList;
+R3Nptrs d_gList; 
 
 R3Nptrs d_contactForces;
 R3Nptrs h_contactForces;
@@ -402,6 +402,12 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_fList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_fList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_fList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_gList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_gList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_gList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
 
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
   cudaMemset(d_C180_sign, 0, 180*sizeof(int));
@@ -449,14 +455,6 @@ int main(int argc, char *argv[])
   thrust::host_vector<angles3> theta0(192);
   thrust::device_vector<angles3> d_theta0V(192);
   angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
-
-  thrust::device_vector<float3> d_fListV(MaxNoofC180s*192);
-  thrust::fill(d_fListV.begin(), d_fListV.end(), make_float3(0.f, 0.f, 0.f));
-  d_fList = thrust::raw_pointer_cast(&d_fListV[0]);
-  
-  thrust::device_vector<float3> d_gListV(MaxNoofC180s*192);
-  thrust::fill(d_gListV.begin(), d_gListV.end(), make_float3(0.f, 0.f, 0.f));
-  d_gList = thrust::raw_pointer_cast(&d_gListV[0]);
 
   h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -1029,15 +1027,17 @@ int main(int argc, char *argv[])
   {
       numNodes = No_of_C180s*192;
       Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
-                                           d_X, d_Y, d_Z,
-                                           d_XM, d_YM, d_ZM, 
-                                           d_velListX, d_velListY, d_velListZ, 
-                                           d_time, mass,
-                                           d_fList, No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
+                                                 d_X, d_Y, d_Z,
+                                                 d_XM, d_YM, d_ZM, 
+                                                 d_velListX, d_velListY, d_velListZ, 
+                                                 d_time, mass,
+                                                 d_fList, No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
       CudaErrorCheck();
 
       // save previous step forces in g
-      cudaMemcpy(d_gList, d_fList, 192*No_of_C180s*sizeof(float3), cudaMemcpyDeviceToDevice);
+      cudaMemcpy(d_gList.x, d_fList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToDevice);
+      cudaMemcpy(d_gList.y, d_fList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToDevice);
+      cudaMemcpy(d_gList.z, d_fList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToDevice);
       CudaErrorCheck();
       
       if (doPopModel == 1){
