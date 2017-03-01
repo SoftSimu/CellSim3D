@@ -1273,12 +1273,10 @@ int main(int argc, char *argv[])
           
           NDIV[globalrank] += 1;
 
-          // TODO: Give daugter cells parent's velocities
           cell_division<<<1,256>>>(globalrank,
-                                   d_XP, d_YP, d_ZP,
                                    d_X, d_Y, d_Z,
-                                   d_XM, d_YM, d_ZM,
                                    d_CMx, d_CMy, d_CMz,
+                                   d_velListX, d_velListY, d_velListZ, 
                                    No_of_C180s, d_ran2, repulsion_range);
           CudaErrorCheck()
           resetIndices[divCell] = globalrank;
@@ -1292,7 +1290,7 @@ int main(int argc, char *argv[])
           }
           
           ++No_of_C180s;
-          if (No_of_C180s >= MaxNoofC180s){
+          if (No_of_C180s > MaxNoofC180s){
               printf("ERROR: Population is %d, only allocated enough memory for %d\n",
                      No_of_C180s, MaxNoofC180s);
               printf("ERROR: Fatal error, crashing...\n");
