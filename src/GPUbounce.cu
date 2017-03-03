@@ -1274,7 +1274,9 @@ int main(int argc, char *argv[])
           NDIV[globalrank] += 1;
 
           cell_division<<<1,256>>>(globalrank,
+                                   d_XP, d_YP, d_ZP, 
                                    d_X, d_Y, d_Z,
+                                   d_XM, d_YM, d_ZM, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ, 
                                    No_of_C180s, d_ran2, repulsion_range);
