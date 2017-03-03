@@ -1062,19 +1062,12 @@ int main(int argc, char *argv[])
           printf("   time %-8d %d cells, rGrowth %f, maxPop %f\n",step,No_of_C180s, rGrowth, maxPop);
       }
 
-      noofblocks      = No_of_C180s;
-      if ( prevnoofblocks < noofblocks )
-      {
-          prevnoofblocks  = noofblocks;
-          //        printf("             no of thread blocks = %d, threadsperblock = %d, no of threads = %ld\n",
-          //             noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
-      }
 
 #ifdef FORCE_DEBUG
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif
 
-      CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+      CalculateForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                       d_X,  d_Y,  d_Z,
                                                       d_CMx, d_CMy, d_CMz,
                                                       d_R0, d_pressList, d_Youngs_mod , stiffness1, 
@@ -1109,7 +1102,7 @@ int main(int argc, char *argv[])
 //           }
 
 //           a = getAdpCoeffs(isPredictor, c1, c2); 
-//           Integrate<<<noofblocks, threadsperblock>>>(d_XP, d_YP, d_ZP,
+//           Integrate<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP,
 //                                                      d_X, d_Y, d_Z, 
 //                                                      d_XM, d_YM, d_ZM,
 //                                                      d_XMM, d_YMM, d_ZMM,
@@ -1120,7 +1113,7 @@ int main(int argc, char *argv[])
 //           a = getAdpCoeffs(!isPredictor, c1, c2); 
           
 
-//           CalculateForce<<<noofblocks,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+//           CalculateForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
 //                                                           d_XP,  d_YP,  d_ZP,
 //                                                           d_CMx, d_CMy, d_CMz,
 //                                                           d_R0, d_pressList, d_Youngs_mod , stiffness1, 
@@ -1136,7 +1129,7 @@ int main(int argc, char *argv[])
 //                                                           constrainAngles, d_theta0, d_forceList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
 //           CudaErrorCheck();
 
-//           Integrate<<<noofblocks, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
+//           Integrate<<<No_of_C180s, threadsperblock>>>(d_Xt, d_Yt, d_Zt,
 //                                                      d_X, d_Y, d_Z, 
 //                                                      d_XM, d_YM, d_ZM,
 //                                                      d_XMM, d_YMM, d_ZMM,
@@ -1182,7 +1175,7 @@ int main(int argc, char *argv[])
           
           //}
 
-      VelocityUpdate<<<noofblocks, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
+      VelocityUpdate<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
                                                   d_fList, d_gList, delta_t, numNodes);
       CudaErrorCheck();
 
