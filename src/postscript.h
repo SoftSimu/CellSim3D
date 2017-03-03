@@ -5,10 +5,12 @@
 cudaDeviceProp getDevice(void);
 
 __global__ void  cell_division(int rank,
+                               float* d_XP, float* d_YP, float* d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
+                               float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ,
-                               int No_of_C180s, float *d_ran2, float repulsion_range);
+                               int No_of_C180s, float *d_randNorm, float repulsion_range);
 
 __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
                            float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
