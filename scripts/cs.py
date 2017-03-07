@@ -64,6 +64,14 @@ parser.add_argument("--ref-force", type=str, default="med", required=False,
                     help="The reference force to plot relative stress too. 'med'\
                     uses median, 'max' uses the maximum force")
 
+parser.add_argument("--last-frame", "-lf", type=int, default=-1, required=False,
+                    help="Only analyze upto this frame. This is useful for\
+                    analyzing really large simulations that can also be still in\
+                    progress")
+
+parser.add_argument("-f", "--frame", type = int, default=-1, required=False,
+                    help="Only analyze this one frame.")
+
 
 args=parser.parse_args()
 trajPath = os.path.abspath(args.traj)
@@ -115,7 +123,22 @@ mins = []
 if args.set_limits:
     with cd.TrajHandle(trajPath) as th:
         print("Getting movie limits...")
-        frame = np.vstack(th.ReadFrame(th.maxFrames))
+
+        if args.last_frame > 0 and args.last_frame > th.maxFrames:
+            print("Trajectory only has {0} step".format(th.maxFrames))
+            args.last_frame = -1
+
+        if args.frame > 0 and args.frame > th.maxFrames:
+            print("Trajectory only has {0} step".format(th.maxFrames))
+            args.frame = th.maxFrames
+
+        if args.frame > 0:
+            frame = np.vstack(th.ReadFrame(args.frame))
+        elif args.last_frame > 0:
+            frame = np.vstack(th.ReadFrame(args.last_frame))
+        else:
+            frame = np.vstack(th.ReadFrame(th.maxFrames))
+
         frame = frame - np.mean(frame, axis=0)
         zs = np.abs(frame[:, 2])
         m = zs <= args.threshold
@@ -172,6 +195,12 @@ with cd.TrajHandle(trajPath) as th:
         ax.set_title("$t = %d$" % i)
         try:
             frame = th.ReadFrame(inc=args.skip)
+            if args.frame > 0 and th.currFrameNum < args.frame:
+                continue
+
+            if args.frame > 0 and th.currFrameNum > args.frame:
+                break
+
             cellTypes = th.currTypes
             Xs0 = []
             Ys0 = []
