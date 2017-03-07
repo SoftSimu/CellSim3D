@@ -93,11 +93,7 @@ storePath += "/" + trajFileName + "/cs/"
 
 print ("Saving to", storePath)
 
-
-
-
 cmap = plt.get_cmap(args.colormap)
-
 
 if not os.path.exists(storePath):
     os.makedirs(storePath)
@@ -173,7 +169,7 @@ def GetStepForces(step):
         x = forceFileHandle.tell()
         line = forceFileHandle.readline().strip().split(",")
         if int(line[0]) < step:
-            for _ in range(int(line[1]) * 192):
+            for _ in range(int(line[1]) * 180):
                 #next(forceFileHandle)
                 forceFileHandle.readline()
 
@@ -182,7 +178,7 @@ def GetStepForces(step):
             break
 
         if int(line[0]) == step:
-            n = int(line[1])*192
+            n = int(line[1])*180
             forceFileHandle.seek(x)
             for _ in range(n):
                 stepForces.write(forceFileHandle.readline())
@@ -213,9 +209,8 @@ with cd.TrajHandle(trajPath) as th:
             avgCellForces = []
             datLens = []
 
-            sysCM = np.mean(np.array([np.mean(c, axis=0) for c in frame]), axis=0)
-            frame = [c - sysCM for c in frame]
-
+            sysCM = np.mean(np.array([np.mean(c[:180], axis=0) for c in frame]), axis=0)
+            frame = [c[:180] - sysCM for c in frame]
 
             if args.forces is not "" and th.step>0:
                 sF = GetStepForces(th.step)
