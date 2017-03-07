@@ -143,9 +143,10 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         }
 
         if (checkSphericity){
-            areaList[fullerene] = area; 
-            float psi = 4.835975862049408 * powf(volume, 2.0/3.0)/area;
-            if ((1.0f - psi) > 0.05 || psi > 1 || psi < 0){ // why 0.05?
+            areaList[fullerene] = area;
+            float c = cbrtf(volume);
+            float psi = 4.835975862049408 * c * c/area;
+            if (abs(1.0f - psi) > 0.05){ // why 0.05?
                 cell_div[fullerene] = 0;
                 //printf("cell %d division rejected\n", fullerene);
             }
