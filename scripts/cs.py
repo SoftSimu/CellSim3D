@@ -2,10 +2,9 @@
 
 import argparse
 import os
-import sys
+import io
 import numpy as np
 from tqdm import tqdm
-import io
 import pandas as pd
 
 import celldiv as cd
@@ -27,22 +26,22 @@ parser.add_argument("traj",
 
 parser.add_argument("-k", "--skip",
                     help="Trajectory frame skip rate",
-                    type = int,
-                    default = 1)
+                    type=int,
+                    default=1)
 parser.add_argument("-t", "--threshold",
                     help="Threshold distance from plane within which plotted",
-                    type = float,
-                    default = 0.1)
+                    type=float,
+                    default=0.1)
 parser.add_argument("-l", "--set-limits",
                     help="Set limits for the video. Must read trajectory twice. \
                     Must be a complete trajectory file.",
-                    type = bool,
-                    default = True)
+                    type=bool,
+                    default=True)
 
 parser.add_argument("-o", "--out",
                     help="Output file name (with format)",
-                    type = str,
-                    default = "cs.png")
+                    type=str,
+                    default="cs.png")
 
 parser.add_argument("-p", "--pixel",
                     help="Plot pixels instead of points",
@@ -50,7 +49,7 @@ parser.add_argument("-p", "--pixel",
 
 parser.add_argument("-c", "--clear",
                     help="Toggle clearing of storage directory",
-                    type = bool,
+                    type=bool,
                     default=True)
 
 parser.add_argument("--forces", type=str, default="",
@@ -70,11 +69,11 @@ parser.add_argument("--last-frame", "-lf", type=int, default=-1, required=False,
                     analyzing really large simulations that can also be still in\
                     progress")
 
-parser.add_argument("-f", "--frame", type = int, default=-1, required=False,
+parser.add_argument("-f", "--frame", type=int, default=-1, required=False,
                     help="Only analyze this one frame.")
 
 
-args=parser.parse_args()
+args = parser.parse_args()
 trajPath = os.path.abspath(args.traj)
 
 forcePath = []
@@ -122,11 +121,11 @@ if args.set_limits:
         print("Getting movie limits...")
 
         if args.last_frame > 0 and args.last_frame > th.maxFrames:
-            print("Trajectory only has {0} step".format(th.maxFrames))
+            print("Trajectory only has {0} frames".format(th.maxFrames))
             args.last_frame = -1
 
         if args.frame > 0 and args.frame > th.maxFrames:
-            print("Trajectory only has {0} step".format(th.maxFrames))
+            print("Trajectory only has {0} frames".format(th.maxFrames))
             args.frame = th.maxFrames
 
         if args.frame > 0:
@@ -189,7 +188,7 @@ def GetStepForces(step):
 
 with cd.TrajHandle(trajPath) as th:
     for i in tqdm(range(int(th.maxFrames/args.skip))):
-        ax.set_title("$t = %d$" % i)
+        ax.set_title("$t = {0}$".format(i+1))
         try:
             frame = th.ReadFrame(inc=args.skip)
             if args.frame > 0 and th.currFrameNum < args.frame:
@@ -260,11 +259,7 @@ with cd.TrajHandle(trajPath) as th:
                     ax.fill(p[hull.vertices, 0], p[hull.vertices, 1],
                             color=cmap(f/ref_force))
 
-
-
-
-
-            fig.savefig(storePath + outName[0] + "%s" % i + outName[1])
+            fig.savefig(storePath + outName[0] + "{0}".format(i+1) + outName[1])
 
         except cd.IncompleteTrajectoryError as e:
             print(e.value)
