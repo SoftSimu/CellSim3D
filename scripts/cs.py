@@ -15,6 +15,7 @@ mpl.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial import ConvexHull
 
 desc = """"""
 
@@ -259,12 +260,14 @@ with cd.TrajHandle(trajPath) as th:
                     ref_force = max(avgCellForces)
 
                 for x,y,f in zip(Xs0, Ys0, avgCellForces):
-                    # sort the angle
-                    cx = x - np.mean(x)
-                    cy = y - np.mean(y)
-                    thetas = np.arctan(cy/cx)
-                    inds = np.argsort(thetas)
-                    ax.fill(x[inds],y[inds],color = cmap(f/ref_force))
+                    p = np.array([x,y]).T
+                    hull = ConvexHull(p)
+                    ax.fill(p[hull.vertices, 0], p[hull.vertices, 1],
+                            color=cmap(f/ref_force))
+
+
+
+
 
             fig.savefig(storePath + outName[0] + "%s" % i + outName[1])
 
