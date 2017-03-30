@@ -3,6 +3,7 @@
 import argparse
 import os
 import io
+import sys
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -187,7 +188,8 @@ def GetStepForces(step):
 
 
 with cd.TrajHandle(trajPath) as th:
-    for i in tqdm(range(int(th.maxFrames/args.skip))):
+    n = args.last_frame if args.last_frame > 0 else th.maxFrames
+    for i in tqdm(range(int(n/args.skip))):
         ax.set_title("$t = {0}$".format(i+1))
         try:
             frame = th.ReadFrame(inc=args.skip)
@@ -208,7 +210,7 @@ with cd.TrajHandle(trajPath) as th:
             avgCellForces = []
             datLens = []
 
-            sysCM = np.mean(np.array([np.mean(c[:180], axis=0) for c in frame]), axis=0)
+            sysCM = np.mean(np.vstack(frame), axis=0)
             frame = [c[:180] - sysCM for c in frame]
 
             if args.forces is not "" and th.step>0:
@@ -229,7 +231,7 @@ with cd.TrajHandle(trajPath) as th:
                     Xs1.append(data[:, 0])
                     Ys1.append(data[:, 1])
 
-                if args.forces is not "" and th.step>0:
+                if args.forces is not "" and th.step > 0:
                     cellForces = Forces[Forces["cell_ind"] == c][["FX", "FY", "FZ"]]
                     avgCellForces.append(np.linalg.norm(cellForces.as_matrix(),
                                                         axis=1).sum())
