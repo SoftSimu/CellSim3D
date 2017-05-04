@@ -1623,29 +1623,54 @@ int initialize_C180s(int Orig_No_of_C180s)
   }
   fclose(infil);
 
+  // first correct for the cells com
+
+  float sumx = 0; 
+  float sumy = 0; 
+  float sumz = 0;
+      
+  for (int i =0; i < 180; ++i){
+      sumx += initx[i]; 
+      sumy += inity[i]; 
+      sumz += initz[i]; 
+  }
+
+  sumx /= 180.0; 
+  sumy /= 180.0; 
+  sumz /= 180.0;
+
+  // calculate initial cell volume
+
+  
+      
+  for (int i =0; i < 180; ++i){
+      initx[i] -= sumx; 
+      inity[i] -= sumy; 
+      initz[i] -= sumz; 
+  }
+
   if (useRigidSimulationBox){
-      float rCheck = ceil(powf(0.75*(1.f/3.14159)*divVol, 1.f/3.f));
+      float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
       printf("Check radius = %f\n", rCheck);
       float3 allCMs[Orig_No_of_C180s];
 
       float vol = 0;
       int k = 0;
-      if (flatbox == 1){
-          vol = boxMax.x*boxMax.y;
-          k = ceil(vol/(rCheck*rCheck*4));
-      } else {
-          vol = boxMax.x*boxMax.y*boxMax.z;
-          k = ceil(vol/(rCheck*rCheck*rCheck*8));
-      }
-
-      if (k <= Orig_No_of_C180s){
+      
+      vol = boxMax.x*boxMax.y*boxMax.z;
+      k = floor(vol/0.786);
+      
+      if (k < Orig_No_of_C180s){
           fprintf(stderr, "ERROR: Simulation box is too small\n");
           fprintf(stderr, "       Big enough for %d\n", k);
           return 27;
       }
 
+      printf("Can fit upto %d cells\n", k);
+
       int c = 0;
       float rands[3];
+
       if (rand_pos){
           while (true){
               ranmar(rands, 3);
@@ -1658,12 +1683,15 @@ int initialize_C180s(int Orig_No_of_C180s)
                   CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
               }
 
-              bool farEnough = true; 
+
+              bool farEnough = true;
+              
+              farEnough = !(CM.x+rCheck > boxMax.x ||
+                            CM.y+rCheck > boxMax.y ||
+                            CM.z+rCheck > boxMax.z);
+              
               for (int nInd = 0; nInd < c; ++nInd){
-                  if (mag(allCMs[nInd] - CM) < 2*rCheck ||
-                      CM.x+rCheck > boxMax.x ||
-                      CM.y+rCheck > boxMax.y ||
-                      CM.z+rCheck > boxMax.z){
+                  if (mag(allCMs[nInd] - CM) < 2*rCheck){
                       farEnough = false;
                       break;
                   }
@@ -1687,21 +1715,37 @@ int initialize_C180s(int Orig_No_of_C180s)
               }
           }
       } else {
-          Side_length = (int)sqrt(Orig_No_of_C180s);
+
+          // crash because this doesn't work right now.
+          printf("Simulation in a box must be with random positions\n");
+          exit(12);
+
+          rCheck *= 1.2;
+          float3 center = 0.5*boxMax;
           
           for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
           {
-              ey=rank%Side_length;
-              ex=rank/Side_length;
 
               for ( atom = 0 ; atom < 180 ; ++atom)
               {
-                  X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1 + boxMax.x/2.f;
-                  Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1 + boxMax.y/2.f;
-                  Z[rank*192+atom] = initz[atom] + boxMax.z/2.f;
+                  X[rank*192+atom] = initx[atom] + center.x;
+                  Y[rank*192+atom] = inity[atom] + center.y;
+                  Z[rank*192+atom] = initz[atom] + center.z;
               }
-
           }
+      }
+
+      // check all the fucking positions...
+      for (int i = 0; i < Orig_No_of_C180s*192; ++i){
+          if (X[i] > boxMax.x ||
+              Y[i] > boxMax.y ||
+              Z[i] > boxMax.z){
+
+              printf("shit is in the fan\n");
+              printf("%f %f %f\n", X[i], Y[i], Z[i]);
+              //exit(4); 
+          }
+                               
       }
   }
   else{
