@@ -470,45 +470,43 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         }
 
 #endif
-        // add friction
-        //printf("cell %d node %d velX %f\n", rank, atomInd, velX);
-        // FX += -1 * gamma_visc * velX;
-        // FY += -1 * gamma_visc * velY;
-        // FZ += -1 * gamma_visc * velZ;
-        
-        // disForce.x += -1 * gamma_visc * velX;
-        // disForce.y += -1 * gamma_visc * velY;
-        // disForce.z += -1 * gamma_visc * velZ;
-
         // add forces from simulation box if needed:
         if (useRigidSimulationBox){
             float gap1, gap2; 
-            gap1 = d_X[atomInd];
-            gap2 = boxMax.x - d_X[atomInd];
 
-            // if (gap1 < 0) FX += 100.f;
-            // if (gap2 < 0) FX -= 100.f;
+            gap1 = d_X[atomInd] /* - 0 */;
+            gap2 = boxMax.x - d_X[atomInd]; 
 
-            if (abs(gap1) < threshDist && gap1*FX < 0) FX = -FX;
-            if (abs(gap2) < threshDist && -gap2*FX < 0) FX = -FX; 
+            if (gap1 < threshDist){
+                FX += -100*Youngs_mod*(gap1 - threshDist);
+            }
 
+            if (gap2 < threshDist){
+                FX += 100*Youngs_mod*(gap2 - threshDist);
+            }
+            
             gap1 = d_Y[atomInd];
             gap2 = boxMax.y - d_Y[atomInd];
 
-            // if (gap1 < 0) FY += 100.f;
-            // if (gap2 < 0) FY -= 100.f;
+            if (gap1 < threshDist){
+                FY += -100*Youngs_mod*(gap1 - threshDist);
+            }
 
-            if (abs(gap1) < threshDist && gap1*FY < 0) FY = -FY;
-            if (abs(gap2) < threshDist && -gap2*FY < 0) FY = -FY; 
+            if (gap2 < threshDist){
+                FY += 100*Youngs_mod*(gap2 - threshDist);
+            }
 
             gap1 = d_Z[atomInd];
             gap2 = boxMax.z - d_Z[atomInd];
 
-            // if (gap1 < 0) FZ += 100.f;
-            // if (gap2 < 0) FZ -= 100.f;
+            if (gap1 < threshDist){
+                FZ += -100*Youngs_mod*(gap1 - threshDist);
+            }
 
-            if (abs(gap1) < threshDist && gap1*FZ < 0) FZ = -FZ;
-            if (abs(gap2) < threshDist && -gap2*FZ < 0) FZ = -FZ; 
+            if (gap2 < threshDist){
+                FZ += 100*Youngs_mod*(gap2 - threshDist);
+            }
+
         }
 
         d_forceList.x[atomInd] = FX;
