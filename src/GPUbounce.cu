@@ -31,6 +31,9 @@
 #include "VectorFunctions.hpp"
 #include "AdaptiveTimeKernels.cuh"
 
+#include "SimParams.cuh"
+#include "TrajWriter.cuh"
+#include "State.cuh"
 #include "json/json.h"
 
 
@@ -298,6 +301,12 @@ int main(int argc, char *argv[])
   strcpy(inpFile, argv[2]);
 
   if ( read_json_params(inpFile)          != 0 ) return(-1);
+
+  sim_params_struct sim_params;
+
+  ReadSimParams(sim_params, "inp.json");
+
+  TrajWriter TW(sim_params);
 
   printf("%d\n", MaxNoofC180s); 
 
@@ -610,6 +619,33 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
 
   CudaErrorCheck();
+
+  // set simulation state
+  state_struct state;
+
+  state.pos.x = X;
+  state.pos.y = Y;
+  state.pos.z = Z; 
+
+  state.vel.x = velListX;
+  state.vel.y = velListY;
+  state.vel.z = velListZ;
+
+  state.conForce.x = h_contactForces.x;
+  state.conForce.y = h_contactForces.y;
+  state.conForce.z = h_contactForces.z;
+
+
+  state.vol = (float *)calloc(MaxNoofC180s, sizeof(float));
+
+  // state.nodeDisForces.x = d_fDisList.x;
+  // state.nodeDisForces.y = d_fDisList.y;
+  // state.nodeDisForces.z = d_fDisList.z;
+  
+  // state.nodeRanForces.x = d_fRanList.x;
+  // state.nodeRanForces.y = d_fRanList.y;
+  // state.nodeRanForces.z = d_fRanList.z;
+  
 
   // Set the Youngs_mod for the cells
   youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -1018,8 +1054,9 @@ int main(int argc, char *argv[])
       t = (Time_steps+equiStepCount+1) / trajWriteInt;
       fwrite(&t, sizeof(int), 1, trajfile);
       
-    
-      WriteBinaryTraj(0, trajfile, 1); 
+      state.no_of_cells = No_of_C180s; 
+      WriteBinaryTraj(0, trajfile, 1);
+      TW.WriteState(state);
   } else {
       fprintf(trajfile, "Header Start:\n");
       fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
@@ -1445,30 +1482,25 @@ int main(int argc, char *argv[])
           cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
           cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+
+          cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              
+          cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+          cudaMemcpy(state.vol, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+          CudaErrorCheck();
           
-          if (binaryOutput)
+          state.no_of_cells = No_of_C180s; 
+          if (binaryOutput){
               WriteBinaryTraj(step, trajfile, frameCount);
+              TW.WriteState(state);
+          }
           else
               write_traj(step, trajfile);
-
-          if (write_cont_force == true){
-
-              cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              
-              cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              
-              cudaMemcpy(X, d_X, 192*No_of_C180s, cudaMemcpyDeviceToHost);
-              cudaMemcpy(Y, d_Y, 192*No_of_C180s, cudaMemcpyDeviceToHost);
-              cudaMemcpy(Z, d_Z, 192*No_of_C180s, cudaMemcpyDeviceToHost);
-              
-              cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-
-              writeForces(forceFile, step, No_of_C180s);
-          }
       }
 
       myError = cudaGetLastError();

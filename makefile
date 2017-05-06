@@ -1,15 +1,15 @@
 compiler = $(shell which nvcc)
 debug = -g -G -lineinfo
-arch = -arch=sm_52
-oflags = $(arch) -Xptxas="-v" -I inc -dc -D_FORCE_INLINES
+arch = -arch=sm_50
+oflags = $(arch) -Xptxas="-v" -I inc -dc -D_FORCE_INLINES -I /usr/include/hdf5/serial/ -std=c++11
 objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
 objects = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
-	propagatebound.o propagate.o volume.o BondKernels.o
+	propagatebound.o propagate.o volume.o BondKernels.o SimParams.o TrajWriter.o
 linkObjects = $(patsubst %, $(objDir)%, $(objects))
 
-eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand
+eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand -L/usr/lib/x86_64-linux-gnu/hdf5/serial -lhdf5 -std=c++11
 opt = -O3
 
 debug: opt= -O0
@@ -51,6 +51,12 @@ $(objDir)BondKernels.o : src/BondKernels.cu
 $(objDir)GPUbounce.o : src/GPUbounce.cu
 	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
 
+$(objDir)SimParams.o: src/SimParams.cu
+	$(compiler) $(oflags) -c src/SimParams.cu -o $(objDir)SimParams.o
+
+$(objDir)TrajWriter.o: src/TrajWriter.cu
+	$(compiler) $(oflags) -c src/TrajWriter.cu -o $(objDir)TrajWriter.o
+
 CellDiv: $(linkObjects) $(objDir)jsoncpp.o
 	$(compiler) $(eflags)
 
@@ -60,4 +66,4 @@ $(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
 
 .PHONY: clean
 clean:
-	rm -f $(objDir)/CellDiv $(linkObjects)
+	rm -f $(objDir)/*
