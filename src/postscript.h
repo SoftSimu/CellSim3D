@@ -40,12 +40,6 @@ int generate_random(int no_of_ran1_vectors);
 int read_fullerene_nn(void);
 int read_global_params(void);
 int read_json_params(const char* inpFile);
-int PSSETUP(FILE* outfile);
-int PSLINE(float X1, float Y1, float X2, float Y2, FILE *outfile);
-int PSCIRCLE(float X,float Y,FILE *outfile);
-int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271]);
-
-int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
@@ -123,8 +117,6 @@ __global__ void DeviceRandInit(curandState *rngState, uint *d_seeds, unsigned lo
 __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
                             int* d_C180_nn,
                             float* d_youngsModArray, float stiffness2, int No_of_C180s);
-
-void writeForces(FILE* forceFile, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
                                  float sysCMx, float sysCMy, float sysCMz, long int numParts);

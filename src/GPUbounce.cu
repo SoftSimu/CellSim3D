@@ -71,7 +71,6 @@ bool checkSphericity;
 bool chooseRandomCellIndices;
 float fractionOfSofterCells;
 int phase_count = INT_MAX;
-bool write_cont_force=false;
 char forces_file[256];
 
 
@@ -336,11 +335,6 @@ int main(int argc, char *argv[])
   CPUMemory += MaxNoofC180s*sizeof(int);
   for ( i = 0; i < No_of_threads; ++i ) NDIV[i] = 1;
   for ( i = No_of_threads; i < MaxNoofC180s; ++i ) NDIV[i] = 0;
-
-  // empty the psfil from previous results
-  outfile = fopen("psfil","w");
-  if ( outfile == NULL ) {printf("Unable to open file psfil\n");return(-1);}
-  fclose(outfile);
 
   /* PM
      Allocate memory for the dividingCells array that will be used to
@@ -806,10 +800,6 @@ int main(int argc, char *argv[])
       return -1;
   }
 
-  FILE* forceFile = fopen(forces_file, "w");
-
-  FILE* velFile = fopen("velocity2.xyz", "w");
-
 #ifdef OUTPUT_ADP_ERROR
   FILE* timeFile = fopen("times", "w");
   FILE* errFile = fopen("errors", "w"); 
@@ -911,21 +901,6 @@ int main(int argc, char *argv[])
   boxMin[0] = 0;
   boxMin[1] = 0;
   boxMin[2] = 0;
-  
-  // Setup simulation box, if needed (non-pbc)
-  if (useRigidSimulationBox){
-      printf("   Setup rigid (non-PBC) box...\n"); 
-      boxLength = boxLength*ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
-      //if (boxLength < minBoxLength) boxLength = minBoxLength
-      //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = floor(Minx[0]);
-      boxMin[1] = floor(Minx[2]);
-      boxMin[2] = floor(Minx[4]);
-      printf("   Done!\n");
-      printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
-      printf("   Simulation box length = %f\n", boxLength);
-  }
-
   
   cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck(); 
@@ -1070,23 +1045,8 @@ int main(int argc, char *argv[])
       fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
       fprintf(trajfile, "Header End\n");
       write_traj(0, trajfile);
-  }
-
-  if (write_cont_force){
-      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V,X,Y,Z,P\n");
       
-      cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      
-      cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      writeForces(forceFile, 0, No_of_C180s);
   }
-
-  //return 0;
 
 
   int numNodes = No_of_C180s*192;
@@ -1613,7 +1573,6 @@ int main(int argc, char *argv[])
   free(velListZ); 
 
   fclose(trajfile);
-  fclose(forceFile);
   fclose(MitIndFile);
 #ifdef OUTPUT_ADP_ERROR
   fclose(timeFile);
@@ -2001,7 +1960,6 @@ int read_json_params(const char* inpFile){
         dt_tol = coreParams["dt_tol"].asFloat();
         doAdaptive_dt = coreParams["doAdaptive_dt"].asBool();
         phase_count = coreParams["phase_count"].asInt();
-        write_cont_force = coreParams["write_cont_force"].asBool();
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
         correct_com = coreParams["correct_com"].asBool();
                                  
@@ -2589,36 +2547,3 @@ inline int num_cells_far(){
   return farCellCount;
 
 }
-
-void writeForces(FILE* forceFile, int t_step, int num_cells){
-    if(forceFile == NULL){
-        printf("ERROR: forces file not available\n");
-        exit(1);
-    }
-
-    for (int c =0; c < num_cells; ++c){
-        for (int n = 0; n < 180; ++n){
-            fprintf(forceFile, "%d,%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
-                    t_step, num_cells, c, n, c*192+n,
-                    h_contactForces.x[c*192 + n],
-                    h_contactForces.y[c*192 + n],
-                    h_contactForces.z[c*192 + n],
-                    mag(make_float3(h_contactForces.x[c*192 + n],
-                                    h_contactForces.y[c*192 + n],
-                                    h_contactForces.z[c*192 + n])),
-                    velListX[c*192+n],
-                    velListY[c*192+n],
-                    velListZ[c*192+n],
-                    mag(make_float3(velListX[c*192+n],
-                                    velListY[c*192+n],
-                                    velListZ[c*192+n])),
-                    X[c*192+n],
-                    Y[c*192+n],
-                    Z[c*192+n],
-                    pressList[c]
-                );
-                        
-        }
-    }
-}
-
