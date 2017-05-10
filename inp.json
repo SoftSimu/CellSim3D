@@ -21,10 +21,10 @@
         "division_Vol": 2.9,
         "random_z_offset?": 0,
         "z_offset": 0.0,
-        "div_time_steps": 10000,
+        "div_time_steps": 20000,
         "delta_t": 0.0001,
         "restart": 0,
-        "traj_write_int": 1,
+        "traj_write_int": 100,
         "non_div_time_steps": 5000,
         "traj_file_name": "example.hf5",
         "bin_out": 1,
@@ -120,7 +120,8 @@
         "box_len_z": 20.0,
         "flatbox": 0,
         "dom_len": 1.5,
-        "rand_pos": 0
+        "rand_pos": 0,
+        "thresh_dist": 0.01
     },
 
     "rand_params":{

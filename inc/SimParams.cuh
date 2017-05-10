@@ -35,7 +35,7 @@ struct core_params_struct{
     bool angle_pot;
     real dom_len;
     long int phase_count;
-    bool correct_com; 
+    bool correct_com;
 };
 
 struct angle_params_struct{
@@ -106,6 +106,7 @@ struct box_params_struct{
     real box_len_x;
     real box_len_y;
     real box_len_z;
+    real3 box_max; 
     bool flatbox;
 };
 

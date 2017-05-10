@@ -2,6 +2,7 @@
 #include<stdio.h>
 #include"VectorFunctions.hpp"
 #include<curand_kernel.h>
+#include"State.cuh"
 cudaDeviceProp getDevice(void);
 
 __global__ void  cell_division(int rank,
@@ -22,9 +23,7 @@ __global__ void makeNNlist( int No_of_C180s, float *d_bounding_xyz,
                         float Minx, float Miny, float Minz, float attrac, int Xdiv, int Ydiv, int Zdiv,
                         int *d_NoofNNlist, int *d_NNlist, float DL);
 
-__global__ void CenterOfMass( int No_of_C180s,
-               float *d_XP, float *d_YP, float *d_ZP,
-               float *CMx, float *CMy, float *CMz);
+__global__ void CenterOfMass(SimStatePtrs simState);
 
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,

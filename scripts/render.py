@@ -82,7 +82,6 @@ doSmooth = args.smooth
 if doSmooth:
     print("Doing smoothing. Consider avoiding this feature...")
 
-
 if (args.res < 1):
     print("ERROR: invalid resolution factor")
     sys.exit()
@@ -123,8 +122,15 @@ stopAt = args.num_frames
 # Set material color
 bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cell_color]
 bpy.data.materials['Material'].specular_intensity = args.specular_intensity
+
+# reset camera
+# bpy.data.objects["Camera"].location=(0.0, 0.0, 0.0)
+# bpy.data.objects["Camera"].rotation_euler=(0, 0, 0)
+# camConsty=np.tan(0.5*bpy.data.cameras["Camera"].angle_y)
+# camConstx=np.tan(0.5*bpy.data.cameras["Camera"].angle_x)
+# cps=[]
 with celldiv.TrajHandle(filename) as th:
-    frameCount = 1
+    frameCount = 0
     try:
         for i in range(int(th.maxFrames/nSkip)):
 
@@ -145,6 +151,12 @@ with celldiv.TrajHandle(filename) as th:
             f = np.vstack(f)
             # adjust to CoM
             f -= np.mean(f, axis=0)
+
+            # set camera
+            # camPos = max(np.abs(f[:, 0]).max()/camConstx, np.abs(f[:, 1]).max()/camConsty)*1.1
+            # cps.append(camPos)
+            # bpy.data.objects["Camera"].location=(0, 0, camPos)
+
             faces = []
             for mi in range(int(len(f)/192)):
                 for row in firstfaces:

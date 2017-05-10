@@ -30,10 +30,10 @@
 #include "RandomVector.h"
 #include "VectorFunctions.hpp"
 #include "AdaptiveTimeKernels.cuh"
-
 #include "SimParams.cuh"
 #include "TrajWriter.cuh"
 #include "State.cuh"
+#include "globals.cuh"
 #include "json/json.h"
 
 
@@ -47,244 +47,15 @@ void CudaFailure();
         }\
     }
 
-float mass;                                        //  M
-float repulsion_range,    attraction_range;        //  LL1, LL2
-float repulsion_strength, attraction_strength;     //  ST1, ST2
 
-// variables to allow for different stiffnesses
-float stiffness1;
-float stiffness2;
-float Youngs_mod; 
-float* d_Youngs_mod;
-float* youngsModArray; 
-bool useDifferentStiffnesses;
-bool recalc_r0; 
-int* d_indSoftCells;
-float softYoungsMod;
-int numberOfSofterCells;
-bool duringGrowth;
-bool daughtSameStiffness;
-float closenessToCenter;
-int startAtPop;
-bool checkSphericity; 
-
-bool chooseRandomCellIndices;
-float fractionOfSofterCells;
-int phase_count = INT_MAX;
-char forces_file[256];
-
-
-float viscotic_damping, internal_damping;          //  C, DMP
-float gamma_visc;
-float zOffset; // Offset from Z = 0 for starting positions.
-int ranZOffset;
-int   Time_steps;
-float divVol;
-float delta_t;
-float dt_max;
-float dt_tol;
-bool doAdaptive_dt;
-float c1 = 0; float c2 = 0; 
-int   Restart;
-int   trajWriteInt; // trajectory write interval
-int   countOnlyInternal; // 0 - Count all new cells
-                         // 1 - Count only the cells born within 0.6Rmax from
-                         //     the center of mass of the system
-float radFrac; // The factor to count cells within a raduys (<Rmax)
-
-int   overWriteMitInd; // 0 No, 1 yes
-
-int newCellCountInt; // Interval at which to count the divided cells
-int equiStepCount;
-const char* ptrajFileName;
-char trajFileName[256];
-bool binaryOutput; 
-
-// equilibrium length of springs between fullerene atoms
-float R0  = 0.13517879937327418f; // why is this hard-coded?
-float* d_R0;
-float* h_R0;
-
-
-float L1  = 3.0f;       // the initial fullerenes are placed in
-// an X x Y grid of sizne L1 x L1
-
-
-// the three nearest neighbours of C180 atoms
-int   C180_nn[3*192];
-int   C180_sign[180];
-// device: the three nearest neighbours of C180 atoms
-int   *d_C180_nn;
-int   *d_C180_sign;
-
-int   CCI[2][271];       // list of nearest neighbor carbon pairs in the fullerne
-// number of pairs = 270
-
-int   C180_56[92*7];     // 12 lists of atoms forming pentagons 1 2 3 4 5 1 1 and
-// 80 lists of atoms forming hexagons  1 2 3 4 5 6 1
-int   *d_C180_56;
-
-float *d_volume;
-float *volume;
-float *d_area; 
-float *area; 
-char* cell_div;
-char* d_cell_div;
-int num_cell_div;
-int* cell_div_inds;
-
-char mitIndFileName[256]; 
-
-float *d_pressList;
-float *pressList;
-int* d_resetIndices;
-int* resetIndices; 
-
-
-float* d_velListX; 
-float* d_velListY; 
-float* d_velListZ;
-
-float* velListX; 
-float* velListY; 
-float* velListZ; 
-
-// Params related to population modelling
-int doPopModel;
-char* didCellDie;
-float totalFood;
-float* d_totalFood;
-int haylimit;
-int cellLifeTime;
-float cellFoodCons; // baseline food consumption
-float cellFoodConsDiv; // Extra good consumption when cell divides
-float cellFoodRel; // Food released when cell dies (should < total consumed food)
-float maxPressure;
-float minPressure;
-float rMax;
-float maxPop; 
-
-// Params related to having walls in the simulation
-int useWalls;
-char perpAxis[2];
-float threshDist;
-float dAxis;
-float wallLen;
-float wallWidth;
-float wall1, wall2;
-float wallWStart, wallWEnd;
-float wallLStart, wallLEnd;
-
-float boxLength, boxMin[3];
-float3 boxMax;
-bool flatbox; 
-bool useRigidSimulationBox;
-bool usePBCs; 
-float* d_boxMin;
-bool rand_pos; 
-
-// randomness parameters
-
-bool add_rands;
-int rand_seed;
-int rand_dist;
-float rand_scale_factor;
-curandState *d_rngStates;
-unsigned int *d_seeds; 
-
-int No_of_threads; // ie number of staring cells
-int Side_length;
-int ex, ey;
-
-
-float  *X,  *Y,  *Z;     // host: atom positions
-
-float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
-float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
-float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
-float *d_XMM, *d_YMM, *d_ZMM; 
-
-R3Nptrs d_fConList;
-R3Nptrs d_fDisList;
-R3Nptrs d_fRanList; 
-
-R3Nptrs d_contactForces;
-R3Nptrs h_contactForces;
-
-float* d_Fx;
-float* d_Fy;
-float* d_Fz;
-
-// float* theta0;
-// float* d_theta0;
-
-bool constrainAngles;
-
-// host: minimal bounding box for fullerene
-float *bounding_xyz;
-float *d_bounding_xyz;   // device:  bounding_xyz
-
-// global minimum and maximum of x and y, preprocessfirst
-// global minimum and maximum of x and y, postprocesssecond
-float *d_Minx, *d_Maxx, *d_Miny, *d_Maxy, *d_Minz, *d_Maxz;
-float *Minx, *Maxx, *Miny, *Maxy, *Minz, *Maxz;
-
-float DL;
-int Xdiv, Ydiv, Zdiv;
-
-//int *d_NoofNNlist;
-int *d_NNlist;
-int *NoofNNlist;
-int *NNlist;
-
-float *d_CMx, *d_CMy, *d_CMz;
-float *CMx, *CMy, *CMz;
-float sysCMx = 1.0, sysCMy = 1.0, sysCMz = 1.0;
-float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0;
-
-//float Pressure;          // pressure
-//float Temperature;       // equation of state relates Pressure and Temperature
-
-int  No_of_C180s;        // the global number of C180 fullerenes
-int  No_of_C180s_in;     // the number of C180s near the center of mass of the system
-int MaxNoofC180s; 
-
-float *ran2;             // host: ran2[]
-float *d_ran2;           // device: ran2[], used in celldivision
-
-int *NDIV;               // # of divisions
-
-// Parameters related to division
-bool useDivPlaneBasis;
-float divPlaneBasis[3]; 
-
-long int GPUMemory;
-long int CPUMemory;
-
-
-int frameCount = 1;
-
-bool correct_com = false; 
+size_t base_n::used_host_mem = 0;
 
 int main(int argc, char *argv[])
 {
-  int i;
-  int globalrank,step;
-  int noofblocks, threadsperblock, prevnoofblocks;
-  int Orig_No_of_C180s, newcells;
-  int reductionblocks;
-  FILE *outfile;
-  FILE *trajfile; // pointer to xyz file
   cudaError_t myError;
 
   int* dividingCells; //Cells that are about to divide
   int* totalCells; // No. of cells at every Dividing_steps
-
-
-  int* num_new_cells_per_step;
-  int countOffset = 0;
-
-  //int min_no_of_cells = 10;
 
   printf("CellDiv version 0.9\n");
 
@@ -294,8 +65,7 @@ int main(int argc, char *argv[])
       return(0);
   }
 
-  No_of_threads = atoi(argv[1]);
-
+  SimState simState(atoi(argv[1]), sim_params);
   char inpFile[256];
   strcpy(inpFile, argv[2]);
 
@@ -307,34 +77,11 @@ int main(int argc, char *argv[])
 
   TrajWriter TW(sim_params);
 
-  printf("%d\n", MaxNoofC180s); 
-
-  Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
-  if ( No_of_threads > MaxNoofC180s // Side_length*Side_length != No_of_threads
-      )
-  {
-      printf("Usage: Celldiv no_of_threads\n");
-      printf("       no_of_threads should be a square, n^2, < %d\n", MaxNoofC180s);
-      return(0);
-  }
-
-
-  No_of_C180s      = No_of_threads;
-  Orig_No_of_C180s = No_of_C180s;
-  GPUMemory = 0L;
-  CPUMemory = 0L;
-
-  h_R0 = (float *)calloc(192*3, sizeof(float));
-
-  //if ( read_global_params()               != 0 ) return(-1);
-  
   if ( generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   NDIV = (int *)calloc(MaxNoofC180s,sizeof(int));
   CPUMemory += MaxNoofC180s*sizeof(int);
-  for ( i = 0; i < No_of_threads; ++i ) NDIV[i] = 1;
-  for ( i = No_of_threads; i < MaxNoofC180s; ++i ) NDIV[i] = 0;
 
   /* PM
      Allocate memory for the dividingCells array that will be used to
@@ -345,242 +92,13 @@ int main(int argc, char *argv[])
   totalCells = (int *)calloc((Time_steps/newCellCountInt), sizeof(int));
   num_new_cells_per_step = (int *)calloc(Time_steps, sizeof(int));
 
-  CPUMemory += (2L*(long)(Time_steps/newCellCountInt) + 1L + (long)Time_steps) * sizeof(int);
-
-
-
-  CPUMemory += (long)MaxNoofC180s * sizeof(char);
-
   cudaDeviceProp deviceProp = getDevice();
   if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
       printf("Could not set to divice %d\n", 2);
       return -1;
   }
-
-  if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
-  GPUMemory +=  3*192*sizeof(int) + 180*sizeof(int);
-  //  cudaError_t myError = cudaGetLastError();
-  //     if ( cudaSuccess != myError )
-  //         { printf( "1: Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
-
-  if ( cudaSuccess != cudaMalloc( (void **)&d_XP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_YP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_ZP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Y  , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Z  , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_XM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_YM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_ZM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_bounding_xyz , MaxNoofC180s*6*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
-//  if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Minx ,         1024*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Maxx ,         1024*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Miny ,         1024*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Maxy ,         1024*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Minz ,         1024*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Maxz ,         1024*sizeof(float))) return(-1);
-  //  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    MAX_NN*MaxNoofC180s*sizeof(int))) return(-1); if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
-  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Fx, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_R0, 192*3*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc((void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return -1; 
-  if ( cudaSuccess != cudaMalloc((void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return -1; 
-  if ( cudaSuccess != cudaMalloc((void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fConList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fConList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fConList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fDisList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fDisList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fDisList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
   
-
-  cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
-  cudaMemset(d_C180_sign, 0, 180*sizeof(int));
-
-  cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_XM, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_YM, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_ZM, 0, 192*MaxNoofC180s*sizeof(float));
-  CudaErrorCheck();
-
-  cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
-  cudaMemset(d_CMy, 0, MaxNoofC180s*sizeof(float));
-  cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
-  CudaErrorCheck();
-
-  cudaMemset(d_R0, 0, 3*192*sizeof(float));
-  cudaMemset(d_pressList, 0, MaxNoofC180s*sizeof(float));
-  cudaMemset(d_Youngs_mod, 0, MaxNoofC180s*sizeof(float));
-  cudaMemset(d_bounding_xyz, 0, MaxNoofC180s*6*sizeof(float));
-  cudaMemset(d_Minx, 0, 1024*sizeof(float));
-  cudaMemset(d_Maxx, 0, 1024*sizeof(float));
-  cudaMemset(d_Miny, 0, 1024*sizeof(float));
-  cudaMemset(d_Maxy, 0, 1024*sizeof(float));
-  cudaMemset(d_Minz, 0, 1024*sizeof(float));
-  cudaMemset(d_Maxz, 0, 1024*sizeof(float));
-  CudaErrorCheck();
-
-  cudaMemset(d_velListX, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_velListY, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_velListZ, 0, 192*MaxNoofC180s*sizeof(float));
-
-
-  cudaMemset(d_fConList.x, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_fConList.y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_fConList.z, 0, 192*MaxNoofC180s*sizeof(float));
-
-  cudaMemset(d_fDisList.x, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_fDisList.y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_fDisList.z, 0, 192*MaxNoofC180s*sizeof(float));
-
-  cudaMemset(d_fRanList.x, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_fRanList.y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_fRanList.z, 0, 192*MaxNoofC180s*sizeof(float));
-
-  cudaMemset(d_area, 0, MaxNoofC180s*sizeof(float));
-  CudaErrorCheck();
-
-  cudaMemset(d_boxMin, 0, 3*sizeof(float));
-  cudaMemset(d_contactForces.x, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_contactForces.y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
-  
-  thrust::host_vector<angles3> theta0(192);
-  thrust::device_vector<angles3> d_theta0V(192);
-  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
-
-  h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  h_contactForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-
-  thrust::device_vector<float> d_XMMV(MaxNoofC180s*192);
-  thrust::fill(d_XMMV.begin(), d_XMMV.end(), 0.f);
-  float *d_XMM = thrust::raw_pointer_cast(&d_XMMV[0]);
-  
-  thrust::device_vector<float> d_YMMV(MaxNoofC180s*192);
-  thrust::fill(d_YMMV.begin(), d_YMMV.end(), 0.f);
-  float *d_YMM = thrust::raw_pointer_cast(&d_YMMV[0]); 
-  
-  thrust::device_vector<float> d_ZMMV(MaxNoofC180s*192);
-  thrust::fill(d_ZMMV.begin(), d_ZMMV.end(), 0.f);
-  float *d_ZMM = thrust::raw_pointer_cast(&d_ZMMV[0]);
-
-  thrust::device_vector<int> d_NoofNNlistV(1024*1024);
-  thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
-  int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
-
-  thrust::device_vector<float> d_timeV(192*MaxNoofC180s);
-  thrust::fill(d_timeV.begin(), d_timeV.end(), delta_t); 
-  float *d_time = thrust::raw_pointer_cast(&d_timeV[0]);
-  thrust::host_vector<float> h_timeV(192*MaxNoofC180s);
-
-  thrust::host_vector<float> dt_listV(Time_steps + equiStepCount);
-  thrust::fill(dt_listV.begin(), dt_listV.end(), delta_t);  
-  thrust::device_vector<float> d_XtV(192*MaxNoofC180s);
-  thrust::fill(d_XtV.begin(), d_XtV.end(), 0.f);
-  float *d_Xt = thrust::raw_pointer_cast(&d_XtV[0]);
-
-  thrust::device_vector<float> d_YtV(192*MaxNoofC180s);
-  thrust::fill(d_YtV.begin(), d_YtV.end(), 0.f);
-  float *d_Yt = thrust::raw_pointer_cast(&d_YtV[0]);
-
-  thrust::device_vector<float> d_ZtV(192*MaxNoofC180s);
-  thrust::fill(d_ZtV.begin(), d_ZtV.end(), 0.f);
-  float *d_Zt = thrust::raw_pointer_cast(&d_ZtV[0]);
-
-  thrust::device_vector<float> d_AdpErrorsV(192*MaxNoofC180s); 
-  thrust::fill(d_AdpErrorsV.begin(), d_AdpErrorsV.end(), 0); 
-  float *d_AdpErrors = thrust::raw_pointer_cast(&d_AdpErrorsV[0]); 
-
-  thrust::host_vector<float> h_AdpErrors(192*MaxNoofC180s);
-
-  thrust::device_vector<float> d_volumeV(MaxNoofC180s);
-  thrust::host_vector<float> h_volume(MaxNoofC180s);
-  thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
-  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]); 
-
-
-  // thrust::device_vector<float> d_R0V(MaxNoofC180s);
-  // thrust::host_vector<float> h_R0V(MaxNoofC180s);
-  // d_R0 = thrust::raw_pointer_cast(&d_R0V[0]);
-  // thrust::fill(h_R0V.begin(), h_R0V.end(), R0);
-  // d_R0V = h_R0V;
-
-  if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
-
-  // velocities
-
-  
-
-  
-  bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
-  CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  CMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  //volume= (float *)calloc(MaxNoofC180s, sizeof(float));
-  area= (float *)calloc(MaxNoofC180s, sizeof(float));
-  cell_div = (char *)calloc(MaxNoofC180s, sizeof(char));
-  cell_div_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
-  Minx  = (float *)calloc(1024, sizeof(float));
-  Maxx  = (float *)calloc(1024, sizeof(float));
-  Miny  = (float *)calloc(1024, sizeof(float));
-  Maxy  = (float *)calloc(1024, sizeof(float));
-  Minz  = (float *)calloc(1024, sizeof(float));
-  Maxz  = (float *)calloc(1024, sizeof(float));
-  NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
-  NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
-  pressList = (float *)calloc(MaxNoofC180s, sizeof(float));
-  resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
-  
-  CPUMemory += MaxNoofC180s*7L*sizeof(float);
-  CPUMemory += MaxNoofC180s*sizeof(float);
-  CPUMemory += 3L*MaxNoofC180s*sizeof(float);
-  CPUMemory += 6L*1024L*sizeof(float);
-  CPUMemory += MaxNoofC180s*sizeof(char);
-  CPUMemory += MaxNoofC180s*sizeof(int);
-  CPUMemory += MaxNoofC180s*sizeof(int); 
-  CPUMemory += 3*180*sizeof(float); 
-
-
-  cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-
-  velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
-  velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
-  velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-
-  
-
-  
-
-  // Better way to see how much GPU memory is being used.
+    // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
   size_t freeGPUMem;
 
@@ -592,357 +110,209 @@ int main(int argc, char *argv[])
 
   GPUMemory = totalGPUMem - freeGPUMem;
 
-
-  cudaMemcpy(d_C180_nn,   C180_nn,   3*192*sizeof(int),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_C180_56,   C180_56,   7*92*sizeof(int),cudaMemcpyHostToDevice);
-
-  cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_XM, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YM, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZM, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-
-  float tempX[192*No_of_C180s];
-
-
-  cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
-
-  CudaErrorCheck();
-
-  // set simulation state
-  state_struct state;
-
-  state.pos.x = X;
-  state.pos.y = Y;
-  state.pos.z = Z; 
-
-  state.vel.x = velListX;
-  state.vel.y = velListY;
-  state.vel.z = velListZ;
-
-  state.conForce.x = h_contactForces.x;
-  state.conForce.y = h_contactForces.y;
-  state.conForce.z = h_contactForces.z;
-
-
-  state.vol = (float *)calloc(MaxNoofC180s, sizeof(float));
-
-  // state.nodeDisForces.x = d_fDisList.x;
-  // state.nodeDisForces.y = d_fDisList.y;
-  // state.nodeDisForces.z = d_fDisList.z;
-  
-  // state.nodeRanForces.x = d_fRanList.x;
-  // state.nodeRanForces.y = d_fRanList.y;
-  // state.nodeRanForces.z = d_fRanList.z;
-  
-
   // Set the Youngs_mod for the cells
-  youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
-  for (int i =  0; i < MaxNoofC180s; ++i){
-      youngsModArray[i] = stiffness1; 
+  thrust::fill(simState.youngsMod.h.begin(), simState.youngsMod.h.end(),
+               sim_params.youngs_mod);
+
+  if (sim_params.use_stiff){
+      std::cout << "This hasn't been coded yet :(" << std::endl;
+      exit(1);
+      // printf("Making some cells softer... \n");
+      // if (closenessToCenter > 0.f && closenessToCenter < 1.f){
+      //     printf("Only making cells within %f of max radius softer\n", closenessToCenter);
+      //     CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+      //                                       d_XP, d_YP, d_ZP,
+      //                                       d_CMx, d_CMy, d_CMz);
+          
+      //     cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      //     cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      //     cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+      //     float3 sysCM = make_float3(0.f, 0.f, 0.f);
+
+      //     for(int i =0; i < No_of_C180s; ++i){
+      //         sysCM = sysCM + make_float3(CMx[i], CMy[i], CMz[i]);
+      //     }
+
+      //     sysCM = sysCM/No_of_C180s; 
+          
+      //     printf("COM = (%f, %f, %f)\n", sysCM.x, sysCM.y, sysCM.z);
+
+      //     float rMax = 0;
+      //     float mags[No_of_C180s];
+          
+      //     for (int i =0; i < No_of_C180s; ++i){
+      //         float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
+      //         mags[i] = mag(pos);
+      //         rMax = max(rMax, mags[i]);
+      //     }
+      //     int c = 0; 
+      //     for (int i = 0; i < No_of_C180s; ++i){
+      //         if (mags[i]/rMax <= closenessToCenter){
+      //             youngsModArray[i] = stiffness2;
+      //             ++c; 
+      //         }
+      //     }
+
+      //     printf("Made %d cells softer\n", c);
+          
+      // } else {
+
+      //     printf("Choosing softer cells randomly\n");
+      //     int c = numberOfSofterCells;
+      //     if (fractionOfSofterCells > 0.f && fractionOfSofterCells < 1.f){
+      //         c = round(fractionOfSofterCells*(float)No_of_C180s);
+      //     }
+
+      //     if (c > No_of_C180s){
+      //         printf("ERROR: Too many softer cells requested\n");
+      //         return 12516;
+      //     }
+
+      //     if (useRigidSimulationBox){
+      //         for (int i =0; i < c; ++i){
+      //             youngsModArray[i] = stiffness2; 
+      //         }
+      //     } else {
+      //         float rands[1];
+      //         for (int i =0; i < c; ++i){
+      //             ranmar(rands, 1);
+      //             int ind = round(rands[0]*No_of_C180s);
+      //             youngsModArray[ind] = stiffness2; 
+      //         }
+      //     }
+      //     printf("Made %d cells softer\n", c);
+      // }
   }
-  
-  if (useDifferentStiffnesses){
-      printf("Making some cells softer... \n");
-      if (closenessToCenter > 0.f && closenessToCenter < 1.f){
-          printf("Only making cells within %f of max radius softer\n", closenessToCenter);
-          CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                            d_XP, d_YP, d_ZP,
-                                            d_CMx, d_CMy, d_CMz);
-          
-          cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 
-          float3 sysCM = make_float3(0.f, 0.f, 0.f);
+  simState.youngsMod.CopyToDevice();
 
-          for(int i =0; i < No_of_C180s; ++i){
-              sysCM = sysCM + make_float3(CMx[i], CMy[i], CMz[i]);
-          }
-
-          sysCM = sysCM/No_of_C180s; 
-          
-          printf("COM = (%f, %f, %f)\n", sysCM.x, sysCM.y, sysCM.z);
-
-          float rMax = 0;
-          float mags[No_of_C180s];
-          
-          for (int i =0; i < No_of_C180s; ++i){
-              float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
-              mags[i] = mag(pos);
-              rMax = max(rMax, mags[i]);
-          }
-          int c = 0; 
-          for (int i = 0; i < No_of_C180s; ++i){
-              if (mags[i]/rMax <= closenessToCenter){
-                  youngsModArray[i] = stiffness2;
-                  ++c; 
-              }
-          }
-
-          printf("Made %d cells softer\n", c);
-          
-      } else {
-
-          printf("Choosing softer cells randomly\n");
-          int c = numberOfSofterCells;
-          if (fractionOfSofterCells > 0.f && fractionOfSofterCells < 1.f){
-              c = round(fractionOfSofterCells*(float)No_of_C180s);
-          }
-
-          if (c > No_of_C180s){
-              printf("ERROR: Too many softer cells requested\n");
-              return 12516;
-          }
-
-          if (useRigidSimulationBox){
-              for (int i =0; i < c; ++i){
-                  youngsModArray[i] = stiffness2; 
-              }
-          } else {
-              float rands[1];
-              for (int i =0; i < c; ++i){
-                  ranmar(rands, 1);
-                  int ind = round(rands[0]*No_of_C180s);
-                  youngsModArray[ind] = stiffness2; 
-              }
-          }
-          printf("Made %d cells softer\n", c);
-      }
-  }
-
-  cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck();
-  
   // initialize device rng
-
-
     if (add_rands){
-      curandGenerator_t gen;
+        std::cout << "Random number addition not supported for now" << std::endl;
+        exit(1);
+      // curandGenerator_t gen;
       
-      if (cudaMalloc((void **)&d_rngStates, sizeof(curandState)*192*MaxNoofC180s) != cudaSuccess){
-          fprintf(stderr, "ERROR: Failed to allocate rng state memory in %s, at %d\n", __FILE__, __LINE__);
-          return 1;
-      }
+      // if (cudaMalloc((void **)&d_rngStates, sizeof(curandState)*192*MaxNoofC180s) != cudaSuccess){
+      //     fprintf(stderr, "ERROR: Failed to allocate rng state memory in %s, at %d\n", __FILE__, __LINE__);
+      //     return 1;
+      // }
           
 
-      if (cudaMalloc((void **)&d_seeds, sizeof(unsigned int)*192*MaxNoofC180s) != cudaSuccess){
-          fprintf(stderr, "ERROR: Failed to allocate rng seeds in %s, at %d\n", __FILE__, __LINE__);
-          return 1;
-      }
+      // if (cudaMalloc((void **)&d_seeds, sizeof(unsigned int)*192*MaxNoofC180s) != cudaSuccess){
+      //     fprintf(stderr, "ERROR: Failed to allocate rng seeds in %s, at %d\n", __FILE__, __LINE__);
+      //     return 1;
+      // }
       
+      // curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
+      // CudaErrorCheck();
 
-      
-      
-      curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
-      CudaErrorCheck();
+      // curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
+      // CudaErrorCheck();
 
-      curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
-      CudaErrorCheck();
+      // if (rand_seed > 0){
+      //     curandSetPseudoRandomGeneratorSeed(gen, rand_seed);
+      //     CudaErrorCheck();
+      // }
 
-      if (rand_seed > 0){
-          curandSetPseudoRandomGeneratorSeed(gen, rand_seed);
-          CudaErrorCheck();
-      }
-
-      curandGenerate(gen, d_seeds, MaxNoofC180s*192);
-      CudaErrorCheck();
+      // curandGenerate(gen, d_seeds, MaxNoofC180s*192);
+      // CudaErrorCheck();
   
-      DeviceRandInit<<<(192*MaxNoofC180s)/1024 + 1, 1024>>>(d_rngStates, d_seeds, 192*MaxNoofC180s);
-      CudaErrorCheck();
+      // DeviceRandInit<<<(192*MaxNoofC180s)/1024 + 1, 1024>>>(d_rngStates, d_seeds, 192*MaxNoofC180s);
+      // CudaErrorCheck();
   }
 
 
-  prevnoofblocks  = No_of_C180s;
-  noofblocks      = No_of_C180s;
-  threadsperblock = 192;
+  int prevnoofblocks  = simState.no_of_cells;
+  int noofblocks      = simState.no_of_cells;
+  int threadsperblock = 192;
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                    d_X, d_Y, d_Z,
-                                    d_CMx, d_CMy, d_CMz);
+  CenterOfMass<<<simstate.No_of_C180s,256>>>(simSate.devPtrs);
+                                             
   
-  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_X,d_Y,d_Z,
-                                     d_bounding_xyz, d_CMx, d_CMy, d_CMz);
-
+  bounding_boxes<<<No_of_C180s,32>>>(simState.devPtrs);
+                                     
   CudaErrorCheck(); 
 
-  reductionblocks = (No_of_C180s-1)/1024+1;
-  minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-                                       d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+  size_t reductionblocks = (No_of_C180s-1)/1024+1;
+  minmaxpre<<<reductionblocks,1024>>>(sim_state.devPtrs);
   CudaErrorCheck(); 
-  minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+  minmaxpost<<<1,1024>>>(sim_state);
   CudaErrorCheck(); 
-  cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
+  sim_state.mins.CopyToHost();
+  sim_state.maxs.CopyToHost();
   //  DL = 3.8f;
   DL = 2.9f;
   //DL = divVol; 
-  Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
-  Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-  Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
-  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
-                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+
+  Xdiv = (int)((sim_state.maxs.x[0]-sim_state.mins.x[0])/DL + 1);
+  Ydiv = (int)((sim_state.maxs.y[0]-sim_state.mins.y[0])/DL + 1);
+  Zdiv = (int)((sim_state.maxs.z[0]-sim_state.mins.z[0])/DL + 1);
+
+  
+  makeNNlist<<<No_of_C180s/512+1,512>>>(simState.devPtrs, Xdiv, Ydiv, Zdiv);
   CudaErrorCheck(); 
   globalrank = 0;
 
-
-  // open trajectory file
-  trajfile = fopen (trajFileName, "w");
-  if ( trajfile == NULL)
-  {
-      printf("Failed to open %s \n", trajFileName);
-      return -1;
-  }
-
-#ifdef OUTPUT_ADP_ERROR
-  FILE* timeFile = fopen("times", "w");
-  FILE* errFile = fopen("errors", "w"); 
-#endif 
-
-
   if (correct_com == true){
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_X, d_Y, d_Z,
-                                        d_CMx, d_CMy, d_CMz);
-      cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      calc_sys_CM();
-      //printf("sysCMx = %f, sysCMy = %f, sysCmz = %f\n", sysCMx, sysCMy, sysCMz);
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
-                                                             sysCMx, sysCMy, sysCMz,
-                                                             No_of_C180s*192);
-          
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP,
-                                                             sysCMx, sysCMy, sysCMz,
-                                                             No_of_C180s*192);
+      CenterOfMass<<<simState.no_of_cells,256>>>(simState.devPtrs);
+      simState.cellCOMs.x.CopyToHost();
+      simState.cellCOMs.y.CopyToHost();
+      simState.cellCOMs.z.CopyToHost();
 
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XM, d_YM, d_ZM,
-                                                             sysCMx, sysCMy, sysCMz,
-                                                             No_of_C180s*192);
+      real3 sysCM = make_real3(0, 0, 0);
+
+      for (size_t i = 0; i < simState.cellCOMs.x.h.size(), ++i){
+          sysCM = sysCM + make_real3(Simstate.cellCOMs.x.h[i],
+                                     simstate.cellCOMs.y.h[i],
+                                     simstate.cellCOMs.z.h[i]);
+      }
+
+      sysCM = sysCM/(simState.no_of_cells);
+      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(simState.devPtrs, sysCM);
       CudaErrorCheck(); 
   }
   
   
 
-  // Set up walls if needed
-  if (useWalls == 1){
-      // First we must make sure that the walls surround the
-      // starting system.
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_X, d_Y, d_Z,
-                                        d_CMx, d_CMy, d_CMz);
-      cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      float COMx = 0, COMy = 0, COMz = 0;
-
-      for(int cell = 0; cell < No_of_C180s; cell++){
-          COMx += CMx[cell];
-          COMy += CMy[cell];
-          COMz += CMz[cell];
-      }
-
-      COMx = COMx/No_of_C180s;
-      COMy = COMy/No_of_C180s;
-      COMz = COMz/No_of_C180s;
-
-
-      if (perpAxis[0] == 'Z' || perpAxis[0] == 'z' ){
-          // Check that the walls are far enough from the beginning cells
-          float tempZ[192*No_of_C180s];
-          cudaMemcpy(tempZ, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          std::sort(tempZ, tempZ+No_of_C180s);
-          float radius = 3.0 * divVol / 4.0;
-          radius = radius/3.14159;
-          radius = std::pow(radius, 0.33333333333);
-          dAxis = dAxis * 2 * radius;
-
-          if (dAxis < (tempZ[No_of_C180s] - tempZ[0])){
-                  printf("Distance between walls is too small\nExiting...");
-                  printf("Starting system size= %f\nWall gap = %f",
-                         tempZ[No_of_C180s] - tempZ[0], dAxis);
-                  return(-1);
-              }
-
-          wall1 = COMz - (dAxis/2.0);
-          wall2 = COMz + (dAxis/2.0);
-          wallLStart = COMx - (wallLen/2.0);
-          wallLEnd = COMx + (wallLen/2.0);
-          wallWStart = COMy - (wallWidth/2.0);
-          wallWEnd = COMy + (wallWidth/2.0);
-      }
-      else {
-          printf(" Invalid wall axis selection %s\nExiting...", perpAxis);
-          return(-1);
-      }
-
-  }
-
-
   // Initialize pressures
 
-  for (int cell = 0; cell < No_of_C180s; cell++){
-      pressList[cell] = minPressure;
-  }
-
-  cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck();
-
+  thrust::fill(simState.pressures.d.begin(), simState.pressures.d.end(),
+               sim_params.min_pressure);
+  
   float rGrowth = 0;
   bool growthDone = false;
   
-  boxMin[0] = 0;
-  boxMin[1] = 0;
-  boxMin[2] = 0;
-  
-  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck(); 
-
-
-  // Code to set up pbc things
-  if (usePBCs){
-      boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
-      //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = floor(Minx[0] - 0.1);
-      boxMin[1] = floor(Minx[2] - 0.1);
-      boxMin[2] = floor(Minx[4] - 0.1);
-      
-  }
   if (constrainAngles){
       // Code to initialize equillibrium angles
       float3 p, ni, nj, nk;
+      R3Nptrs pos = simState.pos.hostPtrs;
+      
       for (int n = 0; n<180; n++){
-          p = make_float3(X[n], Y[n], Z[n]); 
+          p = make_float3(pos.x[n], pos.y[n], pos.z[n]); 
 
-          ni = make_float3(X[C180_nn[0*192 + n]], Y[C180_nn[0*192 + n]], 
-                           Z[C180_nn[0*192 + n]]); 
+          ni = make_float3(pos.x[C180_nn[0*192 + n]], pos.y[C180_nn[0*192 + n]], 
+                           pos.z[C180_nn[0*192 + n]]); 
           
-          nj = make_float3(X[C180_nn[1*192 + n]], Y[C180_nn[1*192 + n]], 
-                           Z[C180_nn[1*192 + n]]);
+          nj = make_float3(pos.x[C180_nn[1*192 + n]], pos.y[C180_nn[1*192 + n]], 
+                           pos.z[C180_nn[1*192 + n]]);
           
-          nk = make_float3(X[C180_nn[2*192 + n]], Y[C180_nn[2*192 + n]],
-                           Z[C180_nn[2*192 + n]]);
+          nk = make_float3(pos.x[C180_nn[2*192 + n]], pos.y[C180_nn[2*192 + n]],
+                           pos.z[C180_nn[2*192 + n]]);
 
           ni = ni-p;
           nj = nj-p;
           nk = nk-p; 
 
-          theta0[n].aij = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
-          
-          theta0[n].ajk = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
-          
-          theta0[n].aik = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
+          simState.theta0.h[n].aij = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
+          simState.theta0.h[n].ajk = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
+          simState.theta0.h[n].aik = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
 
-        }
-
-      d_theta0V = theta0; 
+      }
+      
+      simState.theta0.CopyToDevice();
       CudaErrorCheck(); 
   }
 
@@ -974,36 +344,11 @@ int main(int argc, char *argv[])
 
 
   printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/(1024*1024.0));
-  printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/(1024*1024.0));
+  printf("   Total amount of CPU memory used =    %8.2lf MB\n",bas_n::used_mem/(1024*1024.0));
 
   bool phase = false;
 
-  // initial conditions
-
-  // X[10] *= 1.1;
-
-  // cudaMemcpy(d_X, X, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-
-  for (int i = 0; i < 192*No_of_C180s; ++i){
-      tempX[i] = 10;
-  }
-
-  cudaMemcpy(d_velListX, tempX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-
-  CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     d_X,  d_Y,  d_Z,
-                                                     d_CMx, d_CMy, d_CMz,
-                                                     d_R0, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     internal_damping, d_time, d_bounding_xyz,
-                                                     attraction_strength, attraction_range,
-                                                     repulsion_strength, repulsion_range,
-                                                     viscotic_damping, mass,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                     wall1, wall2,
-                                                     threshDist, useWalls,
-                                                     d_velListX, d_velListY, d_velListZ,
-                                                     useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                     constrainAngles, d_theta0, d_fConList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
+  CalculateConForce<<<No_of_C180s,threadsperblock>>>(simState.devPtrs, sim_params); 
   CudaErrorCheck();
 
   CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
@@ -1138,7 +483,7 @@ int main(int argc, char *argv[])
 
 
       // Dissipative velocity update part...
-      for (int s = 0; s < 1; ++s){
+      for (int s = 0; s < 1; ++s){ // may be looped over more later.
           VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
                                                            d_fDisList, delta_t, numNodes, mass);
           CudaErrorCheck();

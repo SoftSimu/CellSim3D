@@ -7,12 +7,7 @@
 
 //#define PRINT_TOO_SHORT_ERROR
 
-__global__ void bounding_boxes( int No_of_C180s,
-               float *d_XP, float *d_YP, float *d_ZP,
-//               float *d_X,  float *d_Y,  float *d_Z,
-//               float *d_XM, float *d_YM, float *d_ZM,
-               float *d_bounding_xyz, float *CMx,
-			   float *CMy, float *CMz)
+__global__ void bounding_boxes( SimStatePtrs sim_state)
 {
   __shared__ float  minx[32];
   __shared__ float  maxx[32];
@@ -21,11 +16,22 @@ __global__ void bounding_boxes( int No_of_C180s,
   __shared__ float  minz[32];
   __shared__ float  maxz[32];
 
+  __shared__ real* d_XP; 
+  __shared__ real* d_YP; 
+  __shared__ real* d_ZP;
+
   int rank = blockIdx.x;
   int tid  = threadIdx.x;
   int atom = tid;
 
-  if ( rank < No_of_C180s )
+  if (tid == 0){
+      d_XP = sim_state.posP.x;
+      d_YP = sim_state.posP.y;
+      d_ZP = sim_state.posP.z;
+  }
+  __syncthreads();
+
+  if ( rank < sim_state.no_of_cells )
     {
 	  minx[tid] = d_XP[rank*192+atom];
 	  maxx[tid] = d_XP[rank*192+atom];
@@ -33,17 +39,6 @@ __global__ void bounding_boxes( int No_of_C180s,
 	  maxy[tid] = d_YP[rank*192+atom];
 	  minz[tid] = d_ZP[rank*192+atom];
 	  maxz[tid] = d_ZP[rank*192+atom];
-
-	  // // move present value to past value
-	  // d_XM[rank*192+atom] =  d_X[rank*192+atom];
-	  // d_YM[rank*192+atom] =  d_Y[rank*192+atom];
-	  // d_ZM[rank*192+atom] =  d_Z[rank*192+atom];
-
-	  // // move future value to present value
-	  // d_X[rank*192+atom] = d_XP[rank*192+atom];
-	  // d_Y[rank*192+atom] = d_YP[rank*192+atom];
-	  // d_Z[rank*192+atom] = d_ZP[rank*192+atom];
-
 
 	  while ( atom + 32 < 180 )
         {
@@ -60,17 +55,6 @@ __global__ void bounding_boxes( int No_of_C180s,
 		       minz[tid] = d_ZP[rank*192+atom];
 		  if ( maxz[tid] < d_ZP[rank*192+atom] )
 		       maxz[tid] = d_ZP[rank*192+atom];
-
-		  // // move present value to past value
-		  // d_XM[rank*192+atom] =  d_X[rank*192+atom];
-		  // d_YM[rank*192+atom] =  d_Y[rank*192+atom];
-		  // d_ZM[rank*192+atom] =  d_Z[rank*192+atom];
-
-		  // // move future value to present value
-		  // d_X[rank*192+atom]  = d_XP[rank*192+atom];
-		  // d_Y[rank*192+atom]  = d_YP[rank*192+atom];
-		  // d_Z[rank*192+atom]  = d_ZP[rank*192+atom];
-
         }
 
 	  if ( tid < 16 )
@@ -117,6 +101,7 @@ __global__ void bounding_boxes( int No_of_C180s,
 
 	  if ( tid == 0  )
         {
+            real* d_bounding_xyz = sim_state.boundingBoxes;
 		  if ( minx[0] > minx[1] ) minx[0] = minx[1];
 		  d_bounding_xyz[rank*6+0] = minx[0];
 
@@ -135,17 +120,12 @@ __global__ void bounding_boxes( int No_of_C180s,
 		  if ( maxz[0] < maxz[1] ) maxz[0] = maxz[1];
 		  d_bounding_xyz[rank*6+5] = maxz[0];
         }
-
     }
-
 }
 
 
 
-__global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
-                    float *Minx, float *Maxx,
-					float *Miny, float *Maxy,
-					float *Minz, float *Maxz)
+__global__ void minmaxpre( SimStatePtrs sim_state)
 {
 
   __shared__ float  minx[1024];
@@ -154,6 +134,11 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
   __shared__ float  maxy[1024];
   __shared__ float  minz[1024];
   __shared__ float  maxz[1024];
+  __shared__ real* d_bounding_xyz;
+  
+  if (threadIdx.x == 0){
+      d_bounding_xyz = sim_state.boundingBoxes;
+  }
 
   int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
   int tid       = threadIdx.x;
@@ -165,7 +150,7 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
   minz[tid] = +1.0E8f;
   maxz[tid] = -1.0E8f;
 
-  if ( fullerene < No_of_C180s )
+  if ( fullerene < sim_state.no_of_cells)
     {
 	  minx[tid] = d_bounding_xyz[6*fullerene+0];
 	  maxx[tid] = d_bounding_xyz[6*fullerene+1];
@@ -193,12 +178,20 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 
   if ( tid == 0 )
 	{
-	  Minx[blockIdx.x]  = minx[0];
-	  Maxx[blockIdx.x]  = maxx[0];
-	  Miny[blockIdx.x]  = miny[0];
-	  Maxy[blockIdx.x]  = maxy[0];
-	  Minz[blockIdx.x]  = minz[0];
-	  Maxz[blockIdx.x]  = maxz[0];
+	  // Minx[blockIdx.x]  = minx[0];
+	  // Maxx[blockIdx.x]  = maxx[0];
+	  // Miny[blockIdx.x]  = miny[0];
+	  // Maxy[blockIdx.x]  = maxy[0];
+	  // Minz[blockIdx.x]  = minz[0];
+	  // Maxz[blockIdx.x]  = maxz[0];
+
+      sim_state.mins.x[blockIdx.x] = minx[0];
+      sim_state.mins.y[blockIdx.x] = miny[0];
+      sim_state.mins.z[blockIdx.x] = minz[0];
+
+      sim_state.maxs.x[blockIdx.x] = minx[0];
+      sim_state.maxs.y[blockIdx.x] = miny[0];
+      sim_state.maxs.z[blockIdx.x] = minz[0];
 	}
 
 }
@@ -206,19 +199,19 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 
 
 
-__global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
-                           float Minx, float Miny, float Minz,
-                           float attrac,
-                           int Xdiv, int Ydiv, int Zdiv,
-                           int *d_NoofNNlist, int *d_NNlist, float DL)
-{
+__global__ void makeNNlist(SimStatePtrs sim_state, sim_params_struct sm, int Xdiv, int Ydiv, int Zdiv){
 
 
   int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
-//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
+  
+  real* d_bounding_xyz = sim_state.boundingBoxes;
+  real attrac = sm.core_params.attr_range;
+  real DL = sm.core_params.dom_len;
+  real Minx = sim_state.mins.x[0];
+  real Miny = sim_state.mins.y[0];
+  real Minz = sim_state.mins.z[0];
 
-
-  if ( fullerene < No_of_C180s )
+  if ( fullerene < sim_state.no_of_cells )
 	{
 
 	  int startx = (int)((d_bounding_xyz[6*fullerene+0]-attrac
@@ -244,7 +237,7 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
               for ( int j2 = starty; j2 <= endy; ++j2 )
 		  for ( int j3 = startz; j3 <= endz; ++j3 )
 			{
-			  int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+                int index = atomicAdd( &(sim_state.numOfNNList[j3*Xdiv*Ydiv+j2*Xdiv+j1]) , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
 			  if ( index > 32 )
 				{
@@ -256,68 +249,78 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
 				  continue;
 				}
 #endif
-			  d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  sim_state.nnList[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 			}
 	}
 
 }
 
 
-__global__ void minmaxpost( int No_of_C180s,
-							float *Minx, float *Maxx, float *Miny, float *Maxy,  float *Minz, float *Maxz)
-{
+__global__ void minmaxpost(SimStatePtrs sim_state){
 
-  __shared__ float  minx[1024];
-  __shared__ float  maxx[1024];
-  __shared__ float  miny[1024];
-  __shared__ float  maxy[1024];
-  __shared__ float  minz[1024];
-  __shared__ float  maxz[1024];
+    __shared__ float  minx[1024];
+    __shared__ float  maxx[1024];
+    __shared__ float  miny[1024];
+    __shared__ float  maxy[1024];
+    __shared__ float  minz[1024];
+    __shared__ float  maxz[1024];
 
-  int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
-  int tid       = threadIdx.x;
+    int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+    int tid       = threadIdx.x;
 
-  minx[tid] = +1.0E8f;
-  maxx[tid] = -1.0E8f;
-  miny[tid] = +1.0E8f;
-  maxy[tid] = -1.0E8f;
-  minz[tid] = +1.0E8f;
-  maxz[tid] = -1.0E8f;
+    minx[tid] = +1.0E8f;
+    maxx[tid] = -1.0E8f;
+    miny[tid] = +1.0E8f;
+    maxy[tid] = -1.0E8f;
+    minz[tid] = +1.0E8f;
+    maxz[tid] = -1.0E8f;
 
-  if ( fullerene < No_of_C180s )
-    {
-	  minx[tid] = Minx[fullerene];
-	  maxx[tid] = Maxx[fullerene];
-	  miny[tid] = Miny[fullerene];
-	  maxy[tid] = Maxy[fullerene];
-	  minz[tid] = Minz[fullerene];
-	  maxz[tid] = Maxz[fullerene];
+    real* Minx = sim_state.mins.x; 
+    real* Miny = sim_state.mins.x; 
+    real* Minz = sim_state.mins.x; 
+
+    real* Maxx = sim_state.maxs.x; 
+    real* Maxy = sim_state.maxs.x; 
+    real* Maxz = sim_state.maxs.x; 
+
+    if ( fullerene < sim_state.no_of_cells ){
+        minx[tid] = Minx[fullerene];
+        maxx[tid] = Maxx[fullerene];
+        miny[tid] = Miny[fullerene];
+        maxy[tid] = Maxy[fullerene];
+        minz[tid] = Minz[fullerene];
+        maxz[tid] = Maxz[fullerene];
     }
 
-  __syncthreads();
+    __syncthreads();
 
-  for ( int s = blockDim.x/2; s > 0; s>>=1)
-	{
-	  if ( tid < s )
-		{
-		  minx[tid] = fminf(minx[tid],minx[tid+s]);
-		  maxx[tid] = fmaxf(maxx[tid],maxx[tid+s]);
-		  miny[tid] = fminf(miny[tid],miny[tid+s]);
-		  maxy[tid] = fmaxf(maxy[tid],maxy[tid+s]);
-		  minz[tid] = fminf(minz[tid],minz[tid+s]);
-		  maxz[tid] = fmaxf(maxz[tid],maxz[tid+s]);
+    for ( int s = blockDim.x/2; s > 0; s>>=1){
+        if ( tid < s ){
+            minx[tid] = fminf(minx[tid],minx[tid+s]);
+            maxx[tid] = fmaxf(maxx[tid],maxx[tid+s]);
+            miny[tid] = fminf(miny[tid],miny[tid+s]);
+            maxy[tid] = fmaxf(maxy[tid],maxy[tid+s]);
+            minz[tid] = fminf(minz[tid],minz[tid+s]);
+            maxz[tid] = fmaxf(maxz[tid],maxz[tid+s]);
 		}
-	  __syncthreads();
+        __syncthreads();
 	}
 
-  if ( tid == 0 )
+    if ( tid == 0 )
 	{
-	  Minx[blockIdx.x+0]  = minx[0];
-	  Minx[blockIdx.x+1]  = maxx[0];
-	  Minx[blockIdx.x+2]  = miny[0];
-	  Minx[blockIdx.x+3]  = maxy[0];
-	  Minx[blockIdx.x+4]  = minz[0];
-	  Minx[blockIdx.x+5]  = maxz[0];
-	}
+        // Minx[blockIdx.x+0]  = minx[0];
+        // Minx[blockIdx.x+1]  = maxx[0];
+        // Minx[blockIdx.x+2]  = miny[0];
+        // Minx[blockIdx.x+3]  = maxy[0];
+        // Minx[blockIdx.x+4]  = minz[0];
+        // Minx[blockIdx.x+5]  = maxz[0];
 
+        sim_state.mins.x[blockIdx.x] = minx[0];
+        sim_state.mins.y[blockIdx.x] = miny[0];
+        sim_state.mins.z[blockIdx.x] = minz[0];
+
+        sim_state.maxs.x[blockIdx.x] = minx[0];
+        sim_state.maxs.y[blockIdx.x] = miny[0];
+        sim_state.maxs.z[blockIdx.x] = minz[0];
+	}
 }
