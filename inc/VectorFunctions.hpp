@@ -102,7 +102,7 @@ __host__ __device__ inline bool good_real3(real3 a){
 
 }
 
-real3 make_real3(real x, real y, real z){
+__host__ __device__ inline real3 make_real3(real x, real y, real z){
     real3 a;
     a.x = x;
     a.y = y;
