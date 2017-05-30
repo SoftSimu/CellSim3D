@@ -1717,21 +1717,24 @@ int initialize_C180s(int Orig_No_of_C180s)
       } else {
 
           // crash because this doesn't work right now.
-          printf("Simulation in a box must be with random positions\n");
-          exit(12);
+          // printf("Simulation in a box must be with random positions\n");
+          // exit(12);
 
           rCheck *= 1.2;
           float3 center = 0.5*boxMax;
-          
+
           for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
           {
+              ey=rank%Side_length;
+              ex=rank/Side_length;
 
               for ( atom = 0 ; atom < 180 ; ++atom)
               {
-                  X[rank*192+atom] = initx[atom] + center.x;
-                  Y[rank*192+atom] = inity[atom] + center.y;
+                  X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1 + center.x;
+                  Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1 + center.y;
                   Z[rank*192+atom] = initz[atom] + center.z;
               }
+
           }
       }
 
