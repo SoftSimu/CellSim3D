@@ -665,6 +665,19 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 }
 
 
+__global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
+                                  R3Nptrs d_fRanList){
+    size_t nodeIdx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (nodeIdx < No_of_C180s*192){
+        curandState rngState = d_rngStates[nodeIdx];
+        d_fRanList.x[nodeIdx] = rand_scale_factor*curand_normal(&rngState); 
+        d_fRanList.y[nodeIdx] = rand_scale_factor*curand_normal(&rngState); 
+        d_fRanList.z[nodeIdx] = rand_scale_factor*curand_normal(&rngState);
+        d_rngStates[nodeIdx] = rngState;
+    }
+}
+
+
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z, 
                           float *d_XM, float *d_YM, float *d_ZM,
@@ -695,18 +708,6 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         d_YP[nodeInd] = d_Y[nodeInd] + d_velListY[nodeInd]*dt; 
         d_ZP[nodeInd] = d_Z[nodeInd] + d_velListZ[nodeInd]*dt; 
 
-        if (add_rands != 0){
-            curandState rngState = rngStates[nodeInd];
-            float3 r = rand_scale_factor*make_float3(curand_uniform(&rngState) - 0.5f,
-                                                     curand_uniform(&rngState) - 0.5f,
-                                                     curand_uniform(&rngState) - 0.5f);
-
-            d_XP[nodeInd] += r.x; 
-            d_YP[nodeInd] += r.y; 
-            d_ZP[nodeInd] += r.z; 
-            
-            rngStates[nodeInd] = rngState;
-        }
     }
 }
 

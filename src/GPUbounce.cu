@@ -723,7 +723,7 @@ int main(int argc, char *argv[])
       curandGenerate(gen, d_seeds, MaxNoofC180s*192);
       CudaErrorCheck();
   
-      DeviceRandInit<<<(192*MaxNoofC180s)/1024 + 1, 1024>>>(d_rngStates, d_seeds, 192*MaxNoofC180s);
+      DeviceRandInit<<<(192*MaxNoofC180s)/256 + 1, 256>>>(d_rngStates, d_seeds, 192*MaxNoofC180s);
       CudaErrorCheck();
   }
 
@@ -1133,10 +1133,14 @@ int main(int argc, char *argv[])
       CudaErrorCheck();
 
       // Calculate random Force here...
-      // Placeholder
+      if (add_rands){
+          CalculateRanForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_rngStates, rand_scale_factor,
+                                                              d_fRanList);
+          CudaErrorCheck();
+      }
       
       VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                       d_fConList, d_fRanList, delta_t, numNodes, mass);
+                                                        d_fConList, d_fRanList, delta_t, numNodes, mass);
       CudaErrorCheck();
 
 
