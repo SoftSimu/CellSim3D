@@ -31,7 +31,7 @@ __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params){
     if ( tid == 0){
         volume = 0.0f;
         area = 0.0f;
-        C180_56 = sim_params.core_params.C180_56;
+        C180_56 = sim_state.C180_56;
         X = sim_state.pos.x;
         Y = sim_state.pos.y;
         Z = sim_state.pos.z;

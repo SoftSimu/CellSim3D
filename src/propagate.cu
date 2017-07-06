@@ -82,7 +82,7 @@ __device__ void NeighNeighs (const int nodeInd, const int ni, int& nii, int& nij
 // This fucking function will break if we decide to make cell geometry more interesting
 __device__ real3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
                                       real d_X[], real d_Y[], real d_Z[],
-                                      const angles3 d_theta0[], real k, int cellInd){
+                                      angles3 d_theta0[], real k, int cellInd){
     // First get the first angle contribution
     int ni = d_C180_nn[0*192 + nodeInd];
     int nj = d_C180_nn[1*192 + nodeInd];
@@ -185,15 +185,11 @@ __device__ real3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
 __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_params,
                                   int Xdiv, int Ydiv, int Zdiv){
 
-    __shared__ int no_of_cells;
-    __shared__ int num_nodes;
-    __shared__ real* pressList;
     __shared__ real* d_X; 
     __shared__ real* d_Y; 
     __shared__ real* d_Z;
-    __shared__ int* C180_nn;
-    __shared__ int* C180_sign;
-    __shared__ real* R0;
+    __shared__ int* d_C180_nn;
+    __shared__ real* d_R0;
     __shared__ real3 cellCOM;
     __shared__ real Pressure;
     __shared__ real stiffness;
@@ -201,41 +197,37 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
     __shared__ real attr_range;
     __shared__ real attr_stren;
     __shared__ real rep_range;
-    __shared__ real attr_stren;
+    __shared__ real rep_stren;
     __shared__ real thresh_dist;
     __shared__ real3 box_max;
     __shared__ real* d_Fx; 
     __shared__ real* d_Fy; 
     __shared__ real* d_Fz;
-    __shared__ real3* d_theta0;
-    
+    __shared__ angles3* d_theta0;
+    __shared__ real DL;
+    __shared__ int* d_numOfNNList;
+    __shared__ int* d_nnList;
     size_t cellInd, localNodeInd;
     
     cellInd = blockIdx.x;
     localNodeInd = threadIdx.x;
     
-    size_t cellOffset = rank*192;
+    size_t cellOffset = cellInd*192;
     size_t nodeInd = cellOffset + localNodeInd;
     if ( cellInd < simState.no_of_cells && localNodeInd < 180 )
     {
         if (threadIdx.x == 0){
-            no_of_cells = simState.no_of_cells;
-            num_nodes = 192;
             d_X = simState.pos.x; 
             d_Y = simState.pos.y; 
             d_Z = simState.pos.z;
-            C180_nn = simState.C180_nn;
-            C180_sign = simState.C180_sign;
-            R0 = simState.R0;
-            d_CMx = simState.cellCOMs.x;
-            d_CMx = simState.cellCOMs.y;
-            d_CMx = simState.cellCOMs.z;
-            Pressure = simState.pressures[rank];
-            stiffness = simState.youngsMod[rank];
+            d_C180_nn = simState.C180_nn;
+            d_R0 = simState.R0;
+            Pressure = simState.pressures[cellInd];
+            stiffness = simState.youngsMod[cellInd];
             
-            cellCOM = make_real3(simState.cellCOMs.x[rank],
-                                 simState.cellCOMs.y[rank],
-                                 simState.cellCOMS.z[rank]);
+            cellCOM = make_real3(simState.cellCOMs.x[cellInd],
+                                 simState.cellCOMs.y[cellInd],
+                                 simState.cellCOMs.z[cellInd]);
             
             attr_range = sim_params.core_params.attr_range;
             attr_stren = sim_params.core_params.attr_stiff;
@@ -243,11 +235,14 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
             rep_range = sim_params.core_params.rep_range;
             rep_stren = sim_params.core_params.rep_stiff;
             thresh_dist = sim_params.box_params.thresh_dist;
-            box_max = sim_params.box_params.box_len;
+            box_max = sim_params.box_params.box_max;
             d_Fx = simState.conForce.x; 
             d_Fy = simState.conForce.y; 
             d_Fz = simState.conForce.z;
             d_theta0 = simState.theta0;
+            DL = sim_params.core_params.dom_len;
+            d_numOfNNList = simState.numOfNNList;
+            d_nnList = simState.nnList;
         }
         __syncthreads();
         
@@ -258,7 +253,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
         
         if (!good_real3(nodePos)){
             printf("OH SHIT: we have a nan\n");
-            printf("Particle index: %d, Cell: %d\n", atom, rank);
+            printf("Particle index: %d, Cell: %d\n", localNodeInd, cellInd);
             printf("Crash now :(\n"); 
             asm("trap;"); 
         }
@@ -267,16 +262,17 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
         //  go through three nearest neighbors
         for ( int i = 0; i < 3 ; ++i ) // Maybe Better to open this loop
         {
-            int N1 = d_C180_nn[i*192+atom];
+            int N1 = d_C180_nn[i*192+localNodeInd];
 
             real3 delta = make_real3(d_X[cellInd*192+N1],
                                      d_Y[cellInd*192+N1],
                                      d_Z[cellInd*192+N1]) - nodePos;
+            real R = mag(delta);
 
-            real R0 = d_R0[i*192 + atom];
+            real R0 = d_R0[i*192 + localNodeInd];
 
             //spring forces
-            force = force + (stiffness*(R-R0)/R0)*calcUnitVec(delta);
+            force = force + (stiffness*(R-R0)/R)*delta;
         }
 
         // new growth force
@@ -287,7 +283,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
         //gForce = -10*(volList[cellInd] - div_vol)*calcUnitVec(r_CM);
         //gForce = -10*(mag(r_CM) - r_CM_o)*calcUnitVec(r_CM);
         
-        if (constrainAngles){
+        if (sim_params.angle_params.angle_pot){
             real3 t = CalculateAngleForce(localNodeInd, d_C180_nn,
                                           d_X, d_Y, d_Z,
                                           d_theta0, stiffness, cellInd);
@@ -297,40 +293,40 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
         
         // interfullerene attraction and repulsion
         
-        NooflocalNN = 0;
+        int NooflocalNN = 0;
 
-        int startx = (int)((nodePos.x - sim_state.mins.x[0])/DL);
+        int startx = (int)((nodePos.x - simState.mins.x[0])/DL);
         if ( startx < 0 ) startx = 0;
         if ( startx >= Xdiv ) startx = Xdiv-1;
 
-        int starty = (int)((nodePos.y - sim_state.mins.y[0])/DL);
+        int starty = (int)((nodePos.y - simState.mins.y[0])/DL);
         if ( starty < 0 ) starty = 0;
         if ( starty >= Ydiv ) starty = Ydiv-1;
 
-        int startz = (int)((nodePos.z - sim_state.mins.z[0])/DL);
+        int startz = (int)((nodePos.z - simState.mins.z[0])/DL);
         if ( startz < 0 ) startz = 0;
         if ( startz >= Zdiv ) startz = Zdiv-1;
 
         int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
         
 
-        int nn_cellInd;
+        int nn_CellInd;
         real deltaX, deltaY, deltaZ;
         int localNNs[MAX_NN];
-        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 ){
-            nn_cellInd = d_NNlist[32*index+nn_rank1-1];
+        for ( int nn_rank1 = 1 ; nn_rank1 <= d_numOfNNList[index] ; ++nn_rank1 ){
+            nn_CellInd = d_nnList[32*index+nn_rank1-1];
             
-            if ( nn_rank == rank )
+            if ( nn_CellInd == cellInd )
                 continue;
 
-            deltaX  = (pos.x-d_bounding_xyz[nn_rank*6+1]>0.0f)*(pos.x-d_bounding_xyz[nn_rank*6+1]);
-            deltaX += (d_bounding_xyz[nn_rank*6+0]-pos.x>0.0f)*(d_bounding_xyz[nn_rank*6+0]-pos.x);
+            deltaX  = (nodePos.x-d_bounding_xyz[nn_CellInd*6+1]>0.0f)*(nodePos.x-d_bounding_xyz[nn_CellInd*6+1]);
+            deltaX += (d_bounding_xyz[nn_CellInd*6+0]-nodePos.x>0.0f)*(d_bounding_xyz[nn_CellInd*6+0]-nodePos.x);
 
-            deltaY  = (pos.y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(pos.y-d_bounding_xyz[nn_rank*6+3]);
-            deltaY += (d_bounding_xyz[nn_rank*6+2]-pos.y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-pos.y);
+            deltaY  = (nodePos.y-d_bounding_xyz[nn_CellInd*6+3]>0.0f)*(nodePos.y-d_bounding_xyz[nn_CellInd*6+3]);
+            deltaY += (d_bounding_xyz[nn_CellInd*6+2]-nodePos.y>0.0f)*(d_bounding_xyz[nn_CellInd*6+2]-nodePos.y);
 
-            deltaZ  = (pos.z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(pos.z-d_bounding_xyz[nn_rank*6+5]);
-            deltaZ += (d_bounding_xyz[nn_rank*6+4]-pos.z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-pos.z);
+            deltaZ  = (nodePos.z-d_bounding_xyz[nn_CellInd*6+5]>0.0f)*(nodePos.z-d_bounding_xyz[nn_CellInd*6+5]);
+            deltaZ += (d_bounding_xyz[nn_CellInd*6+4]-nodePos.z>0.0f)*(d_bounding_xyz[nn_CellInd*6+4]-nodePos.z);
 
             if (deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ >
                 attr_range*attr_range)
@@ -345,7 +341,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
                 continue;
             }
 
-            localNNs[NooflocalNN-1] = nn_rank;
+            localNNs[NooflocalNN-1] = nn_CellInd;
         }
 
         real3 contactForce = make_real3(0.f, 0.f, 0.f);
@@ -360,13 +356,13 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
                                                   d_Y[nnNodeInd],
                                                   d_Z[nnNodeInd]);
 
-                real R = mag2(Rvec)
+                real R = mag2(Rvec);
                 if (R > attr_range*attr_range)
                     continue;
 
                 R = sqrtf(R);
                 
-                contactForce = -attr_stren*youngs_mod*(attr_range-R)*calcUnitVec(Rvec);
+                contactForce = -attr_stren*stiffness*(attr_range-R)*calcUnitVec(Rvec);
                 
                 if (R <= rep_range){
                     //if (R < (rep_range-0.01)) R = repulsion_range-0.01;
@@ -379,7 +375,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
         }
 
         // add forces from simulation box if needed:
-        if (useRigidSimulationBox){
+        if (sim_params.box_params.use_rigid_sim_box){
             real gap1, gap2; 
 
             gap1 = nodePos.x; 
@@ -389,7 +385,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
                 force.x += -rep_stren*stiffness*(gap1-thresh_dist);
             }
 
-            if (gap2 < threshDist){
+            if (gap2 < thresh_dist){
                 force.x += rep_stren*stiffness*(gap2 - thresh_dist);
             }
 
@@ -400,7 +396,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
                 force.y += -rep_stren*stiffness*(gap1-thresh_dist);
             }
 
-            if (gap2 < threshDist){
+            if (gap2 < thresh_dist){
                 force.y += rep_stren*stiffness*(gap2 - thresh_dist);
             }
             
@@ -411,7 +407,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
                 force.z += -rep_stren*stiffness*(gap1-thresh_dist);
             }
 
-            if (gap2 < threshDist){
+            if (gap2 < thresh_dist){
                 force.z += rep_stren*stiffness*(gap2 - thresh_dist);
             }
             
@@ -424,35 +420,76 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
 }
 
 
-__global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
-                                   real d_X[],  real d_Y[],  real d_Z[],
-                                   real gamma_int,
-                                   real d_bounding_xyz[],
-                                   real attraction_range,
-                                   real gamma_ext,
-                                   real Minx, real Miny,  real Minz, int Xdiv, int Ydiv, int Zdiv,
-                                   int *d_NoofNNlist, int *d_NNlist, real DL, real gamma_o,
-                                   real* d_velListX, real* d_velListY, real* d_velListZ,
-                                   R3Nptrs d_fDisList){
+__global__ void CalculateDisForce( SimStatePtrs sim_state, sim_params_struct sim_params,
+                                   int Xdiv, int Ydiv, int Zdiv){
+
+    __shared__ real* d_X;
+    __shared__ real* d_Y;
+    __shared__ real* d_Z;
+    __shared__ real* d_VX;
+    __shared__ real* d_VY;
+    __shared__ real* d_VZ;
+    
+    __shared__ real* d_FX;
+    __shared__ real* d_FY;
+    __shared__ real* d_FZ;
+    
+    __shared__ int no_of_cells;
+    __shared__ int* d_C180_nn;
+    __shared__ int* d_C180_sign;
+    __shared__ real attr_range;
+    __shared__ real DL;
+    __shared__ int* d_NNlist;
+    __shared__ int* d_NoofNNlist;
+    __shared__ real* d_bounding_xyz;
+    __shared__ real gamma_int;
+    __shared__ real gamma_ext;
+    __shared__ real gamma_o;
+
+    if (threadIdx.x == 0){
+        d_X = sim_state.pos.x;
+        d_Y = sim_state.pos.y;
+        d_Z = sim_state.pos.z;
+        d_VX = sim_state.vel.x;
+        d_VY = sim_state.vel.y;
+        d_VZ = sim_state.vel.z;
+        no_of_cells = sim_state.no_of_cells;
+        d_C180_nn = sim_state.C180_nn;
+        d_C180_sign = sim_state.C180_sign;
+        attr_range = sim_params.core_params.attr_range;
+        DL = sim_params.core_params.dom_len;
+        d_NNlist = sim_state.nnList;
+        d_NoofNNlist = sim_state.numOfNNList;
+        d_bounding_xyz = sim_state.boundingBoxes;
+        gamma_int = sim_params.core_params.internal_damping;
+        gamma_ext = sim_params.core_params.inter_membr_fric;
+        gamma_o = sim_params.core_params.gamma_visc;
+        d_FX = sim_state.disForce.x;
+        d_FY = sim_state.disForce.y;
+        d_FZ = sim_state.disForce.z;
+    }
+    __syncthreads();
+    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
 
-    if (cellInd < No_of_C180s && nodeInd < 180){
+    if (cellInd < no_of_cells && nodeInd < 180){
         size_t globalNodeInd = cellInd*192 + nodeInd;
         size_t N = 0;
         real3 force = make_real3(0, 0, 0);
-        real3 nodeVelocity = make_real3(d_velListX[globalNodeInd],
-                                          d_velListY[globalNodeInd],
-                                          d_velListZ[globalNodeInd]);
+        
+        real3 nodeVelocity = make_real3(d_VX[globalNodeInd],
+                                        d_VY[globalNodeInd],
+                                        d_VZ[globalNodeInd]);
 
-        real3 neighVelocity = make_real3(0, 0, 0);
+        real3 neighVelocity;
         
         // dampen bonding
         for (int i = 0; i < 3; ++i){
             N = d_C180_nn[i*192+nodeInd];
-            neighVelocity = make_real3(d_velListX[cellInd*192+N],
-                                        d_velListY[cellInd*192+N],
-                                        d_velListZ[cellInd*192+N]);
+            neighVelocity = make_real3(d_VX[cellInd*192+N],
+                                       d_VY[cellInd*192+N],
+                                       d_VZ[cellInd*192+N]);
                 
             force = force - gamma_int*(nodeVelocity - neighVelocity);
         }
@@ -464,61 +501,58 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         int N3 = d_C180_nn[384+nodeInd];
 
         real3 A = make_real3(d_X[cellInd*192+N2]-d_X[cellInd*192+N1],
-                               d_Y[cellInd*192+N2]-d_Y[cellInd*192+N1],
-                               d_Z[cellInd*192+N2]-d_Z[cellInd*192+N1]);
+                             d_Y[cellInd*192+N2]-d_Y[cellInd*192+N1],
+                             d_Z[cellInd*192+N2]-d_Z[cellInd*192+N1]);
 
         real3 B = make_real3(d_X[cellInd*192+N3]-d_X[cellInd*192+N1],
-                               d_Y[cellInd*192+N3]-d_Y[cellInd*192+N1],
-                               d_Z[cellInd*192+N3]-d_Z[cellInd*192+N1]);
+                             d_Y[cellInd*192+N3]-d_Y[cellInd*192+N1],
+                             d_Z[cellInd*192+N3]-d_Z[cellInd*192+N1]);
 
         real3 normal = calcUnitVec(cross(A, B));
 
         normal = d_C180_sign[nodeInd]*normal;
 
-        real X = d_X[globalNodeInd];
-        real Y = d_Y[globalNodeInd];
-        real Z = d_Z[globalNodeInd];
+        real3 nodePos = make_real3(d_X[globalNodeInd],
+                                   d_Y[globalNodeInd],
+                                   d_Z[globalNodeInd]);
 
         real deltaX = 0;
         real deltaY = 0;
         real deltaZ = 0;
-        real R = 0;
-
-        int nn_rank = 0;
-        int nnAtomInd = 0;
+        
+        int nn_CellInd = 0;
         
         int NooflocalNN = 0;
-        int localNNs[10];
 
-        int startx = (int)((X -Minx)/DL);
+        int startx = (int)((nodePos.x - sim_state.mins.x[0])/DL);
         if ( startx < 0 ) startx = 0;
         if ( startx >= Xdiv ) startx = Xdiv-1;
 
-        int starty = (int)((Y - Miny)/DL);
+        int starty = (int)((nodePos.y - sim_state.mins.y[0])/DL);
         if ( starty < 0 ) starty = 0;
         if ( starty >= Ydiv ) starty = Ydiv-1;
 
-        int startz = (int)((Z - Minz)/DL);
+        int startz = (int)((nodePos.z - sim_state.mins.z[0])/DL);
         if ( startz < 0 ) startz = 0;
         if ( startz >= Zdiv ) startz = Zdiv-1;
 
         int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
-        
+        int localNNs[MAX_NN];
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
-            nn_rank = d_NNlist[32*index+nn_rank1-1]; // MAGIC NUMBER!!
-            if ( nn_rank == cellInd ) continue;
+            nn_CellInd = d_NNlist[32*index+nn_rank1-1]; // MAGIC NUMBER!!
+            if ( nn_CellInd == cellInd ) continue;
 
-            deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
-            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
+            deltaX  = (nodePos.x-d_bounding_xyz[nn_CellInd*6+1]>0.0f)*(nodePos.x-d_bounding_xyz[nn_CellInd*6+1]);
+            deltaX += (d_bounding_xyz[nn_CellInd*6+0]-nodePos.x>0.0f)*(d_bounding_xyz[nn_CellInd*6+0]-nodePos.x);
 
-            deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
-            deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+            deltaY  = (nodePos.y-d_bounding_xyz[nn_CellInd*6+3]>0.0f)*(nodePos.y-d_bounding_xyz[nn_CellInd*6+3]);
+            deltaY += (d_bounding_xyz[nn_CellInd*6+2]-nodePos.y>0.0f)*(d_bounding_xyz[nn_CellInd*6+2]-nodePos.y);
 
-            deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
-            deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+            deltaZ  = (nodePos.z-d_bounding_xyz[nn_CellInd*6+5]>0.0f)*(nodePos.z-d_bounding_xyz[nn_CellInd*6+5]);
+            deltaZ += (d_bounding_xyz[nn_CellInd*6+4]-nodePos.z>0.0f)*(d_bounding_xyz[nn_CellInd*6+4]-nodePos.z);
 
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range )
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attr_range*attr_range)
                 continue;
 
             ++NooflocalNN;
@@ -527,27 +561,26 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                 printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
                 continue;
             }
-            localNNs[NooflocalNN-1] = nn_rank;
+            localNNs[NooflocalNN-1] = nn_CellInd;
         }
+
 
         for ( int i = 0; i < NooflocalNN; ++i )
         {
-            nn_rank =localNNs[i];
-
+            nn_CellInd =localNNs[i];
             for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             {
-                deltaX = X - d_X[nn_rank*192+nn_atom];
-                deltaY = Y - d_Y[nn_rank*192+nn_atom];
-                deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                int nnAtomInd = nn_CellInd*192+nn_atom;
+                real3 delta = nodePos - make_real3(d_X[nnAtomInd],
+                                                   d_Y[nnAtomInd],
+                                                   d_Z[nnAtomInd]);
 
-                R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
-
-                if ( R > attraction_range*attraction_range )
+                if (mag2(delta) > attr_range*attr_range)
                     continue;
 
-                neighVelocity = make_real3(d_velListX[nn_rank*192+nn_atom],
-                                            d_velListY[nn_rank*192+nn_atom],
-                                            d_velListZ[nn_rank*192+nn_atom]);
+                neighVelocity = make_real3(d_VX[nn_CellInd*192+nn_atom],
+                                           d_VY[nn_CellInd*192+nn_atom],
+                                           d_VZ[nn_CellInd*192+nn_atom]);
 
                 real3 v_ij = nodeVelocity - neighVelocity;
 
@@ -555,106 +588,236 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                 real3 vTau = v_ij - dot(v_ij, normal)*normal;
                 force = force - gamma_ext*vTau;
             }
-
         }
 
         // viscous drag
         force = force - gamma_o*nodeVelocity;
         
         // write force to global memory
-        d_fDisList.x[globalNodeInd] = force.x; 
-        d_fDisList.y[globalNodeInd] = force.y; 
-        d_fDisList.z[globalNodeInd] = force.z; 
+        d_FX[globalNodeInd] = force.x; 
+        d_FY[globalNodeInd] = force.y; 
+        d_FZ[globalNodeInd] = force.z; 
     }
 }
 
 
-__global__ void Integrate(real *d_XP, real *d_YP, real *d_ZP,
-                          real *d_X, real *d_Y, real *d_Z, 
-                          real *d_XM, real *d_YM, real *d_ZM,
-                          real *d_velListX, real *d_velListY, real *d_velListZ, 
-                          real *d_time, real m,
-                          R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
-                          int numCells, bool add_rands,
-                          curandState *rngStates, real rand_scale_factor){
+__global__ void Integrate(SimStatePtrs sim_state, sim_params_struct sim_params){
+    
+    __shared__ real *d_XP;
+    __shared__ real *d_YP;
+    __shared__ real *d_ZP;
+    
+    __shared__ real *d_X;
+    __shared__ real *d_Y;
+    __shared__ real *d_Z;
+    
+    __shared__ real *d_VX;
+    __shared__ real *d_VY; 
+    __shared__ real *d_VZ;
+
+    __shared__ real *d_FCX; 
+    __shared__ real *d_FCY; 
+    __shared__ real *d_FCZ; 
+
+    __shared__ real *d_FDX; 
+    __shared__ real *d_FDY; 
+    __shared__ real *d_FDZ; 
+
+    __shared__ real *d_FRX;
+    __shared__ real *d_FRY; 
+    __shared__ real *d_FRZ;
+    __shared__ real m;
+    __shared__ long int numCells;
+    __shared__ real dt;
+    __shared__ real root_dt; 
+    
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
+
+
+    if (threadIdx.x == 0){
+        d_XP = sim_state.posP.x;
+        d_YP = sim_state.posP.y;
+        d_ZP = sim_state.posP.z;
+            
+        d_X = sim_state.pos.x;
+        d_Y = sim_state.pos.y;
+        d_Z = sim_state.pos.z;
+
+        d_FCX = sim_state.conForce.x;
+        d_FCY = sim_state.conForce.y;
+        d_FCZ = sim_state.conForce.z;
+             
+        d_FDX = sim_state.disForce.x;
+        d_FDY = sim_state.disForce.y;
+        d_FDZ = sim_state.disForce.z;
+             
+        d_FRX = sim_state.ranForce.x;
+        d_FRY = sim_state.ranForce.y;
+        d_FRZ = sim_state.ranForce.z;
+             
+        d_VX = sim_state.vel.x;
+        d_VY = sim_state.vel.y;
+        d_VZ = sim_state.vel.z;
+
+        m = sim_params.core_params.node_mass;
+        numCells = sim_state.no_of_cells;
+        dt = sim_params.core_params.delta_t;
+        root_dt = sqrtf(dt); 
+    }
     
     
     if (cellInd < numCells && node < 180){
         int nodeInd = cellInd*192 + node;
-        const real dt = d_time[0];
-        const real root_dt = sqrtf(dt);
         
-        d_velListX[nodeInd] = d_velListX[nodeInd] + 0.5*(dt*d_fConList.x[nodeInd] + dt*d_fDisList.x[nodeInd] + \
-                                                         root_dt*d_fRanList.x[nodeInd])/m;
+        real3 vel = make_real3 (d_VX[nodeInd],
+                                d_VY[nodeInd],
+                                d_VZ[nodeInd]);
         
-        d_velListY[nodeInd] = d_velListY[nodeInd] + 0.5*(dt*d_fConList.y[nodeInd] + dt*d_fDisList.y[nodeInd] + \
-                                                         root_dt*d_fRanList.y[nodeInd])/m;
+        real3 conForce = make_real3(d_FCX[nodeInd],
+                                    d_FCY[nodeInd],
+                                    d_FCZ[nodeInd]);
+
+        real3 disForce = make_real3(d_FDX[nodeInd],
+                                    d_FDY[nodeInd],
+                                    d_FDZ[nodeInd]); // not datForce
+
+        real3 ranForce = make_real3(d_FRX[nodeInd],
+                                    d_FRY[nodeInd],
+                                    d_FRZ[nodeInd]);
+                                    
+
+        real3 posP = make_real3(0,0,0);
+
+        real3 pos = make_real3(d_X[nodeInd],
+                               d_Y[nodeInd],
+                               d_Z[nodeInd]);
         
-        d_velListZ[nodeInd] = d_velListZ[nodeInd] + 0.5*(dt*d_fConList.z[nodeInd] + dt*d_fDisList.z[nodeInd] + \
-                                                         root_dt*d_fRanList.z[nodeInd])/m;
 
-        d_XP[nodeInd] = d_X[nodeInd] + d_velListX[nodeInd]*dt; 
-        d_YP[nodeInd] = d_Y[nodeInd] + d_velListY[nodeInd]*dt; 
-        d_ZP[nodeInd] = d_Z[nodeInd] + d_velListZ[nodeInd]*dt; 
+        vel = vel + 0.5*(dt*conForce + dt*disForce + root_dt*ranForce)/m;
 
-        if (add_rands != 0){
-            curandState rngState = rngStates[nodeInd];
-            real3 r = rand_scale_factor*make_real3(curand_uniform(&rngState) - 0.5f,
-                                                     curand_uniform(&rngState) - 0.5f,
-                                                     curand_uniform(&rngState) - 0.5f);
+        posP = pos + dt*vel;
 
-            d_XP[nodeInd] += r.x; 
-            d_YP[nodeInd] += r.y; 
-            d_ZP[nodeInd] += r.z; 
-            
-            rngStates[nodeInd] = rngState;
-        }
+        d_VX[nodeInd] = vel.x;
+        d_VY[nodeInd] = vel.y;
+        d_VZ[nodeInd] = vel.z;
+
+        d_XP[nodeInd] = posP.x; 
+        d_YP[nodeInd] = posP.y; 
+        d_ZP[nodeInd] = posP.z; 
     }
 }
 
-__global__ void VelocityUpdateA(real* d_VX, real* d_VY, real* d_VZ,
-                                R3Nptrs fConList, R3Nptrs fRanList,
-                                real dt, long int num_nodes, real m){
+__global__ void VelocityUpdateA(SimStatePtrs sim_state, sim_params_struct sim_params){
+    
+
+    __shared__ real *d_VX;
+    __shared__ real *d_VY;
+    __shared__ real *d_VZ;
+    __shared__ real *d_fConX;
+    __shared__ real *d_fConY;
+    __shared__ real *d_fConZ;
+    __shared__ real *d_fRanX;
+    __shared__ real *d_fRanY;
+    __shared__ real *d_fRanZ;
+    __shared__ real m;
+    __shared__ real dt;
+    __shared__ long int num_nodes; 
+
+    if (threadIdx.x == 0){
+        d_VX = sim_state.vel.x;
+        d_VY = sim_state.vel.y;
+        d_VZ = sim_state.vel.z;
+
+        d_fConX = sim_state.conForce.x; 
+        d_fConY = sim_state.conForce.y; 
+        d_fConZ = sim_state.conForce.z; 
+
+        d_fRanX = sim_state.ranForce.x; 
+        d_fRanY = sim_state.ranForce.y; 
+        d_fRanZ = sim_state.ranForce.z;
+
+        m = sim_params.core_params.node_mass;
+        dt = sim_params.core_params.delta_t;
+        num_nodes = sim_state.no_of_cells*192;  // hard-coded :(
+        
+    }
+    __syncthreads();
+
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
     if (nodeInd < num_nodes){
         real root_dt = sqrtf(dt);
-        d_VX[nodeInd] = d_VX[nodeInd] + 0.5*(dt*fConList.x[nodeInd] + root_dt*fRanList.x[nodeInd])/m;
-        d_VY[nodeInd] = d_VY[nodeInd] + 0.5*(dt*fConList.y[nodeInd] + root_dt*fRanList.y[nodeInd])/m;
-        d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*(dt*fConList.z[nodeInd] + root_dt*fRanList.z[nodeInd])/m;
+        d_VX[nodeInd] = d_VX[nodeInd] + 0.5*(dt*d_fConX[nodeInd] + root_dt*d_fRanX[nodeInd])/m;
+        d_VY[nodeInd] = d_VY[nodeInd] + 0.5*(dt*d_fConY[nodeInd] + root_dt*d_fRanY[nodeInd])/m;
+        d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*(dt*d_fConZ[nodeInd] + root_dt*d_fRanZ[nodeInd])/m;
     }
 }
 
-__global__ void VelocityUpdateB(real* d_VX, real* d_VY, real* d_VZ,
-                                R3Nptrs fDisList, real dt, long int num_nodes, real m){
+__global__ void VelocityUpdateB(SimStatePtrs sim_state, sim_params_struct sim_params){
+    __shared__ real *d_VX;
+    __shared__ real *d_VY;
+    __shared__ real *d_VZ;
+    __shared__ real *d_fDisX; 
+    __shared__ real *d_fDisY; 
+    __shared__ real *d_fDisZ; 
+    __shared__ real m;
+    __shared__ real dt;
+    __shared__ long int num_nodes; 
+
+    if (threadIdx.x == 0){
+        d_VX = sim_state.vel.x;
+        d_VY = sim_state.vel.y;
+        d_VZ = sim_state.vel.z;
+        d_fDisX = sim_state.disForce.x;
+        d_fDisY = sim_state.disForce.y;
+        d_fDisZ = sim_state.disForce.z;
+        m = sim_params.core_params.node_mass;
+        dt = sim_params.core_params.delta_t;
+        num_nodes = sim_state.no_of_cells*192;
+    }
+    
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
     if (nodeInd < num_nodes){
-        d_VX[nodeInd] = d_VX[nodeInd] + 0.5*dt*(fDisList.x[nodeInd])/m;
-        d_VY[nodeInd] = d_VY[nodeInd] + 0.5*dt*(fDisList.y[nodeInd])/m;
-        d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*dt*(fDisList.z[nodeInd])/m;
+        d_VX[nodeInd] = d_VX[nodeInd] + 0.5*dt*(d_fDisX[nodeInd])/m;
+        d_VY[nodeInd] = d_VY[nodeInd] + 0.5*dt*(d_fDisY[nodeInd])/m;
+        d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*dt*(d_fDisZ[nodeInd])/m;
     }
 }
 
-__global__ void ForwardTime(real *d_XP, real *d_YP, real *d_ZP,
-                            real *d_X, real *d_Y, real *d_Z,
-                            real *d_XM, real *d_YM, real *d_ZM, 
-                            int numCells){
+__global__ void ForwardTime(SimStatePtrs sim_state){
+
+    __shared__  real *d_XP;
+    __shared__  real *d_YP;
+    __shared__  real *d_ZP;
+    __shared__  real *d_X;
+    __shared__  real *d_Y;
+    __shared__  real *d_Z;
+    __shared__  real *d_XM;
+    __shared__  real *d_YM;
+    __shared__  real *d_ZM;
+    __shared__ int no_of_cells; 
+
     
     const int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
-    if (nodeInd < 192*numCells){
-        // if (d_XP[nodeInd] != d_XM[nodeInd] ||
-        //     d_YP[nodeInd] != d_YM[nodeInd] || 
-        //     d_ZP[nodeInd] != d_ZM[nodeInd] ){
-        //     printf("%.20f != %.20f or\n%.20f != %.20f or\n%.20f != %.20f\nnodeInd=%d\n",
-        //            d_XP[nodeInd], d_XM[nodeInd],
-        //            d_YP[nodeInd], d_YM[nodeInd],
-        //            d_ZP[nodeInd], d_ZM[nodeInd], nodeInd);
-        //     asm("trap;");
-        // }
 
+    if (threadIdx.x == 0){
+        d_XP = sim_state.posP.x;
+        d_YP = sim_state.posP.y;
+        d_ZP = sim_state.posP.z;
+        
+        d_X = sim_state.pos.x;
+        d_Y = sim_state.pos.y;
+        d_Z = sim_state.pos.z;
+        
+        d_XM = sim_state.posM.x;
+        d_YM = sim_state.posM.y;
+        d_ZM = sim_state.posM.z;
+        no_of_cells = sim_state.no_of_cells; 
+    }
+    
+    if (nodeInd < 192*no_of_cells){
         d_XM[nodeInd] = d_X[nodeInd]; 
         d_YM[nodeInd] = d_Y[nodeInd]; 
         d_ZM[nodeInd] = d_Z[nodeInd];

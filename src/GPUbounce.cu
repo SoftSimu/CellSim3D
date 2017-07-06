@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-  CenterOfMass<<<simstate.No_of_C180s,256>>>(simSate.devPtrs);
+  CenterOfMass<<<simstate.No_of_C180s,256>>>(simState.devPtrs);
                                              
   
   bounding_boxes<<<No_of_C180s,32>>>(simState.devPtrs);
@@ -237,19 +237,19 @@ int main(int argc, char *argv[])
   CudaErrorCheck(); 
 
   size_t reductionblocks = (No_of_C180s-1)/1024+1;
-  minmaxpre<<<reductionblocks,1024>>>(sim_state.devPtrs);
+  minmaxpre<<<reductionblocks,1024>>>(simState.devPtrs);
   CudaErrorCheck(); 
-  minmaxpost<<<1,1024>>>(sim_state);
+  minmaxpost<<<1,1024>>>(simState.devPtrs);
   CudaErrorCheck(); 
-  sim_state.mins.CopyToHost();
-  sim_state.maxs.CopyToHost();
+  simState.mins.CopyToHost();
+  simState.maxs.CopyToHost();
   //  DL = 3.8f;
   DL = 2.9f;
   //DL = divVol; 
 
-  Xdiv = (int)((sim_state.maxs.x[0]-sim_state.mins.x[0])/DL + 1);
-  Ydiv = (int)((sim_state.maxs.y[0]-sim_state.mins.y[0])/DL + 1);
-  Zdiv = (int)((sim_state.maxs.z[0]-sim_state.mins.z[0])/DL + 1);
+  Xdiv = (int)((simState.maxs.x[0]-simState.mins.x[0])/DL + 1);
+  Ydiv = (int)((simState.maxs.y[0]-simState.mins.y[0])/DL + 1);
+  Zdiv = (int)((simState.maxs.z[0]-simState.mins.z[0])/DL + 1);
 
   
   makeNNlist<<<No_of_C180s/512+1,512>>>(simState.devPtrs, Xdiv, Ydiv, Zdiv);
@@ -265,13 +265,13 @@ int main(int argc, char *argv[])
       real3 sysCM = make_real3(0, 0, 0);
 
       for (size_t i = 0; i < simState.cellCOMs.x.h.size(), ++i){
-          sysCM = sysCM + make_real3(Simstate.cellCOMs.x.h[i],
+          sysCM = sysCM + make_real3(simstate.cellCOMs.x.h[i],
                                      simstate.cellCOMs.y.h[i],
                                      simstate.cellCOMs.z.h[i]);
       }
 
       sysCM = sysCM/(simState.no_of_cells);
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(simState.devPtrs, sysCM);
+      CorrectCoMMotion<<<(simState.no_of_cells*192)/1024 + 1, 1024>>>(simState.devPtrs, sysCM);
       CudaErrorCheck(); 
   }
   
@@ -351,16 +351,7 @@ int main(int argc, char *argv[])
   CalculateConForce<<<No_of_C180s,threadsperblock>>>(simState.devPtrs, sim_params); 
   CudaErrorCheck();
 
-  CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                     d_X, d_Y, d_Z,
-                                                     internal_damping,
-                                                     d_bounding_xyz,
-                                                     attraction_range,
-                                                     viscotic_damping,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv,
-                                                     d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                     d_velListX, d_velListY, d_velListZ,
-                                                     d_fDisList);
+  CalculateDisForce<<<No_of_C180s, threadsperblock>>>(simState.devPtrs, sim_params);
   CudaErrorCheck();
 
 
@@ -400,39 +391,28 @@ int main(int argc, char *argv[])
   {
       //printf("step %d\n", step);
       numNodes = No_of_C180s*192;
-      Integrate<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP,
-                                                 d_X, d_Y, d_Z,
-                                                 d_XM, d_YM, d_ZM, 
-                                                 d_velListX, d_velListY, d_velListZ, 
-                                                 d_time, mass,
-                                                 d_fConList, d_fDisList, d_fRanList,
-                                                 No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
+      Integrate<<<No_of_C180s, threadsperblock>>>(simState.devPtrs, sim_params);
       CudaErrorCheck();
 
-      ForwardTime<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP, 
-                                                   d_X , d_Y , d_Z ,
-                                                   d_XM, d_YM, d_ZM,
-                                                   No_of_C180s);
+      ForwardTime<<<No_of_C180s, threadsperblock>>>(simState.devPtrs);
       CudaErrorCheck();
 
 
       // save previous step forces in g
       
-      if (doPopModel == 1){
-            rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
-            // dr = -rGrowth(a + b*rGrowth)
-            // rGrowth += dr * delta_t ;
-            // dN/dT = N*R
-            // dR/dT = -R(a+bR)
-            // 
-            if (rGrowth < 0) rGrowth =0; 
-      }
-      else {
-      rGrowth = rMax;
-      }
-      PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s,
-                                                       useDifferentStiffnesses, stiffness1, d_Youngs_mod, step,
-                                                       phase_count);
+      // if (doPopModel == 1){
+      //       rGrowth = rMax * (1 - (No_of_C180s*1.0/maxPop));
+      //       // dr = -rGrowth(a + b*rGrowth)
+      //       // rGrowth += dr * delta_t ;
+      //       // dN/dT = N*R
+      //       // dR/dT = -R(a+bR)
+      //       // 
+      //       if (rGrowth < 0) rGrowth =0; 
+      // }
+      // else {
+      // rGrowth = rMax;
+      // }
+      PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (simState, sim_params, step);
       CudaErrorCheck(); 
       
       if ( (step)%1000 == 0)
@@ -445,60 +425,30 @@ int main(int argc, char *argv[])
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif
 
-      CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                      d_X,  d_Y,  d_Z,
-                                                      d_CMx, d_CMy, d_CMz,
-                                                      d_R0, d_pressList, d_Youngs_mod , stiffness1, 
-                                                      internal_damping, d_time, d_bounding_xyz,
-                                                      attraction_strength, attraction_range,
-                                                      repulsion_strength, repulsion_range,
-                                                      viscotic_damping, mass,
-                                                      Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                      wall1, wall2,
-                                                      threshDist, useWalls,
-                                                      d_velListX, d_velListY, d_velListZ,
-                                                      useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_fConList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
+      CalculateConForce<<<No_of_C180s,threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
       CudaErrorCheck();
 
 
-      CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                         d_X, d_Y, d_Z,
-                                                         internal_damping,
-                                                         d_bounding_xyz,
-                                                         attraction_range,
-                                                         viscotic_damping,
-                                                         Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv,
-                                                         d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                         d_velListX, d_velListY, d_velListZ,
-                                                         d_fDisList);
+      CalculateDisForce<<<No_of_C180s, threadsperblock>>>(simSate.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
       CudaErrorCheck();
 
       // Calculate random Force here...
       // Placeholder
       
-      VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                       d_fConList, d_fRanList, delta_t, numNodes, mass);
+      VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(simState.devPtrs, sim_params);
       CudaErrorCheck();
 
 
       // Dissipative velocity update part...
       for (int s = 0; s < 1; ++s){ // may be looped over more later.
-          VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                           d_fDisList, delta_t, numNodes, mass);
+          VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(simState.devPtrs, sim_params);
           CudaErrorCheck();
-          
-          CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                             d_X, d_Y, d_Z,
-                                                             internal_damping,
-                                                             d_bounding_xyz,
-                                                             attraction_range,
-                                                             viscotic_damping,
-                                                             Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv,
-                                                             d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                             d_velListX, d_velListY, d_velListZ,
-                                                             d_fDisList);
-          CudaErrorCheck();
+
+          CalculateDisForce<<<No_of_C180s, threadsperblock>>>(simSate.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
+      CudaErrorCheck();
+
+      // this loop can be looped until convergence, but it shouldn't
+      // be necessary most of the time...
       }
 
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
@@ -508,7 +458,6 @@ int main(int argc, char *argv[])
       if (step <= Time_steps && rGrowth > 0){
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
-
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_X, d_Y, d_Z,
                                      d_CMx , d_CMy, d_CMz,
@@ -517,35 +466,6 @@ int main(int argc, char *argv[])
                                      stiffness1, useDifferentStiffnesses, d_Youngs_mod,
                                      recalc_r0);
         CudaErrorCheck();
-
-#if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
-      if (checkSphericity){
-          //cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          h_volume = d_volumeV; 
-          cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          printf("time: %d\n", step); 
-          for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f, area=%f, psi=%f, p = %f" , i, h_volume[i], area[i],
-                      4.835975862049408*pow(h_volume[i], 2.0/3.0)/area[i], pressList[i]);
-          
-              if (h_volume[i] > divVol)
-                  printf(", I'm too big :(");
-          
-              printf("\n"); 
-          }
-      } else{
-          h_volume = d_volumeV; 
-          for (int i = 0; i < No_of_C180s; i++){
-              printf ("Cell: %d, volume= %f", i, h_volume[i]); 
-          
-              if (h_volume[i] > divVol)
-                  printf(", I'm too big :(");
-          
-              printf("\n"); 
-          }
-      }
-#endif
 
         count_and_get_div();
 
@@ -616,7 +536,7 @@ int main(int argc, char *argv[])
 
             CudaErrorCheck(); 
 
-            PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
+            PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (simState.devPtrs, sim_params); 
             CudaErrorCheck();
 
             cudaMemcpy(d_Youngs_mod, youngsModArray,

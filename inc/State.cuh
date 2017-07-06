@@ -71,6 +71,7 @@ struct SimState{ // contains state on gpu and cpu side
     SimList1D<real> pressures;
     SimList1D<int> C180_nn;
     SimList1D<int> C180_sign;
+    SimList1D<int> C180_56; 
 
     SimList3D<real> mins; 
     SimList3D<real> maxs; 
@@ -119,6 +120,7 @@ struct SimState{ // contains state on gpu and cpu side
         pressures(sim_params.core_params.max_no_of_cells),
         C180_nn(sim_params.core_params.num_nodes*3),
         C180_sign(sim_params.core_params.num_nodes),
+        C180_56(92*7),
         nnList(MAX_NN*sim_params.core_params.max_no_of_cells),
         numOfNNList(sim_params.core_params.max_no_of_cells),
         youngsMod(sim_params.core_params.max_no_of_cells),
@@ -150,6 +152,7 @@ struct SimState{ // contains state on gpu and cpu side
 
         devPtrs.C180_nn       = C180_nn.devPtr;
         devPtrs.C180_sign     = C180_sign.devPtr;
+        devPtrs.C180_56       = C180_56.devPtr;
 
         devPtrs.mins          = mins.devPtrs;
         devPtrs.maxs          = maxs.devPtrs;
