@@ -44,12 +44,8 @@ def flatten(trajPath, storePath, inc, name=None, f=False):
     print("writing to %s" % storePath)
 
     if os.path.isfile(storePath):
-        print("Skipping %s" % storePath)
-        return
 
-    CMxList = []
-    CMyList = []
-    CMzList = []
+        print("overwriting {0}".format(storePath))
 
 
     CMx = 0
@@ -63,25 +59,16 @@ def flatten(trajPath, storePath, inc, name=None, f=False):
             while c < t.maxFrames:
                 frame = t.ReadFrame(inc)
                 c += 1
-                nCells = int(frame.shape[0]/192)
+                nCells = len(frame)
                 t.nCellsLastFrame
                 print("frame ", t.currFrameNum, nCells, " cells")
-                for n in range(nCells):
-                    CMxList.append(str(frame[n*192:(n+1)*192, 0].sum()/192))
-                    CMyList.append(str(frame[n*192:(n+1)*192, 1].sum()/192))
-                    CMzList.append(str(frame[n*192:(n+1)*192, 2].sum()/192))
+                CM = np.vstack([np.mean(c, axis=1) for c in frame])
 
-                if len(CMxList) != len(CMyList):
-                    raise('uh oh hotdog. len(CMxList) != len(CMyList)')
-
-                outFileHandle.write("%s\n" % " ".join(CMxList))
-                outFileHandle.write("%s\n" % " ".join(CMyList))
+                outFileHandle.write("%s\n" % " ".join([str(a) for a in CM[:, 0]]))
+                outFileHandle.write("%s\n" % " ".join([str(a) for a in CM[:, 1]]))
                 if f:
-                    outFileHandle.write("%s\n" % " ".join(CMzList))
+                    outFileHandle.write("%s\n" % " ".join([str(a) for a in CM[:, 2]]))
 
-                CMxList = []
-                CMyList = []
-                CMzList = []
 
 
 

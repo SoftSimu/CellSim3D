@@ -80,7 +80,7 @@ def measurePacking(filePath, storePath, name=None):
             try:
                 frame = s.ReadFrame(inc = aRate)
             except:
-                pass
+                break
             step = s.step
             if s.fatalError:
                 break
@@ -213,5 +213,5 @@ figll.set_size_inches(10, 5)
 h, l = axll.get_legend_handles_labels()
 figll.legend(h, l)
 
-fig.savefig("fit.svg")
-figll.savefig("llfit.svg")
+fig.savefig("fit.png")
+figll.savefig("llfit.png")
