@@ -350,7 +350,8 @@ int main(int argc, char *argv[])
 
   cudaDeviceProp deviceProp = getDevice();
   if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
-      printf("Could not set to divice %d\n", 2);
+      CudaErrorCheck();
+      printf("Could not set to divice %d\n", atoi(argv[3]));
       return -1;
   }
 
