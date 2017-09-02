@@ -6,6 +6,7 @@
 #include "SimParams.cuh"
 #include "SimList.cuh"
 #include "globals.cuh"
+#include "VectorFunctions.hpp"
 
 struct SimStatePtrs{
     R3Nptrs posP;
@@ -34,6 +35,7 @@ struct SimStatePtrs{
 
     int* C180_nn;
     int* C180_sign;
+    int* C180_56;
 
     int* resetIndices;
 
@@ -174,4 +176,32 @@ struct SimState{ // contains state on gpu and cpu side
     }
 };
 
+
+
+__device__ void write_to_R3N_state(R3Nptrs& state,
+                                   const real3& value,
+                                   const size_t globalInd){
+    state.x[globalInd] = value.x;
+    state.y[globalInd] = value.y;
+    state.z[globalInd] = value.z;
+}
+
+__device__ real3 read_from_R3N_state(const R3Nptrs& state,
+                                     const size_t globalInd){
+
+    return make_real3(state.x[globalInd],
+                      state.y[globalInd],
+                      state.z[globalInd]);
+}
+
+
+__device__ void copy_R3N_state(R3Nptrs state,
+                               const size_t destGlobalInd, 
+                               const size_t sourceGlobalInd){
+    
+    state.x[destGlobalInd] = state.x[sourceGlobalInd];
+    state.y[destGlobalInd] = state.y[sourceGlobalInd];
+    state.z[destGlobalInd] = state.z[sourceGlobalInd];
+}
+        
 #endif // STATE_CUH
