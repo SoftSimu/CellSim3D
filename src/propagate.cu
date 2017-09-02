@@ -851,11 +851,25 @@ __global__ void CorrectCoMMotion(SimStatePtrs sim_state, real3 sysCM){
 
 __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
                           R3Nptrs fList, 
-                          long int numNodes){
+                          long int numNodes,
+                          SimStatePtrs sim_state){
+    __shared__ R3Nptrs conForce;
+    __shared__ R3Nptrs disForce;
+    __shared__ R3Nptrs ranForce;
+    __shared__ R3Nptrs totForce;
+    
     size_t idx = blockIdx.x*blockDim.x + threadIdx.x;
-    if (idx < numNodes){
-        fList.x[idx] = fConList.x[idx] + fDisList.x[idx] + fRanList.x[idx]; 
-        fList.y[idx] = fConList.y[idx] + fDisList.y[idx] + fRanList.y[idx]; 
-        fList.z[idx] = fConList.z[idx] + fDisList.z[idx] + fRanList.z[idx];
+    if (idx < sim_state.no_of_cells*192){
+
+        if (idx == 0){
+            conForce = sim_state.conForce;
+            disForce = sim_state.disForce;
+            ranForce = sim_state.ranForce;
+            totForce = sim_state.conForce;
+        }
+        
+        totForce.x[idx] = conForce.x[idx] + disForce.x[idx] + ranForce.x[idx]; 
+        totForce.y[idx] = conForce.y[idx] + disForce.y[idx] + ranForce.y[idx]; 
+        totForce.z[idx] = conForce.z[idx] + disForce.z[idx] + ranForce.z[idx];
     }
 }
