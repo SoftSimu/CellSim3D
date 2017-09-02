@@ -1,4 +1,13 @@
 #include <stdio.h>
+
+#include "Types.cuh"
+#include "VectorFunctions.hpp"
+#include "State.cuh"
+
+#warning "This source file uses the magic 192 number. Remember to rewrite if that number ever changes!!"
+
+#define CELLDIV_EPS 1e-3
+
 cudaDeviceProp getDevice(void)
 {
 
@@ -31,113 +40,64 @@ cudaDeviceProp getDevice(void)
 
 
 
-__device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap,
-                                       float CMx, float CMy, float CMz,
-                                       float X, float Y, float Z,
-                                       float* d_XP,  float* d_YP,  float* d_ZP,
-                                       float* d_X,  float* d_Y,  float* d_Z,
-                                       float* d_XM,  float* d_YM,  float* d_ZM,
-                                       float planeNx, float planeNy, float planeNz){
-             
-    // redefine position of parent cell wrt to an origin that includes
-    // 0.5 the minimum gap between daughter cells
-    X = X - CMx - halfGap*planeNx; 
-    Y = Y - CMy - halfGap*planeNy; 
-    Z = Z - CMz - halfGap*planeNz;
+__device__ void CalcAndUpdateDaughtPos(const real3& parNodePos,
+                                       const real3& norm,
+                                       const real3& parCoM,
+                                       const real& halfgap,
+                                       SimStatePtrs& sim_state,
+                                       const size_t& globalDaughtNodeInd){
 
-    float posDotN = X*planeNx + Y*planeNy + Z*planeNz;
+    real3 daughtNodePos = parNodePos - parCoM - halfgap*norm;
 
-    // If particle is below the plane, project onto the plane
-    if (posDotN < 0.0f || posDotN == 0){
-        X = X - posDotN*planeNx;
-        Y = Y - posDotN*planeNy;
-        Z = Z - posDotN*planeNz;
+    real mu = dot(daughtNodePos, norm);
+
+    // if node is below division plane, project on the th division plane
+    if (mu <= 0){
+        daughtNodePos = daughtNodePos - mu*norm;
     }
-             
-    d_XP[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
-    d_YP[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
-    d_ZP[daughtInd*192+partInd] = Z + (CMz + halfGap*planeNz);
-    
-    d_X[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
-    d_Y[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
-    d_Z[daughtInd*192+partInd] = Z + (CMz + halfGap*planeNz);
-    
-    d_XM[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
-    d_YM[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
-    d_ZM[daughtInd*192+partInd] = Z + (CMz + halfGap*planeNz);
+
+    // restore node position back to its original position wrt to the system origin
+    daughtNodePos = daughtNodePos + parCoM + halfgap*norm;
+
+    write_to_R3N_state(sim_state.posP, daughtNodePos, globalDaughtNodeInd);
+    write_to_R3N_state(sim_state.pos, daughtNodePos, globalDaughtNodeInd);
+    write_to_R3N_state(sim_state.posM, daughtNodePos, globalDaughtNodeInd);
 }
 
+__global__ void  cell_division(size_t parCellInd, size_t daughtCellInd,
+                               SimStatePtrs sim_state, sim_params_struct sim_params, real3 norm){
+    int localNodeInd = threadIdx.x;
 
-__global__ void  cell_division(int rank,
-                               float* d_XP, float* d_YP, float* d_ZP, 
-                               float *d_X,  float *d_Y,  float *d_Z,
-                               float* d_XM, float* d_YM, float* d_ZM,
-                               float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float *d_randNorm, float repulsion_range){
-    int newrank = No_of_C180s;
-    __shared__ float CMx, CMy, CMz;
-  
-    int tid  = threadIdx.x;
-    int atom = tid;
-
-    if (tid == 0){
-        CMx = AllCMx[rank];
-        CMy = AllCMy[rank];
-        CMz = AllCMz[rank];
-    }
-
-    __syncthreads();
-
-
-    if ( atom < 180 ) 
+    if ( localNodeInd < 180 ) 
     {
 
-        // planeN is the division plane's normal vector
-        float planeNx = d_randNorm[0];
-        float planeNy = d_randNorm[1];
-        float planeNz = d_randNorm[2];
-
-        if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
-            printf("OH SHIT: normal is not normalized\n");
-            printf("Crash now :(\n"); 
+#ifdef CELLDIV_EPS
+#warning "This source file has hard coded constants!!!"
+        if (abs(mag(norm)) > CELLDIV_EPS){
             asm("trap;");
         }
+#endif
 
+        real halfgap = 0.5*sim_params.core_params.rep_range;
 
-        // First generate and write positions for the first daughter
+        size_t globalNodeInd = parCellInd*192+localNodeInd;
+        size_t globalDaughtNodeInd = daughtCellInd*192+localNodeInd; 
+                
+        real3 parNodePos = make_real3(sim_state.pos.x[globalNodeInd],
+                                      sim_state.pos.y[globalNodeInd],
+                                      sim_state.pos.z[globalNodeInd]);
 
-        float X = d_X[rank*192+atom]; 
-        float Y = d_Y[rank*192+atom]; 
-        float Z = d_Z[rank*192+atom]; 
-         
-        CalcAndUpdateDaughtPos(rank, atom, 0.5*repulsion_range,
-                               CMx, CMy, CMz,
-                               X, Y, Z,
-                               d_XP, d_YP, d_ZP, 
-                               d_X, d_Y, d_Z,
-                               d_XM, d_YM, d_ZM, 
-                               planeNx, planeNy, planeNz);
+        real3 parCoM = make_real3(sim_state.cellCOMs.x[parCellInd],
+                                  sim_state.cellCOMs.y[parCellInd],
+                                  sim_state.cellCOMs.z[parCellInd]);
 
-        
-        // Invert the normal
-        planeNx = -1*planeNx; 
-        planeNy = -1*planeNy; 
-        planeNz = -1*planeNz;
+        CalcAndUpdateDaughtPos(parNodePos, norm, parCoM, halfgap, sim_state,
+                               globalNodeInd);
 
-        // Now repeat for the second daughter
-        CalcAndUpdateDaughtPos(newrank, atom, 0.5*repulsion_range,
-                               CMx, CMy, CMz,
-                               X, Y, Z,
-                               d_XP, d_YP, d_ZP, 
-                               d_X, d_Y, d_Z,
-                               d_XM, d_YM, d_ZM,
-                               planeNx, planeNy, planeNz);
+        CalcAndUpdateDaughtPos(parNodePos, -1*norm, parCoM, halfgap, sim_state,
+                               globalDaughtNodeInd);
 
-        // give the daughter the same velocities as the parent
-        d_velListX[newrank*192 + atom] = d_velListX[rank*192+atom];
-        d_velListY[newrank*192 + atom] = d_velListY[rank*192+atom];
-        d_velListZ[newrank*192 + atom] = d_velListZ[rank*192+atom];
+        copy_R3N_state(sim_state.vel, globalDaughtNodeInd, globalNodeInd);
     }
 }
 
