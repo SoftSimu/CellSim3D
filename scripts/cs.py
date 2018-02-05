@@ -2,10 +2,10 @@
 
 import argparse
 import os
+import io
 import sys
 import numpy as np
 from tqdm import tqdm
-import io
 import pandas as pd
 
 import celldiv as cd
@@ -15,6 +15,7 @@ mpl.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial import ConvexHull
 
 desc = """"""
 
@@ -26,22 +27,22 @@ parser.add_argument("traj",
 
 parser.add_argument("-k", "--skip",
                     help="Trajectory frame skip rate",
-                    type = int,
-                    default = 1)
+                    type=int,
+                    default=1)
 parser.add_argument("-t", "--threshold",
                     help="Threshold distance from plane within which plotted",
-                    type = float,
-                    default = 0.1)
+                    type=float,
+                    default=0.1)
 parser.add_argument("-l", "--set-limits",
                     help="Set limits for the video. Must read trajectory twice. \
                     Must be a complete trajectory file.",
-                    type = bool,
-                    default = True)
+                    type=bool,
+                    default=True)
 
 parser.add_argument("-o", "--out",
                     help="Output file name (with format)",
-                    type = str,
-                    default = "cs.png")
+                    type=str,
+                    default="cs.png")
 
 parser.add_argument("-p", "--pixel",
                     help="Plot pixels instead of points",
@@ -49,7 +50,7 @@ parser.add_argument("-p", "--pixel",
 
 parser.add_argument("-c", "--clear",
                     help="Toggle clearing of storage directory",
-                    type = bool,
+                    type=bool,
                     default=True)
 
 parser.add_argument("--forces", type=str, default="",
@@ -64,8 +65,16 @@ parser.add_argument("--ref-force", type=str, default="med", required=False,
                     help="The reference force to plot relative stress too. 'med'\
                     uses median, 'max' uses the maximum force")
 
+parser.add_argument("--last-frame", "-lf", type=int, default=-1, required=False,
+                    help="Only analyze upto this frame. This is useful for\
+                    analyzing really large simulations that can also be still in\
+                    progress")
 
-args=parser.parse_args()
+parser.add_argument("-f", "--frame", type=int, default=-1, required=False,
+                    help="Only analyze this one frame.")
+
+
+args = parser.parse_args()
 trajPath = os.path.abspath(args.traj)
 
 forcePath = []
@@ -84,11 +93,7 @@ storePath += "/" + trajFileName + "/cs/"
 
 print ("Saving to", storePath)
 
-
-
-
 cmap = plt.get_cmap(args.colormap)
-
 
 if not os.path.exists(storePath):
     os.makedirs(storePath)
@@ -115,7 +120,22 @@ mins = []
 if args.set_limits:
     with cd.TrajHandle(trajPath) as th:
         print("Getting movie limits...")
-        frame = np.vstack(th.ReadFrame(th.maxFrames))
+
+        if args.last_frame > 0 and args.last_frame > th.maxFrames:
+            print("Trajectory only has {0} frames".format(th.maxFrames))
+            args.last_frame = -1
+
+        if args.frame > 0 and args.frame > th.maxFrames:
+            print("Trajectory only has {0} frames".format(th.maxFrames))
+            args.frame = th.maxFrames
+
+        if args.frame > 0:
+            frame = np.vstack(th.ReadFrame(args.frame))
+        elif args.last_frame > 0:
+            frame = np.vstack(th.ReadFrame(args.last_frame))
+        else:
+            frame = np.vstack(th.ReadFrame(th.maxFrames))
+
         frame = frame - np.mean(frame, axis=0)
         zs = np.abs(frame[:, 2])
         m = zs <= args.threshold
@@ -149,7 +169,7 @@ def GetStepForces(step):
         x = forceFileHandle.tell()
         line = forceFileHandle.readline().strip().split(",")
         if int(line[0]) < step:
-            for _ in range(int(line[1]) * 192):
+            for _ in range(int(line[1]) * 180):
                 #next(forceFileHandle)
                 forceFileHandle.readline()
 
@@ -158,7 +178,7 @@ def GetStepForces(step):
             break
 
         if int(line[0]) == step:
-            n = int(line[1])*192
+            n = int(line[1])*180
             forceFileHandle.seek(x)
             for _ in range(n):
                 stepForces.write(forceFileHandle.readline())
@@ -168,10 +188,17 @@ def GetStepForces(step):
 
 
 with cd.TrajHandle(trajPath) as th:
-    for i in tqdm(range(int(th.maxFrames/args.skip))):
-        ax.set_title("$t = %d$" % i)
+    n = args.last_frame if args.last_frame > 0 else th.maxFrames
+    for i in tqdm(range(int(n/args.skip))):
+        ax.set_title("$t = {0}$".format(i+1))
         try:
             frame = th.ReadFrame(inc=args.skip)
+            if args.frame > 0 and th.currFrameNum < args.frame:
+                continue
+
+            if args.frame > 0 and th.currFrameNum > args.frame:
+                break
+
             cellTypes = th.currTypes
             Xs0 = []
             Ys0 = []
@@ -183,9 +210,8 @@ with cd.TrajHandle(trajPath) as th:
             avgCellForces = []
             datLens = []
 
-            sysCM = np.mean(np.array([np.mean(c, axis=0) for c in frame]), axis=0)
-            frame = [c - sysCM for c in frame]
-
+            sysCM = np.mean(np.vstack(frame), axis=0)
+            frame = [c[:180] - sysCM for c in frame]
 
             if args.forces is not "" and th.step>0:
                 sF = GetStepForces(th.step)
@@ -205,7 +231,7 @@ with cd.TrajHandle(trajPath) as th:
                     Xs1.append(data[:, 0])
                     Ys1.append(data[:, 1])
 
-                if args.forces is not "" and th.step>0:
+                if args.forces is not "" and th.step > 0:
                     cellForces = Forces[Forces["cell_ind"] == c][["FX", "FY", "FZ"]]
                     avgCellForces.append(np.linalg.norm(cellForces.as_matrix(),
                                                         axis=1).sum())
@@ -230,14 +256,12 @@ with cd.TrajHandle(trajPath) as th:
                     ref_force = max(avgCellForces)
 
                 for x,y,f in zip(Xs0, Ys0, avgCellForces):
-                    # sort the angle
-                    cx = x - np.mean(x)
-                    cy = y - np.mean(y)
-                    thetas = np.arctan(cy/cx)
-                    inds = np.argsort(thetas)
-                    ax.fill(x[inds],y[inds],color = cmap(f/ref_force))
+                    p = np.array([x,y]).T
+                    hull = ConvexHull(p)
+                    ax.fill(p[hull.vertices, 0], p[hull.vertices, 1],
+                            color=cmap(f/ref_force))
 
-            fig.savefig(storePath + outName[0] + "%s" % i + outName[1])
+            fig.savefig(storePath + outName[0] + "{0}".format(i+1) + outName[1])
 
         except cd.IncompleteTrajectoryError as e:
             print(e.value)

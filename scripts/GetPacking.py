@@ -58,7 +58,7 @@ def analyze(filePath, storePath, name = None):
     voro = []
     #polyCountEvo = {1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 7:[], 8:[], 9:[], 10:[], 11:[], 12:[], 13:[], 14:[], 15:[]}
     polyCountEvo = {4:[], 5:[], 6:[], 7:[], 8:[]}
-    colorDict = {3:'k', 4:'w', 5:'g', 6:'r', 7:'c', 8:'m', 9:'y', 10:'k', 11:'k', 12:'k', 13:'k', 14:'k', 15:'k', 16:'k', 17:'k'}
+    colorDict = {3:'k', 4:'w', 5:'g', 6:'r', 7:'c', 8:'m', 9:'y', 10:'k', 11:'k', 12:'k', 13:'k', 14:'k', 15:'k', 16:'k', 17:'k', 18:'k', 19:'k', 20:'k', 21:'k'}
 
     #ncLocDict = {0.1:[], 0.2:[], 0.3:[], 0.4:[], 0.5:[], 0.6:[], 0.7:[], 0.8:[], 0.9:[]}
     #rList = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
@@ -110,7 +110,6 @@ def analyze(filePath, storePath, name = None):
             for region in voro.regions:
                 if -1 not in region and len(region) != 0: # region containing index -1 means infinite region
                     cellList.append(region)
-                    #print region
 
 
             # Count polygon types
@@ -169,7 +168,7 @@ def analyze(filePath, storePath, name = None):
 
     print("Charting %s bars..." % fileName)
     # Generate bar charts
-    plt.bar(np.array(polyCountEvo.keys()) - 0.5,
+    plt.bar(np.array(list(polyCountEvo.keys())) - 0.5,
             [np.mean(polyCountEvo[key][-20:]) for key in polyCountEvo],
             yerr = [np.std(polyCountEvo[key][-20:]) for key in polyCountEvo],
             ecolor='k', color='grey')

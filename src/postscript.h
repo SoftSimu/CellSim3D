@@ -46,7 +46,7 @@ int PSCIRCLE(float X,float Y,FILE *outfile);
 int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271]);
 
 int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
-__global__ void CalculateForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+__global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
                            float* d_R0, float* d_pressList, float* d_Youngs_mod , float cellStiffness,
@@ -68,7 +68,9 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
                           float *d_time, float mass,
-                          R3Nptrs d_forceList, int numCells, bool add_rands, curandState *rngStates, float rand_scale_factor);
+                          R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
+                          int numCells, bool add_rands,
+                          curandState *rngStates, float rand_scale_factor);
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
@@ -125,6 +127,25 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
 void writeForces(FILE* forceFile, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
-                                 float sysCMx, float sysCMy, float sysCMz, int numParts);
-__global__ void VelocityUpdate(float* d_VX, float* d_VY, float* d_VZ,
-                               R3Nptrs fList, R3Nptrs gList, float dt, long int num_nodes);
+                                 float sysCMx, float sysCMy, float sysCMz, long int numParts);
+
+__global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
+                                R3Nptrs fConList, R3Nptrs fRanList,
+                                float dt, long int num_nodes, float m);
+
+__global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
+                                R3Nptrs fDisList, float dt, long int num_nodes, float m);
+
+__global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+                                   float d_X[],  float d_Y[],  float d_Z[],
+                                   float gamma_int,
+                                   float d_bounding_xyz[],
+                                   float attraction_range,
+                                   float gamma_ext,
+                                   float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                                   int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
+                                   float* d_velListX, float* d_velListY, float* d_velListZ,
+                                   R3Nptrs d_fDisList);
+
+__global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
+                                  R3Nptrs d_fRanList);

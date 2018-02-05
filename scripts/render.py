@@ -58,13 +58,13 @@ parser.add_argument("-r", "--res", type=int, default=1, required=False,
                     help='Renders images with resolution RES*1080p. RES>=1. \
                     Use 2 for 4k. A high number will devour your RAM.')
 
-parser.add_argument("-cc", "--cell-color", type=float, nargs=3, required=False,
-                    default=[0.284, 0.15, 0.6],
-                    help="RGB values of cell color. From 0.0 to 1.0")
+parser.add_argument("-cc", "--cell-color", type=int, nargs=3, required=False,
+                    default=[72, 38, 153],
+                    help="RGB values of cell color. From 0 to 255")
 
-parser.add_argument("-bc", "--background-color", type=float, nargs=3,
-                    required=False, default=[1,1,1],
-                    help="RGB values of cell color. From 0.0 to 1.0")
+parser.add_argument("-bc", "--background-color", type=int, nargs=3,
+                    required=False, default=[255,255,255],
+                    help="RGB values of cell color. From 0 to 255")
 
 parser.add_argument("-si", "--specular-intensity", type=float, required=False,
                     default = 0.0,
@@ -74,7 +74,7 @@ args = parser.parse_args(argv)
 
 imageindex = 0
 firstfaces = []
-bpy.data.worlds["World"].horizon_color=args.background_color
+bpy.data.worlds["World"].horizon_color=[ (1.0/255.0)*c for c in args.background_color]
 
 bpy.data.scenes["Scene"].render.alpha_mode='SKY'
 
@@ -121,12 +121,16 @@ if len(args.inds) > 0:
 stopAt = args.num_frames
 
 # Set material color
-bpy.data.materials['Material'].diffuse_color = args.cell_color
+bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cell_color]
 bpy.data.materials['Material'].specular_intensity = args.specular_intensity
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     try:
         for i in range(int(th.maxFrames/nSkip)):
+
+            frameCount += 1
+            if frameCount > args.num_frames:
+                break
 
             f = th.ReadFrame(inc=nSkip)
 
@@ -174,15 +178,13 @@ with celldiv.TrajHandle(filename) as th:
             bpy.ops.object.select_all(action='TOGGLE')
 
             imagename = basename + "%d.png" % frameCount
-            frameCount += 1
             bpy.context.scene.render.filepath = imagename
 
             bpy.ops.render.render(write_still=True)  # render to file
 
             bpy.ops.object.select_pattern(pattern='cellObject')
             bpy.ops.object.delete()                                     # delete mesh...
-            if frameCount > stopAt:
-                break
+
 
     except celldiv.IncompleteTrajectoryError:
         print ("Stopping...")
