@@ -7,7 +7,7 @@ If you use the code, please cite the following papers:
 
 The 3D model is based on the 2D model introduced in
 
-A new model for cell division and migration with spontaneous topology changes, Anna Mkrtchyan, J.A. Åström and Mikko Karttunen, Soft Matter 10, 4332-4339 (2014).
+A new model for cell division and migration with spontaneous topology changes, A. Mkrtchyan, J.A. Åström and M. Karttunen, Soft Matter 10, 4332-4339 (2014).
 
 3D model:
 
