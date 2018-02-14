@@ -12,7 +12,7 @@ A new model for cell division and migration with spontaneous topology changes, A
 3D model:
 
 CellSim3D: GPU Accelerated Software for Simulations of Cellular Growth and Division in Three Dimensions, 
-P. Madhikar, J.A. Astrom, J. Westerholm, M. Karttunen
+P. Madhikar, J.A. Astrom, J. Westerholm, M. Karttunen, submitted
 
 ## Compilation
 CellSim3D can be compiled easily with the packaged makefile. First
