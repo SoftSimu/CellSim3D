@@ -34,7 +34,7 @@ The simulator can be found in the bin directory
 
 ## Simulator Source Code Description (note: subject to change):
 
-- GPUBounce.cu
+##### GPUBounce.cu
 
 This file contains the entry point for the simulator code. This is
 where the GPU is selected and memory is allocated. Simulation
@@ -43,40 +43,40 @@ parameters are read from the input json file.
 All GPU functions (force calculation, integration, cell division) is
 controlled from here.
 
-- propagate.cu
+##### propagate.cu
 
 This file contains GPU kernel code that is used for force
 calculations and integration.
 
-- centermass.cu
+##### centermass.cu
 
 This file only contains a single GPU kernel that calculate the
 centers of mass of individual cells. This is needed for the
 calculation of cell volumes and the cell division algorithm
 
-- BondKernels.cu
+##### BondKernels.cu
 
 This file calculates the equilibrium bond lengths of bonded nodes in
 a cell. For now, this code is not very crucial since this bond
 length does not change over the course of a simulation. It will be
 used in later releases more extensively.
 
-- postscriptinit.cu
+##### postscriptinit.cu
 
 This file contains some legacy code that is no longer used. It also
 contains the implementation of the cell division algorithm.
 
-- propagatebound.cu
+##### propagatebound.cu
 
 Code here is used to calculate the bounding boxes around cells,
 which are then used during neighbor list generation. Neighbor list
 generation itself is also carried out here.
 
-- PressureKernels.cu
+##### PressureKernels.cu
 
 Cell internal pressure is managed with the code here.
 
-- IntegrationKernels.cu and AdaptiveTimeKernels.cu
+##### IntegrationKernels.cu and AdaptiveTimeKernels.cu
 
 Code here is not currently used.
 
@@ -90,12 +90,12 @@ functionality can be explored by running
 
 The most important ones are:
 
-- celldiv.py
+##### celldiv.py
 
 This is contains the interface to the binary format of the
 trajectory. It can be used to read the trajectory into numpy arrays.
 
-- render.py
+##### render.py
 
 This is the rendering engine used to visualize the simulations. It
 produces images which can be made into movies. Requires Blender 2.7 or
