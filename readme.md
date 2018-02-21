@@ -23,8 +23,11 @@ For example: -arch=sm_52 for a GPU of compute capability of 5.2
 
 Then:
 
+
+~~~bash
 mkdir bin
 make -j12 CellDiv to compile the simulator.
+~~~
 
 The simulator can be found in the bin directory
 
@@ -81,7 +84,9 @@ Code here is not currently used.
 The scripts directory contains various analysis scripts. Their
 functionality can be explored by running
 
-  python3 Sript.py --help
+~~~bash
+  python3 script.py --help
+~~~
 
 The most important ones are:
 
@@ -98,4 +103,6 @@ higher. Uses the scene set in CellDiv.blend
 
 Learn more by running
 
+~~~bash
   blender -b CellDiv_flat.blend -P scripts/render.py -- --help
+~~~
