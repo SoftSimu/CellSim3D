@@ -92,8 +92,8 @@ The most important ones are:
 
 ##### celldiv.py
 
-This is contains the interface to the binary format of the
-trajectory. It can be used to read the trajectory into numpy arrays.
+This is the interface to the binary format of the trajectory. It can
+be used to read the trajectory into numpy arrays.
 
 ##### render.py
 
