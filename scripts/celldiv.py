@@ -189,7 +189,7 @@ class TrajHandleBinary(object):
                     z = self._GetArray(np.float32, self.numPart)
 
                     if self.variableStiffness:
-                        types[i] = self._GetArray(np.int32, 1)
+                        types[i] = self._GetArray(np.int32, 1)[0]
 
                     frame[i][:, 0] = x
                     frame[i][:, 1] = y
