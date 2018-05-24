@@ -1,3 +1,5 @@
+![Alt Text](https://github.com/SoftSimu/CellSim3D/images/mov.gif)
+
 # CellSim3D
 Welcome to the CellSim3D repository. CellSim3D is a software package to simulate the mechanistic aspects of cell division in three dimensions. The code is written in C/C++ and CUDA.
 
