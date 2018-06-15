@@ -104,9 +104,6 @@ struct SimList3D{
     // copy constructor
     SimList3D(const SimList3D& other): n(other.n), x(other.x), y(other.y),
                                        z(other.z){
-        x = other.x;
-        y = other.y;
-        z = other.z;
     }
 
     // copy assignment
