@@ -60,6 +60,15 @@ struct SimList1D: base_n{
         CopyToHost(n, 0);
     }
 
+    void Fill(T _val, size_t _n, size_t offset){
+        thrust::fill(h.begin()+offset, h.begin+offset+_n, val);
+        CopyToDevice(_n, offset);
+    }
+
+    void Fill(T _val){
+        Fill(val, n, 0);
+    }
+
 };
 
 // special constructor for angles3 list
