@@ -1,11 +1,11 @@
 #ifndef SimList_CUH
 #define SIMLIST_CUH
-#include "Types.cuh"
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 #include <string>
 
+#include "Types.cuh"
 struct base_n{
     static size_t used_host_mem;
 };
