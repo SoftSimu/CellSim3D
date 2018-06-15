@@ -36,6 +36,7 @@ struct core_params_struct{
     real dom_len;
     long int phase_count;
     bool correct_com;
+    long int init_num_cells; 
 };
 
 struct angle_params_struct{
