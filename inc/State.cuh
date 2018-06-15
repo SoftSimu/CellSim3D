@@ -8,7 +8,7 @@
 #include "globals.cuh"
 #include "VectorFunctions.hpp"
 
-struct SimStatePtrs{
+typedef struct{
     R3Nptrs posP;
     R3Nptrs pos;
     R3Nptrs posM;
@@ -39,17 +39,15 @@ struct SimStatePtrs{
 
     int* resetIndices;
 
-    real* youngsMod;
+    real* bondStiffness;
 
     long int no_of_cells;
     long int no_new_cells; 
 
     real* R0;
     angles3* theta0;
-};
+} SimStatePtrs;
 
-typedef struct SimStatePtrs SimStatePtrs;
-typedef SimStatePtrs state_struct;
 
 struct SimState{ // contains state on gpu and cpu side
     SimStatePtrs devPtrs; // state to be given to the gpu
@@ -81,11 +79,11 @@ struct SimState{ // contains state on gpu and cpu side
     SimList1D<int> nnList;
     SimList1D<int> numOfNNList; 
 
-    SimList1D<real> youngsMod;
+    SimList1D<real> bondStiffness;
 
     SimList1D<real> R0;
 
-    SimList1D<int> resetIndices; 
+    SimList1D<int> resetIndices;    
 
     long int no_of_cells;
     long int no_new_cells; 
@@ -125,7 +123,7 @@ struct SimState{ // contains state on gpu and cpu side
         C180_56(92*7),
         nnList(MAX_NN*sim_params.core_params.max_no_of_cells),
         numOfNNList(sim_params.core_params.max_no_of_cells),
-        youngsMod(sim_params.core_params.max_no_of_cells),
+        bondStiffness(sim_params.core_params.max_no_of_cells),
         numDivisions(sim_params.core_params.max_no_of_cells, 0),
         R0(sim_params.core_params.num_nodes*3),
         theta0(180),
@@ -162,7 +160,7 @@ struct SimState{ // contains state on gpu and cpu side
         devPtrs.nnList        = nnList.devPtr;
         devPtrs.numOfNNList   = numOfNNList.devPtr;
 
-        devPtrs.youngsMod     = youngsMod.devPtr;
+        devPtrs.bondStiffness     = bondStiffness.devPtr;
 
         devPtrs.R0            = R0.devPtr;
         devPtrs.theta0 = theta0.devPtr;
