@@ -25,6 +25,12 @@ struct SimList1D: base_n{
         devPtr = thrust::raw_pointer_cast(&d[0]);
         hostPtr = thrust::raw_pointer_cast(&h[0]);
     }
+    
+    SimList1D(size_t _n, T _val): n(_n), h(_n, _val), d(_n, _val){
+        base_n::used_host_mem += n*sizeof(T);
+        devPtr = thrust::raw_pointer_cast(&d[0]);
+        hostPtr = thrust::raw_pointer_cast(&h[0]);
+    }
 
     ~SimList1D(){
         base_n::used_host_mem -= n*sizeof(T);
