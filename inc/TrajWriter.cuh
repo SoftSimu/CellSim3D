@@ -71,7 +71,6 @@ public:
     herr_t status;
     std::string fileName ;
     TrajDetailLevel getDetailLevel();
-    void WriteState(state_struct state);
     void WriteState(const SimState& state);
     uint frame;
     uint lastFrameWritten;
