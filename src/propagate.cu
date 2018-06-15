@@ -833,7 +833,8 @@ __global__ void CorrectCoMMotion(SimStatePtrs sim_state, real3 sysCM){
     
     long int partInd = blockIdx.x*blockDim.x + threadIdx.x;
 
-    if (partInd < sim_state.no_of_cells*192){
+#warning Something hardcoded here
+    if (partInd < sim_state.no_of_cells*192){ 
         sim_state.posP.x[partInd] -= sysCM.x;
         sim_state.posP.y[partInd] -= sysCM.y;
         sim_state.posP.z[partInd] -= sysCM.z;
@@ -860,7 +861,7 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
     
     size_t idx = blockIdx.x*blockDim.x + threadIdx.x;
     if (idx < sim_state.no_of_cells*192){
-
+#warning Something hardcoded here        
         if (idx == 0){
             conForce = sim_state.conForce;
             disForce = sim_state.disForce;
