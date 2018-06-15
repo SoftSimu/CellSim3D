@@ -111,6 +111,7 @@ struct SimList3D{
 
     // copy assignment
     SimList3D& operator=(const SimList3D& other){
+        n = other.n;
         x = other.x;
         y = other.y;
         z = other.z; 
