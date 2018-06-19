@@ -79,6 +79,15 @@ struct SimList1D: base_n{
         Fill(_val, n, 0);
     }
 
+    void ReadIn(thrust::host_vector<T> _src, size_t _n, size_t _offset1,
+                size_t _offset2){
+        thrust::copy(_src.begin()+_offset1, _src.begin()+_offset1+_n,
+                     h.begin()+_offset2);
+        CopyToDevice(_n, _offset2);
+    }
+
+    void ReadIn(thrust::host_vector<T> _src){
+        ReadIn(_src, _src.size(), 0, 0);
     }
 
 };
@@ -160,4 +169,4 @@ struct SimList3D{
     }
 
 };
-#endif // SimList_CU
+#endif // SimList_CUH
