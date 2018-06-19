@@ -64,7 +64,7 @@ __device__ void CalcAndUpdateDaughtPos(const real3& parNodePos,
     write_to_R3N_state(sim_state.posM, daughtNodePos, globalDaughtNodeInd);
 }
 
-__global__ void  cell_division(size_t parCellInd, size_t daughtCellInd,
+__global__ void  cell_division(long int parCellInd, long int daughtCellInd,
                                SimStatePtrs sim_state, sim_params_struct sim_params, real3 norm){
     int localNodeInd = threadIdx.x;
 
