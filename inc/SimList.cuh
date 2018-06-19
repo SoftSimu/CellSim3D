@@ -67,12 +67,18 @@ struct SimList1D: base_n{
     }
 
     void Fill(T _val, size_t _n, size_t offset){
-        thrust::fill(h.begin()+offset, h.begin+offset+_n, val);
+        thrust::fill(h.begin()+offset, h.begin()+offset+_n, _val);
         CopyToDevice(_n, offset);
     }
 
+    void Fill(T _val, size_t _n){
+        Fill(_val, _n, 0);
+    }
+
     void Fill(T _val){
-        Fill(val, n, 0);
+        Fill(_val, n, 0);
+    }
+
     }
 
 };
