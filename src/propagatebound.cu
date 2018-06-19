@@ -7,7 +7,7 @@
 
 //#define PRINT_TOO_SHORT_ERROR
 
-__global__ void bounding_boxes( SimStatePtrs sim_state)
+__global__ void bounding_boxes(SimStatePtrs sim_state)
 {
   __shared__ float  minx[32];
   __shared__ float  maxx[32];
