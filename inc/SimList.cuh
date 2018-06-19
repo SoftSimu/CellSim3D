@@ -45,7 +45,7 @@ struct SimList1D: base_n{
     }
 
     // copy assignment
-    SimList1D& operator=(const SimList1D& other){
+    void operator=(const SimList1D& other){
         thrust::copy(other.d.begin(), other.d.end(), d.begin());
         thrust::copy(other.h.begin(), other.h.end(), h.begin());
     }
