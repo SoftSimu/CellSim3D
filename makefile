@@ -6,7 +6,7 @@ objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
 objects = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
-	propagatebound.o propagate.o volume.o BondKernels.o SimParams.o TrajWriter.o
+	propagatebound.o propagate.o volume.o SimParams.o TrajWriter.o
 linkObjects = $(patsubst %, $(objDir)%, $(objects))
 
 eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand -L/usr/lib/x86_64-linux-gnu/hdf5/serial -lhdf5 -std=c++11
@@ -44,9 +44,6 @@ $(objDir)propagate.o: src/propagate.cu
 
 $(objDir)volume.o : src/volume.cu
 	$(compiler) $(oflags) -c src/volume.cu -o $(objDir)volume.o
-
-$(objDir)BondKernels.o : src/BondKernels.cu
-	$(compiler) $(oflags) -c src/BondKernels.cu -o $(objDir)BondKernels.o
 
 $(objDir)GPUbounce.o : src/GPUbounce.cu
 	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
