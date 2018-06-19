@@ -5,7 +5,9 @@
 #include <stdio.h>
 #endif
 #include "marsaglia.h"
-void GetRandomVector (float* n){
+#include "Types.cuh"
+
+real3 GetRandomVector(){
     float ran2[2];
     float s = 0;
     do {
@@ -18,18 +20,20 @@ void GetRandomVector (float* n){
     float x1 = ran2[0];
     float x2 = ran2[1];
 
-    n[0] = 2*x1*sqrt(1 - x1*x1 - x2*x2);
-    n[1] = 2*x2*sqrt(1 - x1*x1 - x2*x2);
-    n[2] = 1 - 2*(x1*x1 + x2*x2);
+    return (make_real3(2*x1*sqrt(1 - x1*x1 - x2*x2),
+                       2*x2*sqrt(1 - x1*x1 - x2*x2),
+                       1 - 2*(x1*x1 + x2*x2)));
 }
 
-void GetRandomVectorBasis (float* n, float* basis){
+real3 GetRandomVectorBasis (real3 _basis){
     // Credit for algorithm to Arthur Vromans, Sept 10, 2015, TUE CASA
     float ran[1];
     ranmar(ran, 1);
     float Nv = cos(2*3.14159*ran[0]);
     float Nw = sin(2*3.14159*ran[0]);
     float v[3], w[3];
+    float basis[3] = {_basis.x, _basis.y, _basis.z};
+    float n[3] = {0,0,0};
 
     if (basis[1] != 0){
         v[0] = 0;
@@ -74,6 +78,6 @@ void GetRandomVectorBasis (float* n, float* basis){
     n[0] = Nv*v[0] + Nw*w[0];
     n[1] = Nv*v[1] + Nw*w[1];
     n[2] = Nv*v[2] + Nw*w[2];
-
+    return (make_real3(n[0], n[1], n[2]));
 }
 #endif // RANDOM_VECTOR_H End
