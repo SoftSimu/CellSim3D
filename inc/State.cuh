@@ -96,6 +96,10 @@ struct SimState{ // contains state on gpu and cpu side
 
     sim_params_struct* sm;
 
+    bool growthDone; 
+
+    long int frameCount;
+    
     SimState(long int _no_of_cells,
              sim_params_struct& sim_params):
         no_of_cells(_no_of_cells),
@@ -128,7 +132,9 @@ struct SimState{ // contains state on gpu and cpu side
         R0(sim_params.core_params.num_nodes*3),
         theta0(180),
         resetIndices(sim_params.core_params.max_no_of_cells),
-        no_new_cells(0){
+        no_new_cells(0),
+        growthDone(false),
+        frameCount(0){
 
         devPtrs.posP          = posP.devPtrs; 
         devPtrs.pos           = pos.devPtrs; 
