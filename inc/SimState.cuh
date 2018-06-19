@@ -1,5 +1,5 @@
-#ifndef STATE_CUH
-#define STATE_CUH
+#ifndef SIMSTATE_CUH
+#define SIMSTATE_CUH
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include "Types.cuh"
@@ -182,16 +182,16 @@ struct SimState{ // contains state on gpu and cpu side
 
 
 
-__device__ void write_to_R3N_state(R3Nptrs& state,
-                                   const real3& value,
-                                   const size_t globalInd){
+__host__ __device__ inline void write_to_R3N_state(R3Nptrs& state,
+                                          const real3& value,
+                                          const size_t globalInd){
     state.x[globalInd] = value.x;
     state.y[globalInd] = value.y;
     state.z[globalInd] = value.z;
 }
 
-__device__ real3 read_from_R3N_state(const R3Nptrs& state,
-                                     const size_t globalInd){
+__host__ __device__ inline real3 read_from_R3N_state(const R3Nptrs& state,
+                                            const size_t globalInd){
 
     return make_real3(state.x[globalInd],
                       state.y[globalInd],
@@ -199,13 +199,13 @@ __device__ real3 read_from_R3N_state(const R3Nptrs& state,
 }
 
 
-__device__ void copy_R3N_state(R3Nptrs state,
-                               const size_t destGlobalInd, 
-                               const size_t sourceGlobalInd){
+__host__ __device__ inline void copy_R3N_state(R3Nptrs state,
+                                       const size_t destGlobalInd, 
+                                       const size_t sourceGlobalInd){
     
     state.x[destGlobalInd] = state.x[sourceGlobalInd];
     state.y[destGlobalInd] = state.y[sourceGlobalInd];
     state.z[destGlobalInd] = state.z[sourceGlobalInd];
 }
-        
-#endif // STATE_CUH
+
+#endif // SIMSTATE_CUH
