@@ -6,7 +6,7 @@
 #include<functional>
 #include "Types.cuh"
 #include "SimParams.cuh"
-#include "State.cuh"
+#include "SimState.cuh"
 
 #define VAR_NAME(v) #v
 #define WRITE_SIM_PARAM(v) WriteSimParam(v, VAR_NAME(v));

@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "postscript.h"
 #include "VectorFunctions.hpp"
+#include "State.cuh"
 
 //#define PRINT_TOO_SHORT_ERROR
 

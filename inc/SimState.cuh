@@ -7,48 +7,8 @@
 #include "SimList.cuh"
 #include "globals.cuh"
 #include "VectorFunctions.hpp"
-
-typedef struct{
-    R3Nptrs posP;
-    R3Nptrs pos;
-    R3Nptrs posM;
-
-    R3Nptrs vel; 
-    R3Nptrs conForce;
-    R3Nptrs disForce;
-    R3Nptrs ranForce;
-    R3Nptrs totForce;
-    
-    R3Nptrs cellCOMs;
-
-    real* vol;
-    real* areas;
-    char* cellShouldDiv;
-    real* boundingBoxes;
-    real* pressures;
-
-    R3Nptrs mins; 
-    R3Nptrs maxs; 
-
-    int* nnList;
-    int* numOfNNList;
-
-    int* C180_nn;
-    int* C180_sign;
-    int* C180_56;
-
-    int* resetIndices;
-
-    real* bondStiffness;
-
-    long int no_of_cells;
-    long int no_new_cells; 
-
-    real* R0;
-    angles3* theta0;
-} SimStatePtrs;
-
-
+#include "State.cuh"
+ 
 struct SimState{ // contains state on gpu and cpu side
     SimStatePtrs devPtrs; // state to be given to the gpu
 
@@ -130,7 +90,7 @@ struct SimState{ // contains state on gpu and cpu side
         bondStiffness(sim_params.core_params.max_no_of_cells),
         numDivisions(sim_params.core_params.max_no_of_cells, 0),
         R0(sim_params.core_params.num_nodes*3),
-        theta0(180),
+        theta0(180, real3_to_angles3(make_real3(0,0,0))),
         resetIndices(sim_params.core_params.max_no_of_cells),
         no_new_cells(0),
         growthDone(false),
@@ -180,32 +140,5 @@ struct SimState{ // contains state on gpu and cpu side
     }
 };
 
-
-
-__host__ __device__ inline void write_to_R3N_state(R3Nptrs& state,
-                                          const real3& value,
-                                          const size_t globalInd){
-    state.x[globalInd] = value.x;
-    state.y[globalInd] = value.y;
-    state.z[globalInd] = value.z;
-}
-
-__host__ __device__ inline real3 read_from_R3N_state(const R3Nptrs& state,
-                                            const size_t globalInd){
-
-    return make_real3(state.x[globalInd],
-                      state.y[globalInd],
-                      state.z[globalInd]);
-}
-
-
-__host__ __device__ inline void copy_R3N_state(R3Nptrs state,
-                                       const size_t destGlobalInd, 
-                                       const size_t sourceGlobalInd){
-    
-    state.x[destGlobalInd] = state.x[sourceGlobalInd];
-    state.y[destGlobalInd] = state.y[sourceGlobalInd];
-    state.z[destGlobalInd] = state.z[sourceGlobalInd];
-}
 
 #endif // SIMSTATE_CUH

@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "postscript.h"
 #include "State.cuh"
 
 __global__ void CenterOfMass(SimStatePtrs sim_state)

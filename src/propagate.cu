@@ -223,7 +223,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
             d_C180_nn = simState.C180_nn;
             d_R0 = simState.R0;
             Pressure = simState.pressures[cellInd];
-            stiffness = simState.youngsMod[cellInd];
+            stiffness = simState.bondStiffness[cellInd];
             
             cellCOM = make_real3(simState.cellCOMs.x[cellInd],
                                  simState.cellCOMs.y[cellInd],

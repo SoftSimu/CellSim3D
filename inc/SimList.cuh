@@ -20,13 +20,13 @@ struct SimList1D: base_n{
     T* devPtr;
     T* hostPtr;
 
-    SimList1D(size_t _n): n(_n), h(_n, 0), d(_n, 0){
+    SimList1D(long int _n): n(_n), h(_n, 0), d(_n, 0){
         base_n::used_host_mem += n*sizeof(T);
         devPtr = thrust::raw_pointer_cast(&d[0]);
         hostPtr = thrust::raw_pointer_cast(&h[0]);
     }
     
-    SimList1D(size_t _n, T _val): n(_n), h(_n, _val), d(_n, _val){
+    SimList1D(long int _n, T _val): n(_n), h(_n, _val), d(_n, _val){
         base_n::used_host_mem += n*sizeof(T);
         devPtr = thrust::raw_pointer_cast(&d[0]);
         hostPtr = thrust::raw_pointer_cast(&h[0]);
@@ -91,14 +91,6 @@ struct SimList1D: base_n{
     }
 
 };
-
-// special constructor for angles3 list
-template<>
-SimList1D<angles3>::SimList1D(size_t _n): n(_n), h(_n), d(_n){
-    base_n::used_host_mem += 3*sizeof(real)*n;
-    devPtr = thrust::raw_pointer_cast(&d[0]);
-    hostPtr = thrust::raw_pointer_cast(&h[0]);
-}
 
 template<typename T>
 struct SimList3D{

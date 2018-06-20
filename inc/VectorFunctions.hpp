@@ -109,4 +109,12 @@ __host__ __device__ inline real3 make_real3(real x, real y, real z){
     a.z = z;
     return a;
 }
+
+__host__ __device__ inline angles3 real3_to_angles3(real3 a){
+    angles3 b;
+    b.aij = a.x;
+    b.ajk = a.y;
+    b.aik = a.z;
+    return b;
+}
 #endif // VECTOR_FUNCTIONS_CUH

@@ -373,7 +373,7 @@ void TrajWriter::WriteStateVar(real* s, std::string name, uint num_cells,
     }
 }
 
-void TrajWriter::WriteState(state_struct state){
+void TrajWriter::WriteState(const SimState& state){
     std::string frameName = "frame" + std::to_string(frame);
 
     size_t size_hint = sizeof(real)*3*NUM_NODES*state.no_of_cells;
@@ -388,20 +388,20 @@ void TrajWriter::WriteState(state_struct state){
 
     try{
         for (long int i = 0; i<state.no_of_cells; ++i){
-            WriteStateVar(state.pos, "pos", i, NUM_NODES, frame_id);
+            WriteStateVar(state.pos.hostPtrs, "pos", i, NUM_NODES, frame_id);
 
             if (detailLevel > MIN_DETAIL){
-                WriteStateVar(state.vel, "vels", i, NUM_NODES, frame_id);
+                WriteStateVar(state.vel.hostPtrs, "vels", i, NUM_NODES, frame_id);
             }
 
             if (detailLevel > MED_DETAIL){
-                WriteStateVar(state.conForce, "forces", i, NUM_NODES, frame_id);
+                WriteStateVar(state.conForce.hostPtrs, "forces", i, NUM_NODES, frame_id);
             }
         }
 
         if (detailLevel == EVERYTHING){
             //WriteStateVar(state.cellCoMs, "CoMs", -1, state.no_of_cells, frame_id);
-            WriteStateVar(state.vol, "volumes", state.no_of_cells, frame_id);
+            WriteStateVar(state.vol.hostPtr, "volumes", state.no_of_cells, frame_id);
         }
     } catch (const TrajException& e){
         std::cerr << "Trajectory exception in " << frameName

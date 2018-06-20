@@ -33,6 +33,7 @@
 #include "SimParams.cuh"
 #include "TrajWriter.cuh"
 #include "State.cuh"
+#include "SimState.cuh"
 #include "globals.cuh"
 #include "json/json.h"
 
@@ -80,7 +81,7 @@ int main(int argc, char *argv[])
   TrajWriter TW(sim_params);
 
   if ( InitializeRandom(sim_params.rand_params.rand_seed)  != 0 ) return(-1);
-  if ( initialize_C180s(simState) != 0 ) return(-1);
+  if ( initialize_C180s(simState, sim_params) != 0 ) return(-1);
   if ( read_fullerene_nn(simState)                != 0 ) return(-1);
 
   /* PM

@@ -1,6 +1,6 @@
 #include<cuda.h>
-#include "postscript.h"
 #include "Types.cuh"
+#include "State.cuh"
 
 // TODO:
 // sort out the stiffness1 vs stiff_factor1 situation...
@@ -19,7 +19,7 @@ __global__ void PressureUpdate (SimStatePtrs sim_state, sim_params_struct sim_pa
 
     if (threadIdx.x == 0){
         d_pressList = sim_state.pressures;
-        d_youngs_mod = sim_state.youngsMod; 
+        d_youngs_mod = sim_state.bondStiffness; 
         maxPressure = sim_params.core_params.max_pressure;
         inc = sim_params.core_params.growth_rate;
         num_of_cells = sim_state.no_of_cells;
