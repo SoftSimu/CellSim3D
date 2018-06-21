@@ -7,8 +7,11 @@
     // RESCALING
     "version": 0.1,
     "core_params": {
-        "max_no_of_cells": 100000,
+        "max_no_of_cells": 10000,
+        "num_nodes": "n/a",
+        "max_num_nodes": "n/a",
         "node_mass": 0.04,
+        "eq_bond_len": 1.0,
         "rep_range": 0.2,
         "attr_range": 0.3,
         "bond_stiff": 1000,
@@ -26,7 +29,7 @@
         "restart": 0,
         "traj_write_int": 100,
         "non_div_time_steps": 5000,
-        "traj_file_name": "example.hf5",
+        "traj_file_name": "example.cdv",
         "bin_out": 1,
         "max_pressure": 65.0,
         "min_pressure": 50.0,
@@ -53,6 +56,7 @@
     // In theory, these params are not needed for the simulation to run.
     // But, for now, they must be in this file.
     // They may become truly optional later...
+    // deprecated...
     "counting_params": {
         "count_cells": 0,
         "mit_index_file_name": "example.dat",
@@ -63,7 +67,7 @@
     },
 
     // Params related to population modelling
-
+    // Not implemented...
     "population": {
         "do_pop_model": 0,
         "total_food": 5000.0,
@@ -109,11 +113,11 @@
         "recalc_r0": 0
     },
 
-    // Rigid box parameters
+    // Simulation box parameters
     "box_params":{
         "use_rigid_sim_box": 0,
         "use_pbc": 0,
-        "pbc_ax": "x",
+        "pbc_ax": "x", // not implemented
         "box_len": 6.0,
         "box_len_x": 20.0,
         "box_len_y": 20.0,
