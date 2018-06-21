@@ -48,6 +48,7 @@ __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params){
         area_list = sim_state.areas;
         vol = sim_state.vol; 
     }
+    __syncthreads();
 
     if ( tid < 180 ){ 
         locX[tid] = X[192*fullerene+tid] -CMx[fullerene];

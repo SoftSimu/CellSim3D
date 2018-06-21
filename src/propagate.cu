@@ -665,6 +665,8 @@ __global__ void Integrate(SimStatePtrs sim_state, sim_params_struct sim_params){
         dt = sim_params.core_params.delta_t;
         root_dt = sqrtf(dt); 
     }
+
+    __syncthreads();
     
     
     if (cellInd < numCells && node < 180){
@@ -776,6 +778,8 @@ __global__ void VelocityUpdateB(SimStatePtrs sim_state, sim_params_struct sim_pa
         dt = sim_params.core_params.delta_t;
         num_nodes = sim_state.no_of_cells*192;
     }
+
+    __syncthreads();
     
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -816,6 +820,8 @@ __global__ void ForwardTime(SimStatePtrs sim_state){
         d_ZM = sim_state.posM.z;
         no_of_cells = sim_state.no_of_cells; 
     }
+
+    __syncthreads();
     
     if (nodeInd < 192*no_of_cells){
         d_XM[nodeInd] = d_X[nodeInd]; 
@@ -868,6 +874,7 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
             ranForce = sim_state.ranForce;
             totForce = sim_state.conForce;
         }
+        __syncthreads();
         
         totForce.x[idx] = conForce.x[idx] + disForce.x[idx] + ranForce.x[idx]; 
         totForce.y[idx] = conForce.y[idx] + disForce.y[idx] + ranForce.y[idx]; 
