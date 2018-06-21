@@ -20,7 +20,7 @@ __global__ void CenterOfMass(SimStatePtrs simState);
 
 __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params);
 
-int initialize_C180s(SimState& simState, sim_params_struct sim_params);
+int initialize_C180s(SimState& simState, const sim_params_struct& sim_params);
 int InitializeRandom(int rand_seed);
 int read_fullerene_nn(SimState& simState);
 

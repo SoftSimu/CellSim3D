@@ -523,7 +523,7 @@ int main(int argc, char *argv[])
 
 
 
-int initialize_C180s(SimState& simState, sim_params_struct sim_params)
+int initialize_C180s(SimState& simState, const sim_params_struct& sim_params)
 {
   int rank;
   int atom;
