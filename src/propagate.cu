@@ -240,7 +240,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
             d_Fy = simState.conForce.y; 
             d_Fz = simState.conForce.z;
             d_theta0 = simState.theta0;
-            DL = sim_params.core_params.dom_len;
+            DL = sim_params.box_params.dom_len;
             d_numOfNNList = simState.numOfNNList;
             d_nnList = simState.nnList;
         }
@@ -457,7 +457,7 @@ __global__ void CalculateDisForce( SimStatePtrs sim_state, sim_params_struct sim
         d_C180_nn = sim_state.C180_nn;
         d_C180_sign = sim_state.C180_sign;
         attr_range = sim_params.core_params.attr_range;
-        DL = sim_params.core_params.dom_len;
+        DL = sim_params.box_params.dom_len;
         d_NNlist = sim_state.nnList;
         d_NoofNNlist = sim_state.numOfNNList;
         d_bounding_xyz = sim_state.boundingBoxes;

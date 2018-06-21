@@ -137,9 +137,6 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
     sim_params.core_params.angle_pot =
         coreParams["angle_pot"].asBool();
 
-    sim_params.core_params.dom_len =
-        coreParams["dom_len"].asDouble();
-
     sim_params.core_params.correct_com =
         coreParams["correct_com"].asBool();
 

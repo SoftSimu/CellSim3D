@@ -76,7 +76,7 @@ void TrajWriter::init(const sim_params_struct& _sm){
         WRITE_SIM_PARAM(core_params->growth_rate);
         WRITE_SIM_PARAM(core_params->check_sphericity);
         WRITE_SIM_PARAM(core_params->angle_pot);
-        WRITE_SIM_PARAM(core_params->dom_len);
+
 
         uint tot_frames = core_params->div_time_steps + core_params->non_div_time_steps;
         WRITE_SIM_PARAM(tot_frames);
@@ -160,6 +160,7 @@ void TrajWriter::init(const sim_params_struct& _sm){
         WRITE_SIM_PARAM(box_params.box_len_y);
         WRITE_SIM_PARAM(box_params.box_len_z);
         WRITE_SIM_PARAM(box_params.flatbox);
+        WRITE_SIM_PARAM(box_params.dom_len);
     }
 
     detailLevel = EVERYTHING;

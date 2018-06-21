@@ -33,7 +33,6 @@ struct core_params_struct{
     real growth_rate;
     bool check_sphericity;
     bool angle_pot;
-    real dom_len;
     long int phase_count;
     bool correct_com;
     long int init_num_cells; 

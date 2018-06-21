@@ -206,7 +206,7 @@ __global__ void makeNNlist(SimStatePtrs sim_state, sim_params_struct sm, int Xdi
   
   real* d_bounding_xyz = sim_state.boundingBoxes;
   real attrac = sm.core_params.attr_range;
-  real DL = sm.core_params.dom_len;
+  real DL = sm.box_params.dom_len;
   real Minx = sim_state.mins.x[0];
   real Miny = sim_state.mins.y[0];
   real Minz = sim_state.mins.z[0];

@@ -238,9 +238,9 @@ int main(int argc, char *argv[])
   simState.mins.CopyToHost();
   simState.maxs.CopyToHost();
 
-  int Xdiv = (int)((simState.maxs.x.h[0]-simState.mins.x.h[0])/sim_params.core_params.dom_len + 1);
-  int Ydiv = (int)((simState.maxs.y.h[0]-simState.mins.y.h[0])/sim_params.core_params.dom_len + 1);
-  int Zdiv = (int)((simState.maxs.z.h[0]-simState.mins.z.h[0])/sim_params.core_params.dom_len + 1);
+  int Xdiv = (int)((simState.maxs.x.h[0]-simState.mins.x.h[0])/sim_params.box_params.dom_len + 1);
+  int Ydiv = (int)((simState.maxs.y.h[0]-simState.mins.y.h[0])/sim_params.box_params.dom_len + 1);
+  int Zdiv = (int)((simState.maxs.z.h[0]-simState.mins.z.h[0])/sim_params.box_params.dom_len + 1);
 
   
   makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
@@ -462,9 +462,9 @@ int main(int argc, char *argv[])
 
       simState.numOfNNList.Fill(0);
 
-      Xdiv = (int)((simState.maxs.x.h[0]-simState.mins.x.h[0])/sim_params.core_params.dom_len + 1);
-      Ydiv = (int)((simState.maxs.y.h[0]-simState.mins.y.h[0])/sim_params.core_params.dom_len + 1);
-      Zdiv = (int)((simState.maxs.z.h[0]-simState.mins.z.h[0])/sim_params.core_params.dom_len + 1);
+      Xdiv = (int)((simState.maxs.x.h[0]-simState.mins.x.h[0])/sim_params.box_params.dom_len + 1);
+      Ydiv = (int)((simState.maxs.y.h[0]-simState.mins.y.h[0])/sim_params.box_params.dom_len + 1);
+      Zdiv = (int)((simState.maxs.z.h[0]-simState.mins.z.h[0])/sim_params.box_params.dom_len + 1);
 
 
       makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
