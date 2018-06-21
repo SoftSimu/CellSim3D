@@ -63,7 +63,7 @@ __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params){
         float avX = 0.0f;
         float avY = 0.0f;
         float avZ = 0.0f;
-
+#warning Some hardcoded parameters here...
         for ( int i = 0; i < 5; ++i ){
             avX += locX[C180_56[7*tid+i]];
             avY += locY[C180_56[7*tid+i]];
