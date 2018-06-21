@@ -109,7 +109,9 @@ struct box_params_struct{
     real box_len_z;
     real3 box_max; 
     bool flatbox;
+    real dom_len;
     real thresh_dist;
+    real rand_pos;
 };
 
 struct rand_params_struct{
