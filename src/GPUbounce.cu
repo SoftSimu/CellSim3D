@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
   simState.bondStiffness.CopyToDevice();
 
   // initialize device rng
-    if (sim_params.rand_params.add_rands){
+    if (sim_params.rand_params.add_rands == true){
         std::cout << "Random number addition not supported for now" << std::endl;
         exit(1);
       // curandGenerator_t gen;
