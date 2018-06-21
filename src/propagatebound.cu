@@ -189,9 +189,9 @@ __global__ void minmaxpre( SimStatePtrs sim_state)
       sim_state.mins.y[blockIdx.x] = miny[0];
       sim_state.mins.z[blockIdx.x] = minz[0];
 
-      sim_state.maxs.x[blockIdx.x] = minx[0];
-      sim_state.maxs.y[blockIdx.x] = miny[0];
-      sim_state.maxs.z[blockIdx.x] = minz[0];
+      sim_state.maxs.x[blockIdx.x] = maxx[0];
+      sim_state.maxs.y[blockIdx.x] = maxy[0];
+      sim_state.maxs.z[blockIdx.x] = maxz[0];
 	}
 
 }
