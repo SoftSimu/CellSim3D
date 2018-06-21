@@ -55,9 +55,6 @@ int main(int argc, char *argv[])
 {
   cudaError_t myError;
 
-  int* dividingCells; //Cells that are about to divide
-  int* totalCells; // No. of cells at every Dividing_steps
-
   printf("CellDiv version 0.9\n");
 
   if ( argc !=4 )
@@ -221,7 +218,6 @@ int main(int argc, char *argv[])
   }
 
 
-  int prevnoofblocks  = simState.no_of_cells;
   int noofblocks      = simState.no_of_cells;
   int threadsperblock = 192;
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
@@ -277,9 +273,6 @@ int main(int argc, char *argv[])
   // Initialize pressures
 
   simState.pressures.Fill(sim_params.core_params.min_pressure);
-  
-  float rGrowth = 0;
-  bool growthDone = false;
   
   if (sim_params.angle_params.angle_pot == true){
       // Code to initialize equillibrium angles
@@ -343,8 +336,6 @@ int main(int argc, char *argv[])
 
   std::cout << "CPU memory used =    " << base_n::used_host_mem/(1024*1024) << "MB" << std::endl;
   
-  bool phase = false;
-
   CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv); 
   CudaErrorCheck();
 
@@ -525,7 +516,6 @@ int main(int argc, char *argv[])
 
 int initialize_C180s(SimState& simState, const sim_params_struct& sim_params)
 {
-  int rank;
   int atom;
   thrust::host_vector<real> X(180, 0);
   thrust::host_vector<real> Y(180, 0);
@@ -583,9 +573,6 @@ int initialize_C180s(SimState& simState, const sim_params_struct& sim_params)
 
   printf("Can fit upto %d cells\n", k);
 
-  int c = 0;
-  real3 rands;
-  
 #warning hard-coded numbers here. probably should be a simulation params...
   real L1 = 3.5;
   int sideLength = (int)sqrt(simState.no_of_cells);
