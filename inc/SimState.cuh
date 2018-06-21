@@ -64,16 +64,16 @@ struct SimState{ // contains state on gpu and cpu side
              sim_params_struct& sim_params):
         no_of_cells(_no_of_cells),
         
-        posP(sim_params.core_params.max_num_nodes), 
-        pos(sim_params.core_params.max_num_nodes), 
-        posM(sim_params.core_params.max_num_nodes),
+        posP(sim_params.core_params.max_no_of_nodes), 
+        pos(sim_params.core_params.max_no_of_nodes), 
+        posM(sim_params.core_params.max_no_of_nodes),
         
-        vel(sim_params.core_params.max_num_nodes),
+        vel(sim_params.core_params.max_no_of_nodes),
         
-        conForce(sim_params.core_params.max_num_nodes), 
-        disForce(sim_params.core_params.max_num_nodes), 
-        ranForce(sim_params.core_params.max_num_nodes),
-        totForce(sim_params.core_params.max_num_nodes),
+        conForce(sim_params.core_params.max_no_of_nodes), 
+        disForce(sim_params.core_params.max_no_of_nodes), 
+        ranForce(sim_params.core_params.max_no_of_nodes),
+        totForce(sim_params.core_params.max_no_of_nodes),
         mins(1024),
         maxs(1024),
         cellCOMs(sim_params.core_params.max_no_of_cells),

@@ -7,7 +7,7 @@
 struct core_params_struct{
     long int max_no_of_cells;
     int num_nodes;
-    size_t max_num_nodes;
+    size_t max_no_of_nodes;
     real node_mass;
     real eq_bond_len; 
     real rep_range;
