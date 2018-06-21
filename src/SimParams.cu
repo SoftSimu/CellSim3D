@@ -58,54 +58,56 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
 
     sim_params.core_params.max_no_of_cells =
         coreParams["max_no_of_cells"].asUInt();
+    
+    sim_params.core_params.max_no_of_nodes = 192*sim_params.core_params.max_no_of_cells; 
 
     sim_params.core_params.node_mass =
-        coreParams["node_mass"].asFloat();
+        coreParams["node_mass"].asDouble();
 
     sim_params.core_params.eq_bond_len =
-        coreParams["eq_bond_len"].asFloat(); 
+        coreParams["eq_bond_len"].asDouble(); 
 
     sim_params.core_params.rep_range =
-        coreParams["rep_range"].asFloat();
+        coreParams["rep_range"].asDouble();
 
     sim_params.core_params.attr_range =
-        coreParams["attr_range"].asFloat();
+        coreParams["attr_range"].asDouble();
 
     sim_params.core_params.rep_stiff =
-        coreParams["rep_stiff"].asFloat();
+        coreParams["rep_stiff"].asDouble();
 
     sim_params.core_params.attr_stiff =
-        coreParams["attr_stiff"].asFloat();
+        coreParams["attr_stiff"].asDouble();
 
     sim_params.core_params.bond_stiff =
-        coreParams["bond_stiff"].asFloat();
+        coreParams["bond_stiff"].asDouble();
 
     sim_params.core_params.stiff_factor1 =
-        coreParams["stiff_factor1"].asFloat();
+        coreParams["stiff_factor1"].asDouble();
 
     sim_params.core_params.inter_membr_fric =
-        coreParams["inter_membr_fric"].asFloat();
+        coreParams["inter_membr_fric"].asDouble();
 
     sim_params.core_params.internal_damping =
-        coreParams["internal_damping"].asFloat();
+        coreParams["internal_damping"].asDouble();
 
     sim_params.core_params.gamma_visc =
-        coreParams["gamma_visc"].asFloat();
+        coreParams["gamma_visc"].asDouble();
 
     sim_params.core_params.division_vol =
-        coreParams["division_vol"].asFloat();
+        coreParams["division_vol"].asDouble();
 
     sim_params.core_params.random_z_offset =
         coreParams["random_z_offset"].asBool();
 
     sim_params.core_params.z_offset =
-        coreParams["z_offset"].asFloat();
+        coreParams["z_offset"].asDouble();
 
     sim_params.core_params.div_time_steps =
         coreParams["div_time_steps"].asUInt();
 
     sim_params.core_params.delta_t =
-        coreParams["delta_t"].asFloat();
+        coreParams["delta_t"].asDouble();
 
     sim_params.core_params.restart =
         coreParams["restart"].asBool();
@@ -121,13 +123,13 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
                 coreParams["traj_file_name"].asString().c_str());
 
     sim_params.core_params.max_pressure =
-        coreParams["max_pressure"].asFloat();
+        coreParams["max_pressure"].asDouble();
 
     sim_params.core_params.min_pressure =
-        coreParams["min_pressure"].asFloat();
+        coreParams["min_pressure"].asDouble();
 
     sim_params.core_params.growth_rate =
-        coreParams["growth_rate"].asFloat();
+        coreParams["growth_rate"].asDouble();
 
     sim_params.core_params.check_sphericity =
         coreParams["check_sphericity"].asBool();
@@ -136,7 +138,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         coreParams["angle_pot"].asBool();
 
     sim_params.core_params.dom_len =
-        coreParams["dom_len"].asFloat();
+        coreParams["dom_len"].asDouble();
 
     sim_params.core_params.correct_com =
         coreParams["correct_com"].asBool();
@@ -152,7 +154,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
     }
 
     sim_params.angle_params.angle_stiffness =
-        angleParams["angle_stiffness"].asFloat();
+        angleParams["angle_stiffness"].asDouble();
 
     sim_params.angle_params.angle_pot =
         angleParams["angle_pot"].asBool();
@@ -170,10 +172,10 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         adaptiveParams["do_adaptive_dt"].asBool();
 
     sim_params.adaptive_params.dt_max =
-        adaptiveParams["dt_max"].asFloat();
+        adaptiveParams["dt_max"].asDouble();
 
     sim_params.adaptive_params.dt_tol =
-        adaptiveParams["dt_tol"].asFloat();
+        adaptiveParams["dt_tol"].asDouble();
 
     // Cell counting params
     Json::Value countingParams = inpRoot.get("counting_params",
@@ -196,7 +198,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         countingParams["count_int_cells_only"].asBool();
 
     sim_params.counting_params.radius_cutoff =
-        countingParams["radius_cutoff"].asFloat();
+        countingParams["radius_cutoff"].asDouble();
 
     sim_params.counting_params.overwrite_mit_index_file =
         countingParams["overwrite_mit_index_file"].asBool();
@@ -218,13 +220,13 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
             popParams["do_pop_model"].asBool();
 
         sim_params.pop_params.total_food =
-            popParams["total_food"].asFloat();
+            popParams["total_food"].asDouble();
 
         sim_params.pop_params.regular_consumption =
-            popParams["regular_consumption"].asFloat();
+            popParams["regular_consumption"].asDouble();
 
         sim_params.pop_params.death_release_food =
-            popParams["death_release_food"].asFloat();
+            popParams["death_release_food"].asDouble();
     }
 
 
@@ -243,16 +245,16 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
     sim_params.wall_params.perp_axis = 'z';
 
     sim_params.wall_params.d_axis =
-        wallParams["d_axis"].asFloat();
+        wallParams["d_axis"].asDouble();
 
     sim_params.wall_params.wall_len =
-        wallParams["wall_len"].asFloat();
+        wallParams["wall_len"].asDouble();
 
     sim_params.wall_params.wall_width =
-        wallParams["wall_width"].asFloat();
+        wallParams["wall_width"].asDouble();
 
     sim_params.wall_params.thresh_dist =
-        wallParams["thresh_dist"].asFloat();
+        wallParams["thresh_dist"].asDouble();
 
 
     // division parameters
@@ -271,9 +273,9 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         divParams["use_div_plane_basis"].asBool();
 
     sim_params.div_params.div_plane_basis =
-        make_real3(divParams["div_plane_basis_x"].asFloat(),
-                   divParams["div_plane_basis_y"].asFloat(),
-                   divParams["div_plane_basis_z"].asFloat());
+        make_real3(divParams["div_plane_basis_x"].asDouble(),
+                   divParams["div_plane_basis_y"].asDouble(),
+                   divParams["div_plane_basis_z"].asDouble());
 
     // daughter stiffness parameters
     Json::Value stiffParams = inpRoot.get("stiffness_params", Json::nullValue);
@@ -290,13 +292,13 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         stiffParams["use_diff_stiff"].asBool();
 
     sim_params.stiff_params.soft_stiff_factor =
-        stiffParams["soft_stiff_factor"].asFloat();
+        stiffParams["soft_stiff_factor"].asDouble();
 
     sim_params.stiff_params.num_softer_cells =
         stiffParams["num_softer_cells"].asUInt();
 
     sim_params.stiff_params.frac_softer_cells =
-        stiffParams["frac_softer_cells"].asFloat();
+        stiffParams["frac_softer_cells"].asDouble();
 
     sim_params.stiff_params.during_growth =
         stiffParams["during_growth"].asBool();
@@ -305,7 +307,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         stiffParams["daught_same_stiff"].asBool();
 
     sim_params.stiff_params.closeness_to_center =
-        stiffParams["closeness_to_center"].asFloat();
+        stiffParams["closeness_to_center"].asDouble();
 
     sim_params.stiff_params.start_at_pop =
         stiffParams["start_at_pop"].asUInt();
@@ -325,21 +327,60 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
     sim_params.box_params.use_rigid_sim_box =
         boxParams["use_rigid_sim_box"].asBool();
 
-    // not implemented
     sim_params.box_params.use_pbc =
         boxParams["use_pbc"].asBool();
 
     sim_params.box_params.box_len =
-        boxParams["box_len"].asFloat();
+        boxParams["box_len"].asDouble();
     
     sim_params.box_params.box_len_x =
-        boxParams["box_len_x"].asFloat();
+        boxParams["box_len_x"].asDouble();
 
     sim_params.box_params.box_len_y =
-        boxParams["box_len_y"].asFloat();
+        boxParams["box_len_y"].asDouble();
 
     sim_params.box_params.box_len_z =
-        boxParams["box_len_z"].asFloat();
+        boxParams["box_len_z"].asDouble();
+
+    sim_params.box_params.box_max = make_real3(sim_params.box_params.box_len_x,
+                                               sim_params.box_params.box_len_y,
+                                               sim_params.box_params.box_len_z);
+
+    sim_params.box_params.flatbox =
+        boxParams["flatbox"].asBool();
+
+    sim_params.box_params.dom_len =
+        boxParams["dom_len"].asDouble();
+
+    sim_params.box_params.thresh_dist =
+        boxParams["thresh_dist"].asDouble();
+
+    sim_params.box_params.rand_pos =
+        boxParams["rand_pos"].asBool();        
+
+
+    // Readin the random number parameters
+
+    Json::Value randParams = inpRoot.get("box_params", Json::nullValue);
+
+    if (randParams == Json::nullValue){
+        std::cout << "ERROR: Could not load box parameters." << std::endl;
+        return BOX_PARAM_ERROR;
+    }
+
+    sim_params.rand_params.add_rands =
+        randParams["add_rands"].asBool();
+
+    sim_params.rand_params.rand_seed =
+        randParams["rand_seed"].asInt();
+
+    sim_params.rand_params.rand_dist =
+        randParams["rand_dist"].asInt();
+
+    sim_params.rand_params.rand_scale_factor =
+        randParams["rand_scale_factor"].asDouble();
+        
+        
 
     // Now the weird parameter checks
     bool invalidParam = false;
