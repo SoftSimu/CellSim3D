@@ -4,7 +4,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 #include <string>
-
+#include <exception>
 #include "Types.cuh"
 struct base_n{
     static size_t used_host_mem;
@@ -20,22 +20,24 @@ struct SimList1D: base_n{
     T* devPtr;
     T* hostPtr;
 
-    SimList1D(long int _n): n(_n), h(_n, 0), d(_n, 0){
-        base_n::used_host_mem += n*sizeof(T);
-        devPtr = thrust::raw_pointer_cast(&d[0]);
-        hostPtr = thrust::raw_pointer_cast(&h[0]);
-    }
+    // This is proper constructor delegation in C++11
+    SimList1D(long int _n): SimList1D(_n, T(0)){}
     
-    SimList1D(long int _n, T _val): n(_n), h(_n, _val), d(_n, _val){
+    SimList1D(long int _n, T _val)
+    try : n(_n), h(_n, _val), d(_n, _val){
+        std::cout << " yay " << _n << std::endl;
         base_n::used_host_mem += n*sizeof(T);
         devPtr = thrust::raw_pointer_cast(&d[0]);
         hostPtr = thrust::raw_pointer_cast(&h[0]);
+    } catch (const std::exception& e){
+        std::cout << "Bad Memory Exception while trying to allocate "
+                  << sizeof(T)*_n/(1024*1024) << " GB." << std::endl;
+        std::cout << e.what() << std::endl; 
+        throw e; 
     }
 
     ~SimList1D(){
         base_n::used_host_mem -= n*sizeof(T);
-        devPtr = NULL;
-        hostPtr = NULL;
     }
 
     // copy constructor
