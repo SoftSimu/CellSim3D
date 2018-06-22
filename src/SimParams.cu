@@ -57,9 +57,10 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
     // Load core simulation parameters
 
     sim_params.core_params.max_no_of_cells =
-        coreParams["max_no_of_cells"].asUInt();
+        coreParams["max_no_of_cells"].asInt64();
     
-    sim_params.core_params.max_no_of_nodes = 192*sim_params.core_params.max_no_of_cells; 
+    sim_params.core_params.max_no_of_nodes =
+        192*sim_params.core_params.max_no_of_cells; 
 
     sim_params.core_params.node_mass =
         coreParams["node_mass"].asDouble();
@@ -104,7 +105,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         coreParams["z_offset"].asDouble();
 
     sim_params.core_params.div_time_steps =
-        coreParams["div_time_steps"].asUInt();
+        coreParams["div_time_steps"].asInt64();
 
     sim_params.core_params.delta_t =
         coreParams["delta_t"].asDouble();
@@ -113,10 +114,10 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         coreParams["restart"].asBool();
 
     sim_params.core_params.traj_write_int =
-        coreParams["traj_write_int"].asUInt();
+        coreParams["traj_write_int"].asInt64();
 
     sim_params.core_params.non_div_time_steps =
-        coreParams["non_div_time_steps"].asUInt();
+        coreParams["non_div_time_steps"].asInt64();
 
 
     std::strcpy(sim_params.core_params.traj_file_name,
@@ -201,7 +202,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         countingParams["overwrite_mit_index_file"].asBool();
 
     sim_params.counting_params.cell_count_int =
-        countingParams["cell_count_int"].asUInt();
+        countingParams["cell_count_int"].asInt64();
 
     // This section is currently unused.
     // population params
@@ -292,7 +293,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         stiffParams["soft_stiff_factor"].asDouble();
 
     sim_params.stiff_params.num_softer_cells =
-        stiffParams["num_softer_cells"].asUInt();
+        stiffParams["num_softer_cells"].asInt64();
 
     sim_params.stiff_params.frac_softer_cells =
         stiffParams["frac_softer_cells"].asDouble();
@@ -307,7 +308,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
         stiffParams["closeness_to_center"].asDouble();
 
     sim_params.stiff_params.start_at_pop =
-        stiffParams["start_at_pop"].asUInt();
+        stiffParams["start_at_pop"].asInt64();
 
     sim_params.stiff_params.rand_cell_ind =
         stiffParams["rand_cell_ind"].asBool();
