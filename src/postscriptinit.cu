@@ -73,7 +73,7 @@ __global__ void  cell_division(long int parCellInd, long int daughtCellInd,
 
 #ifdef CELLDIV_EPS
 #warning "This source file has hard coded constants!!!"
-        if (abs(mag(norm)) > CELLDIV_EPS){
+        if (abs(mag(norm) - 1) > CELLDIV_EPS){
             asm("trap;");
         }
 #endif
