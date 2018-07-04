@@ -182,8 +182,7 @@ __device__ real3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
     return nodeForce;
 }
         
-__global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_params,
-                                  int Xdiv, int Ydiv, int Zdiv){
+__global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_params){
 
     __shared__ real* d_X; 
     __shared__ real* d_Y; 
@@ -207,6 +206,10 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
     __shared__ real DL;
     __shared__ int* d_numOfNNList;
     __shared__ int* d_nnList;
+    __shared__ int Xdiv;
+    __shared__ int Ydiv;
+    __shared__ int Zdiv;
+    
     size_t cellInd, localNodeInd;
     
     cellInd = blockIdx.x;
@@ -243,6 +246,9 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
             DL = sim_params.box_params.dom_len;
             d_numOfNNList = simState.numOfNNList;
             d_nnList = simState.nnList;
+            Xdiv = (int)((simState.maxs.x[0]-simState.mins.x[0])/sim_params.box_params.dom_len + 1);
+            Ydiv = (int)((simState.maxs.y[0]-simState.mins.y[0])/sim_params.box_params.dom_len + 1);
+            Zdiv = (int)((simState.maxs.z[0]-simState.mins.z[0])/sim_params.box_params.dom_len + 1);
         }
         __syncthreads();
         
@@ -420,8 +426,7 @@ __global__ void CalculateConForce(SimStatePtrs simState, sim_params_struct sim_p
 }
 
 
-__global__ void CalculateDisForce( SimStatePtrs sim_state, sim_params_struct sim_params,
-                                   int Xdiv, int Ydiv, int Zdiv){
+__global__ void CalculateDisForce( SimStatePtrs sim_state, sim_params_struct sim_params){
 
     __shared__ real* d_X;
     __shared__ real* d_Y;
@@ -445,6 +450,9 @@ __global__ void CalculateDisForce( SimStatePtrs sim_state, sim_params_struct sim
     __shared__ real gamma_int;
     __shared__ real gamma_ext;
     __shared__ real gamma_o;
+    __shared__ int Xdiv;
+    __shared__ int Ydiv;
+    __shared__ int Zdiv;
 
     if (threadIdx.x == 0){
         d_X = sim_state.pos.x;
@@ -467,6 +475,9 @@ __global__ void CalculateDisForce( SimStatePtrs sim_state, sim_params_struct sim
         d_FX = sim_state.disForce.x;
         d_FY = sim_state.disForce.y;
         d_FZ = sim_state.disForce.z;
+        Xdiv = (int)((sim_state.maxs.x[0]-sim_state.mins.x[0])/sim_params.box_params.dom_len + 1);
+        Ydiv = (int)((sim_state.maxs.y[0]-sim_state.mins.y[0])/sim_params.box_params.dom_len + 1);
+        Zdiv = (int)((sim_state.maxs.z[0]-sim_state.mins.z[0])/sim_params.box_params.dom_len + 1);
     }
     __syncthreads();
     

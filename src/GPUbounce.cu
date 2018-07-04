@@ -238,12 +238,7 @@ int main(int argc, char *argv[])
   simState.mins.CopyToHost();
   simState.maxs.CopyToHost();
 
-  int Xdiv = (int)((simState.maxs.x.h[0]-simState.mins.x.h[0])/sim_params.box_params.dom_len + 1);
-  int Ydiv = (int)((simState.maxs.y.h[0]-simState.mins.y.h[0])/sim_params.box_params.dom_len + 1);
-  int Zdiv = (int)((simState.maxs.z.h[0]-simState.mins.z.h[0])/sim_params.box_params.dom_len + 1);
-
-  
-  makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
+  makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.devPtrs, sim_params);
   CudaErrorCheck(); 
 
   if (sim_params.core_params.correct_com == true){
@@ -336,10 +331,10 @@ int main(int argc, char *argv[])
 
   std::cout << "CPU memory used =    " << base_n::used_host_mem/(1024*1024) << "MB" << std::endl;
   
-  CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv); 
+  CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params); 
   CudaErrorCheck();
 
-  CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
+  CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
   CudaErrorCheck();
 
 
@@ -362,11 +357,11 @@ int main(int argc, char *argv[])
           printf("   time %-8d %d cells, rGrowth %f, maxPop %f\n", step, simState.no_of_cells);
       }
 
-      CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
+      CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params);
       CudaErrorCheck();
 
 
-      CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
+      CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
       CudaErrorCheck();
 
       // Calculate random Force here...
@@ -381,7 +376,7 @@ int main(int argc, char *argv[])
           VelocityUpdateB<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
           CudaErrorCheck();
 
-          CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params, Xdiv, Ydiv, Zdiv);
+          CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
       CudaErrorCheck();
 
       // this loop can be looped until convergence, but that shouldn't

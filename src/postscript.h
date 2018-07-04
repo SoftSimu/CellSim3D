@@ -14,7 +14,7 @@ __global__ void minmaxpre(SimStatePtrs sim_state);
 
 __global__ void minmaxpost(SimStatePtrs sim_state);
 
-__global__ void makeNNlist( SimStatePtrs sim_state, sim_params_struct sm, int Xdiv, int Ydiv, int Zdiv);
+__global__ void makeNNlist( SimStatePtrs sim_state, sim_params_struct sm);
 
 __global__ void CenterOfMass(SimStatePtrs simState);
 
@@ -24,7 +24,7 @@ int initialize_C180s(SimState& simState, const sim_params_struct& sim_params);
 int InitializeRandom(int rand_seed);
 int read_fullerene_nn(SimState& simState);
 
-__global__ void CalculateConForce(SimStatePtrs sim_state, sim_params_struct sm, int Xdiv, int Ydiv, int Zdiv);
+__global__ void CalculateConForce(SimStatePtrs sim_state, sim_params_struct sm);
 
 __global__ void Integrate(SimStatePtrs sim_state, sim_params_struct sim_params);
 
@@ -51,4 +51,4 @@ __global__ void VelocityUpdateA(SimStatePtrs sim_state, sim_params_struct sim_pa
 
 __global__ void VelocityUpdateB(SimStatePtrs sim_state, sim_params_struct sim_params);
 
-__global__ void CalculateDisForce(SimStatePtrs sim_state, sim_params_struct sim_params, int Xdiv, int Ydiv, int Zdiv);
+__global__ void CalculateDisForce(SimStatePtrs sim_state, sim_params_struct sim_params);

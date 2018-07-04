@@ -199,9 +199,19 @@ __global__ void minmaxpre( SimStatePtrs sim_state)
 
 
 
-__global__ void makeNNlist(SimStatePtrs sim_state, sim_params_struct sm, int Xdiv, int Ydiv, int Zdiv){
+__global__ void makeNNlist(SimStatePtrs sim_state, sim_params_struct sm){
 
+    __shared__ int Xdiv;
+    __shared__ int Ydiv;
+    __shared__ int Zdiv;
 
+    if (threadIdx.x == 0){
+        Xdiv = (int)((sim_state.maxs.x[0]-sim_state.mins.x[0])/sm.box_params.dom_len + 1);
+        Ydiv = (int)((sim_state.maxs.y[0]-sim_state.mins.y[0])/sm.box_params.dom_len + 1);
+        Zdiv = (int)((sim_state.maxs.z[0]-sim_state.mins.z[0])/sm.box_params.dom_len + 1);
+    }
+    __syncthreads();
+    
   int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
   
   real* d_bounding_xyz = sim_state.boundingBoxes;
