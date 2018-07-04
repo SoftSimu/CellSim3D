@@ -9,7 +9,7 @@ objects = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
 	propagatebound.o propagate.o volume.o SimParams.o TrajWriter.o
 linkObjects = $(patsubst %, $(objDir)%, $(objects))
 
-eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand -L/usr/lib/x86_64-linux-gnu/hdf5/serial -lhdf5 -std=c++11
+eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand -L/usr/lib/x86_64-linux-gnu/hdf5/serial -lhdf5 -std=c++11 -lineinfo
 opt = -O3
 
 debug: opt= -O0
