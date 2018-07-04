@@ -466,12 +466,7 @@ int ReadSimParams(sim_params_struct& sim_params, const char* fileName){
                       << "       Division time steps set to "
                       << core.div_time_steps << std::endl;
 
-        }
-
-        if (core.dom_len != 2.9f){
-            std::cout<< "WARNING: Untested domain length " << core.dom_len
-                     << "." << std::endl;
-        }
+        }        
             
     }
 
