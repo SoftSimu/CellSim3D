@@ -86,8 +86,8 @@ void TrajWriter::init(const sim_params_struct& _sm){
         angle_params_struct angle_params = sm->angle_params;
         WRITE_SIM_PARAM(angle_params.angle_stiffness);
 
-        // special for array of angles3
-        WriteSimParam(angle_params.theta0, 180, VAR_NAME(angle_params.theta0));
+    //     // special for array of angles3
+    //     WriteSimParam(angle_params.theta0, 180, VAR_NAME(angle_params.theta0));
     }
 
     { // adaptive_params
