@@ -236,11 +236,9 @@ int main(int argc, char *argv[])
   minmaxpre<<<reductionblocks,1024>>>(simState.devPtrs);
   CudaErrorCheck(); 
   minmaxpost<<<1,1024>>>(simState.devPtrs);
-  CudaErrorCheck(); 
-  simState.mins.CopyToHost();
-  simState.maxs.CopyToHost();
-
-  makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.devPtrs, sim_params);
+  CudaErrorCheck();
+  
+  makeNNlist<<<(simState.no_of_cells-1)/1024 + 1,1024>>>(simState.devPtrs, sim_params);
   CudaErrorCheck(); 
 
   if (sim_params.core_params.correct_com == true){
