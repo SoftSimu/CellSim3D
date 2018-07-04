@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
   CenterOfMass<<<simState.no_of_cells, 256>>>(simState.devPtrs);
-                                             
+  CudaErrorCheck();                                          
   
   bounding_boxes<<<simState.no_of_cells, 32>>>(simState.devPtrs);
                                      
