@@ -1,7 +1,7 @@
 compiler = $(shell which nvcc)
-debug = -g -G -lineinfo
-arch = -arch=sm_50
-oflags = $(arch) -Xptxas="-v" -I inc -dc -D_FORCE_INLINES -I /usr/include/hdf5/serial/ -std=c++11
+debug = -g -G
+arch = -arch=sm_35
+oflags = $(arch) -I inc -dc -D_FORCE_INLINES -I /usr/include/hdf5/serial/ -std=c++11 -lineinfo
 objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
