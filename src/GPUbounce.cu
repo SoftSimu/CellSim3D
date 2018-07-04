@@ -71,6 +71,8 @@ int main(int argc, char *argv[])
   sim_params.core_params.init_num_cells = atoi(argv[1]);
   
   SimState simState(atoi(argv[1]), sim_params);
+
+  std::cout << simState.pos.x.h[0] << std::endl;
   
   char inpFile[256];
   strcpy(inpFile, argv[2]);

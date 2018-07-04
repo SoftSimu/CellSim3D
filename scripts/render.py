@@ -124,8 +124,8 @@ bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cel
 bpy.data.materials['Material'].specular_intensity = args.specular_intensity
 
 # reset camera
-# bpy.data.objects["Camera"].location=(0.0, 0.0, 0.0)
-# bpy.data.objects["Camera"].rotation_euler=(0, 0, 0)
+bpy.data.objects["Camera"].location=(0.0, 0.0, 0.0)
+bpy.data.objects["Camera"].rotation_euler=(0, 0, 0)
 # camConsty=np.tan(0.5*bpy.data.cameras["Camera"].angle_y)
 # camConstx=np.tan(0.5*bpy.data.cameras["Camera"].angle_x)
 # cps=[]
