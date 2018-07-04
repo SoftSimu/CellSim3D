@@ -428,15 +428,16 @@ int main(int argc, char *argv[])
               cell_division<<<1, 192>>>(pCellInd, dCellInd, simState.devPtrs, sim_params, norm);
               CudaErrorCheck();
               simState.numDivisions[pCellInd] += 1;
-              divInds.push_back(dCellInd);              
+              simState.no_of_cells += 1;
+              simState.no_new_cells += 1;
           }
-          simState.no_new_cells = divInds.size();
           if (simState.no_new_cells > 0){
               simState.resetIndices.ReadIn(divInds);
               CudaErrorCheck(); 
 
               PressureReset <<<(2*simState.no_new_cells)/512 + 1, 512>>> (simState.devPtrs, sim_params); 
               CudaErrorCheck();
+              simState.no_new_cells = 0;
           }
 
         // --------------------------------------- End Cell Division -----------
