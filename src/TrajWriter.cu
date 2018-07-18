@@ -230,11 +230,8 @@ void TrajWriter::WriteSimParam(const long int var, const char* name){
 }
 
 void TrajWriter::WriteSimParam(const bool var, const char* name){
-    // hdf5 has no bool implementation
-    // as it was written in c, so write as char
-    char v = 'F';
-    if(var) v = 'T';
-    WriteSimParam((void *)&v, H5T_NATIVE_CHAR, name, traj_id);
+    hbool_t v = (hbool_t)var;
+    WriteSimParam((void *)&v, H5T_NATIVE_HBOOL, name, traj_id);
 }
 
 void TrajWriter::WriteSimParam(const char *var, const char *name){
