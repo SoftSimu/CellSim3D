@@ -18,11 +18,11 @@
 #include <cuda.h>
 #include <curand.h>
 #include <vector_functions.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/fill.h>
-#include <thrust/sort.h>
-#include <thrust/extrema.h>
+// #include <thrust/host_vector.h>
+// #include <thrust/device_vector.h>
+// #include <thrust/fill.h>
+// #include <thrust/sort.h>
+// #include <thrust/extrema.h>
 //#include "helper_cuda.h"
 #include "postscript.h"
 #include "marsaglia.h"
@@ -381,7 +381,7 @@ int main(int argc, char *argv[])
 
           simState.cellShouldDiv.CopyToHost();
 
-          thrust::host_vector<int> divInds;
+          std::vector<int> divInds;
           
           for (long int cellInd = 0; cellInd < simState.no_of_cells; cellInd++){
               auto csd = simState.cellShouldDiv.h;
@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
               simState.no_new_cells += 1;
           }
           if (simState.no_new_cells > 0){
-              simState.resetIndices.ReadIn(divInds);
+              simState.resetIndices.ReadIn(&(divInds[0]), divInds.size());
               CudaErrorCheck(); 
 
               PressureReset <<<(2*simState.no_new_cells)/512 + 1, 512>>> (simState.devPtrs, sim_params); 
@@ -489,6 +489,7 @@ int main(int argc, char *argv[])
       }
 
   }
+  //cudaDeviceReset();
 }
 
 
