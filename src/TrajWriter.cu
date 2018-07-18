@@ -48,42 +48,42 @@ void TrajWriter::init(const sim_params_struct& _sm){
 
 
     { // core_params
-        const core_params_struct* core_params = &(sm->core_params);
+        const core_params_struct& core_params = sm->core_params;
 
-        WRITE_SIM_PARAM(core_params->max_no_of_cells);
-        WRITE_SIM_PARAM(core_params->node_mass);
-        WRITE_SIM_PARAM(core_params->eq_bond_len);
-        WRITE_SIM_PARAM(core_params->rep_range);
-        WRITE_SIM_PARAM(core_params->attr_range);
-        WRITE_SIM_PARAM(core_params->bond_stiff);
-        WRITE_SIM_PARAM(core_params->rep_stiff);
-        WRITE_SIM_PARAM(core_params->attr_stiff);
-        WRITE_SIM_PARAM(core_params->stiff_factor1);
-        WRITE_SIM_PARAM(core_params->inter_membr_fric);
-        WRITE_SIM_PARAM(core_params->internal_damping);
-        WRITE_SIM_PARAM(core_params->gamma_visc);
-        WRITE_SIM_PARAM(core_params->division_vol);
-        WRITE_SIM_PARAM(core_params->random_z_offset);
-        WRITE_SIM_PARAM(core_params->z_offset);
-        WRITE_SIM_PARAM(core_params->div_time_steps);
-        WRITE_SIM_PARAM(core_params->delta_t);
-        WRITE_SIM_PARAM(core_params->restart);
-        WRITE_SIM_PARAM(core_params->traj_write_int);
-        WRITE_SIM_PARAM(core_params->non_div_time_steps);
-        WRITE_SIM_PARAM(core_params->traj_file_name);
-        WRITE_SIM_PARAM(core_params->max_pressure);
-        WRITE_SIM_PARAM(core_params->min_pressure);
-        WRITE_SIM_PARAM(core_params->growth_rate);
-        WRITE_SIM_PARAM(core_params->check_sphericity);
-        WRITE_SIM_PARAM(core_params->angle_pot);
+        WRITE_SIM_PARAM(core_params.max_no_of_cells);
+        WRITE_SIM_PARAM(core_params.node_mass);
+        WRITE_SIM_PARAM(core_params.eq_bond_len);
+        WRITE_SIM_PARAM(core_params.rep_range);
+        WRITE_SIM_PARAM(core_params.attr_range);
+        WRITE_SIM_PARAM(core_params.bond_stiff);
+        WRITE_SIM_PARAM(core_params.rep_stiff);
+        WRITE_SIM_PARAM(core_params.attr_stiff);
+        WRITE_SIM_PARAM(core_params.stiff_factor1);
+        WRITE_SIM_PARAM(core_params.inter_membr_fric);
+        WRITE_SIM_PARAM(core_params.internal_damping);
+        WRITE_SIM_PARAM(core_params.gamma_visc);
+        WRITE_SIM_PARAM(core_params.division_vol);
+        WRITE_SIM_PARAM(core_params.random_z_offset);
+        WRITE_SIM_PARAM(core_params.z_offset);
+        WRITE_SIM_PARAM(core_params.div_time_steps);
+        WRITE_SIM_PARAM(core_params.delta_t);
+        WRITE_SIM_PARAM(core_params.restart);
+        WRITE_SIM_PARAM(core_params.traj_write_int);
+        WRITE_SIM_PARAM(core_params.non_div_time_steps);
+        WRITE_SIM_PARAM(core_params.traj_file_name);
+        WRITE_SIM_PARAM(core_params.max_pressure);
+        WRITE_SIM_PARAM(core_params.min_pressure);
+        WRITE_SIM_PARAM(core_params.growth_rate);
+        WRITE_SIM_PARAM(core_params.check_sphericity);
+        WRITE_SIM_PARAM(core_params.angle_pot);
 
 
-        uint tot_frames = core_params->div_time_steps + core_params->non_div_time_steps;
+        uint tot_frames = core_params.div_time_steps + core_params.non_div_time_steps;
         WRITE_SIM_PARAM(tot_frames);
     }
 
     { // angle_params
-        angle_params_struct angle_params = sm->angle_params;
+        const angle_params_struct& angle_params = sm->angle_params;
         WRITE_SIM_PARAM(angle_params.angle_stiffness);
 
     //     // special for array of angles3
