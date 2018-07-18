@@ -92,22 +92,13 @@ int main(int argc, char *argv[])
   // totalCells = (int *)calloc((Time_steps/newCellCountInt), sizeof(int));
   // num_new_cells_per_step = (int *)calloc(Time_steps, sizeof(int));
 
+
   cudaDeviceProp deviceProp = getDevice();
   if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
       printf("Could not set to divice %d\n", 2);
       return -1;
   }
   
-  // Better way to see how much GPU memory is being used.
-  size_t totalGPUMem;
-  size_t freeGPUMem;
-
-  if ( cudaSuccess != cudaMemGetInfo ( &freeGPUMem, &totalGPUMem ) ) {
-      printf("Couldn't read GPU Memory status\nExiting...\n");
-      CudaErrorCheck();
-      exit(1);
-  }
-
   simState.bondStiffness.Fill(sim_params.core_params.bond_stiff);  
 
   if (sim_params.stiff_params.use_diff_stiff){
@@ -326,9 +317,7 @@ int main(int argc, char *argv[])
   float r_CM_o = pow((3.0/4.0) * (1/3.14159) * sim_params.core_params.division_vol*2.0, 1.0/3);
 
 
-  std::cout << "GPU memory used =    " << (totalGPUMem-freeGPUMem)/(1024*1024) << " MB" << std::endl; 
-
-  std::cout << "CPU memory used =    " << base_n::used_host_mem/(1024*1024) << "MB" << std::endl;
+  std::cout << "Mirrored memory allocated =    " << base_n::used_host_mem/(1024*1024) << "MB" << std::endl;
   
   CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params); 
   CudaErrorCheck();
