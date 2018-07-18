@@ -56,8 +56,6 @@ int main(int argc, char *argv[])
 {
   cudaError_t myError;
 
-  printf("CellDiv version 0.9\n");
-
   if ( argc !=4 )
   {
       printf("Usage: CellDiv no_of_threads inpFile.json gpuid\n");
