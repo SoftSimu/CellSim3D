@@ -1,8 +1,9 @@
 #ifndef SimList_CUH
 #define SIMLIST_CUH
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/copy.h>
+// #include <thrust/host_vector.h>
+// #include <thrust/device_vector.h>
+// #include <thrust/copy.h>
+#include <cstdlib>
 #include <string>
 #include <exception>
 #include "Types.cuh"
@@ -14,61 +15,113 @@ template<typename T>
 struct SimList1D: base_n{
     size_t n;
 
-    thrust::device_vector<T> d;
-    thrust::host_vector<T> h;
+    T* d;
+    T* h; 
 
     T* devPtr;
     T* hostPtr;
 
     // This is proper constructor delegation in C++11
-    SimList1D(long int _n): SimList1D(_n, T(0)){}
+    SimList1D(size_t _n): SimList1D(_n, T(0)){}
     
-    SimList1D(long int _n, T _val)
-    try : n(_n), h(_n, _val), d(_n, _val){
+    SimList1D(size_t _n, T _val)
+    try : n(_n){
         base_n::used_host_mem += n*sizeof(T);
-        devPtr = thrust::raw_pointer_cast(&d[0]);
-        hostPtr = thrust::raw_pointer_cast(&h[0]);
+
+        if (cudaMalloc((void **)&devPtr, sizeof(T)*n) != cudaSuccess){
+            std::cout << "memory allocation error" << std::endl;
+        }
+        
+        d = devPtr;
+
+        hostPtr = new T[n]; 
+        h = hostPtr;
+
     } catch (const std::exception& e){
         std::cout << "Bad Memory Exception while trying to allocate "
-                  << sizeof(T)*_n/(1024*1024) << " GB." << std::endl;
+                  << sizeof(T)*n/(1024*1024) << " GB." << std::endl;
         std::cout << e.what() << std::endl; 
         throw e; 
     }
 
     ~SimList1D(){
         base_n::used_host_mem -= n*sizeof(T);
+        cudaFree(devPtr);
+        
+        delete[] hostPtr;
+        h = NULL; hostPtr=NULL;
     }
 
     // copy constructor
-    SimList1D(const SimList1D& other): n(other.n), d(other.n), h(other.n){
-        thrust::copy(other.d.begin(), other.d.end(), d.begin());
-        thrust::copy(other.h.begin(), other.h.end(), h.begin());
-    }
+    SimList1D(const SimList1D& other): n(other.n){
+        // h = other.h;
+        // hostPtr = other.hostPtr;
 
+        // d = other.d;
+        // devPtr = other.devPtr;
+        base_n::used_host_mem += n*sizeof(T);
+
+        cudaMalloc((void **)&devPtr, sizeof(T)*n);
+        d = devPtr;
+        cudaMemcpy(devPtr, other.devPtr, n*sizeof(T), cudaMemcpyDeviceToDevice);
+
+        hostPtr = new T[n]; 
+        h = hostPtr;
+
+        std::memcpy(hostPtr, other.hostPtr, n*sizeof(T));
+
+    }
+    
     // copy assignment
-    void operator=(const SimList1D& other){
-        thrust::copy(other.d.begin(), other.d.end(), d.begin());
-        thrust::copy(other.h.begin(), other.h.end(), h.begin());
-    }
+    SimList1D& operator=(const SimList1D& other){        
+        if (this != &other){
+            n = other.n;
+            // h = other.h;
+            // hostPtr = other.hostPtr;
 
-    void CopyToDevice(size_t _n, size_t offset){
-        thrust::copy(h.begin()+offset, h.begin()+offset+_n, d.begin()+offset);
+            // d = other.d;
+            // devPtr = other.devPtr;
+            base_n::used_host_mem += n*sizeof(T);
+
+            cudaMalloc(&devPtr, sizeof(T)*n);
+            cudaMemcpy(devPtr, other.devPtr, n*sizeof(T), cudaMemcpyDeviceToDevice); 
+            d = devPtr;
+
+            delete[] hostPtr; 
+            hostPtr = NULL; h = NULL;
+            
+            hostPtr = new T[n];
+            h = hostPtr;
+
+            std::memcpy(hostPtr, other.hostPtr, n*sizeof(T));
+        }
+        return *this;
+    }    
+
+    void CopyToDevice(const size_t& _n, const size_t& offset){
+        //thrust::copy(h.begin()+offset, h.begin()+offset+_n, d.begin()+offset);
+        cudaMemcpy((void *)(d+offset), (void *)(h+offset), _n*sizeof(T), cudaMemcpyHostToDevice);
     }
 
     void CopyToDevice(){
         CopyToDevice(n, 0);
     }
 
-    void CopyToHost(size_t _n, size_t offset){
-        thrust::copy(d.begin()+offset, d.begin()+offset+_n, h.begin()+offset);
+    void CopyToHost(const size_t& _n, const size_t& offset){
+        //thrust::copy(d.begin()+offset, d.begin()+offset+_n, h.begin()+offset);
+        cudaMemcpy((void *)(h+offset), (void *)(d+offset), _n*sizeof(T), cudaMemcpyDeviceToHost);
     }
 
     void CopyToHost(){
         CopyToHost(n, 0);
     }
 
-    void Fill(T _val, size_t _n, size_t offset){
-        thrust::fill(h.begin()+offset, h.begin()+offset+_n, _val);
+    void Fill(const T& _val, const size_t& _n, const size_t& offset){
+        //thrust::fill(h.begin()+offset, h.begin()+offset+_n, _val);
+        for (size_t i = 0; i < _n; ++i){
+            h[i+offset] = _val;
+        }
+        
         CopyToDevice(_n, offset);
     }
 
@@ -80,15 +133,18 @@ struct SimList1D: base_n{
         Fill(_val, n, 0);
     }
 
-    void ReadIn(thrust::host_vector<T> _src, size_t _n, size_t _offset1,
-                size_t _offset2){
-        thrust::copy(_src.begin()+_offset1, _src.begin()+_offset1+_n,
-                     h.begin()+_offset2);
-        CopyToDevice(_n, _offset2);
+    void ReadIn(T* _src, const size_t& _n, const size_t& _offsetSrc,
+                const size_t& _offsetDst){
+
+        for (size_t i = 0; i < _n; ++i){
+            h[i+_offsetDst] = _src[i+_offsetSrc];
+        }
+        
+        CopyToDevice(_n, _offsetDst);
     }
 
-    void ReadIn(thrust::host_vector<T> _src){
-        ReadIn(_src, _src.size(), 0, 0);
+    void ReadIn(T* _src, size_t _n){
+        ReadIn(_src, _n, 0, 0);
     }
 
 };

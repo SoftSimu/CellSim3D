@@ -1,7 +1,6 @@
 #ifndef SIMSTATE_CUH
 #define SIMSTATE_CUH
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
+#include <vector>
 #include "Types.cuh"
 #include "SimParams.cuh"
 #include "SimList.cuh"
@@ -48,7 +47,7 @@ struct SimState{ // contains state on gpu and cpu side
     long int no_of_cells;
     long int no_new_cells; 
 
-    thrust::host_vector<int> numDivisions;
+    std::vector<int> numDivisions;
 
     SimList1D<angles3> theta0;
 
