@@ -91,14 +91,14 @@ void TrajWriter::init(const sim_params_struct& _sm){
     }
 
     { // adaptive_params
-        adaptive_params_struct adaptive_params = sm->adaptive_params;
+        const adaptive_params_struct& adaptive_params = sm->adaptive_params;
         WRITE_SIM_PARAM(adaptive_params.do_adaptive_dt);
         WRITE_SIM_PARAM(adaptive_params.dt_max);
         WRITE_SIM_PARAM(adaptive_params.dt_tol);
     }
 
     { // counting_params
-        counting_params_struct counting_params = sm->counting_params;
+        const counting_params_struct& counting_params = sm->counting_params;
         WRITE_SIM_PARAM(counting_params.count_cells);
         WRITE_SIM_PARAM(counting_params.mit_index_file_name);
         WRITE_SIM_PARAM(counting_params.count_int_cells_only);
@@ -108,7 +108,7 @@ void TrajWriter::init(const sim_params_struct& _sm){
     }
 
     { // pop_params
-        pop_params_struct pop_params = sm->pop_params;
+        const pop_params_struct& pop_params = sm->pop_params;
         WRITE_SIM_PARAM(pop_params.do_pop_model);
         WRITE_SIM_PARAM(pop_params.total_food);
         WRITE_SIM_PARAM(pop_params.regular_consumption);
@@ -119,7 +119,7 @@ void TrajWriter::init(const sim_params_struct& _sm){
     }
 
     { // Wall parameters
-        wall_params_struct wall_params = sm->wall_params;
+        const wall_params_struct& wall_params = sm->wall_params;
         WRITE_SIM_PARAM(wall_params.use_walls);
         WRITE_SIM_PARAM(wall_params.perp_axis);
         WRITE_SIM_PARAM(wall_params.d_axis);
@@ -131,14 +131,14 @@ void TrajWriter::init(const sim_params_struct& _sm){
     }
 
     { // Division parameters
-        div_params_struct div_params = sm->div_params;
+        const div_params_struct& div_params = sm->div_params;
         WRITE_SIM_PARAM(div_params.use_div_plane_basis);
         WRITE_SIM_PARAM(div_params.div_plane_basis);
 
     }
 
     { // Stiffness parameters
-        stiffness_params_struct stiff_params = sm->stiff_params;
+        const stiffness_params_struct& stiff_params = sm->stiff_params;
         WRITE_SIM_PARAM(stiff_params.use_diff_stiff);
         WRITE_SIM_PARAM(stiff_params.soft_stiff_factor);
         WRITE_SIM_PARAM(stiff_params.num_softer_cells);
@@ -152,7 +152,7 @@ void TrajWriter::init(const sim_params_struct& _sm){
     }
 
     { // box parameters
-        box_params_struct box_params = sm->box_params;
+        const box_params_struct& box_params = sm->box_params;
         WRITE_SIM_PARAM(box_params.use_rigid_sim_box);
         WRITE_SIM_PARAM(box_params.use_pbc);
         WRITE_SIM_PARAM(box_params.box_len);
