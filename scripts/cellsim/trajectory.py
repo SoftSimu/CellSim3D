@@ -115,6 +115,12 @@ class Trajectory(object):
         for fInd in range(0, self.numFrames, increment):
             yield self.GetFrame(fInd)
 
+    def dump(self):
+        for f in self.Frames():
+            print(f)
+            for cell in f:
+                print(cell)
+
 
     def _Close(self):
         if self.h5Handle is not None:
@@ -147,14 +153,7 @@ def main():
     args = parser.parse_args()
 
     with Trajectory(args.filePath) as tr:
-        pp = pprint.PrettyPrinter()
-        print(tr)
-        for f in tr.Frames():
-            print(f)
-            print(f.Positions().shape)
-            print(f.CoM())
-            for c in f.cells:
-                print(c)
+        tr.dump()
 
 
 if __name__ == "__main__":
