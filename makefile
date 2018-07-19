@@ -12,6 +12,9 @@ linkObjects = $(patsubst %, $(objDir)%, $(objects))
 eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand -L/usr/lib/x86_64-linux-gnu/hdf5/serial -lhdf5 -std=c++11 -lineinfo
 opt = -O3
 
+ROOT = $(shell pwd)
+rc = export CELLSIM3D_ROOT=$(ROOT)
+
 debug: opt= -O0
 debug: oflags += $(debug)
 debug: eflags += $(debug)
@@ -54,8 +57,17 @@ $(objDir)SimParams.o: src/SimParams.cu
 $(objDir)TrajWriter.o: src/TrajWriter.cu
 	$(compiler) $(oflags) -c src/TrajWriter.cu -o $(objDir)TrajWriter.o
 
-CellDiv: $(linkObjects) $(objDir)jsoncpp.o
+env:
+	echo "$(rc)" > bin/CellSim3D.rc
+	echo "export PATH=\$$PATH:$(ROOT)/bin" >> bin/CellSim3D.rc
+
+CellDiv: $(linkObjects) $(objDir)jsoncpp.o env
 	$(compiler) $(eflags)
+
+install: CellDiv
+	mkdir -p $(ROOT)
+	cp -r --parents `git ls-files` $(ROOT)
+	cp -r --parents bin $(ROOT)
 
 # Third party libraries
 $(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
