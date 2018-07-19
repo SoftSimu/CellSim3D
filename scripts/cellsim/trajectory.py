@@ -111,6 +111,9 @@ class Trajectory(object):
 
         return frame
 
+    def ReadFrame(self, index):
+        return self.GetFrame(index)
+
     def Frames(self, increment=1):
         for fInd in range(0, self.numFrames, increment):
             yield self.GetFrame(fInd)
