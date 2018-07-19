@@ -5,8 +5,8 @@ import os
 import argparse
 import numpy as np
 
-sys.path.append("/home/pranav/dev/celldiv/scripts")
 import celldiv
+sys.path.append(os.environ["CELLSIM3D_ROOT"]+"/scripts")
 
 
 argv = sys.argv
