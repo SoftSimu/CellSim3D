@@ -234,10 +234,50 @@ void TrajWriter::WriteSimParam(const bool var, const char* name){
     WriteSimParam((void *)&v, H5T_NATIVE_HBOOL, name, traj_id);
 }
 
+// Special function to write strings...
 void TrajWriter::WriteSimParam(const char *var, const char *name){
     int ndim = 1;
     hsize_t dims[1] = {strlen(var)};
-    WriteSimParam((void* )&var, H5T_NATIVE_CHAR, name, traj_id, ndim, dims);
+
+    std::cout << "string: "; 
+    std::cout << std::string(var) << std::endl;
+    
+    //WriteSimParam((void* )&var, H5T_C_S1, name, traj_id, ndim, dims);
+
+    if (H5Aexists(traj_id, name) > 0){
+        return;
+    }
+
+    //ds_id = H5Screate_simple(ndim, dims, NULL);
+    ds_id = H5Screate(H5S_SCALAR);
+    
+    hid_t atype = H5Tcopy(H5T_C_S1);
+    if (H5Tset_strpad(atype, H5T_STR_NULLTERM) < 0){
+        std::cerr << "Failed to set the strpad" << std::endl; 
+    }
+    
+    if (H5Tset_size(atype, strlen(var)) < 0){
+        std::cerr << "ERROR: Failed to create variable length string type"
+                  << std::endl;
+    }
+
+    
+    att_id = H5Acreate2(traj_id, name, atype, ds_id,
+                        H5P_DEFAULT, H5P_DEFAULT);
+
+    if (H5Awrite(att_id, atype, (void *)var) < 0){
+        std::cerr << "ERROR: failed to write simulation parameter "
+                  << name << std::endl;
+        status = -1;
+        throw new TrajException();
+    }
+
+    if (H5Aclose(att_id) < 0){
+        std::cerr << "ERROR: failed to close simulation parameter"
+                  << name << std::endl;
+        status = -1;
+        throw new TrajException();
+    }
 }
 
 void TrajWriter::WriteSimParam(const char var, const char *name){
