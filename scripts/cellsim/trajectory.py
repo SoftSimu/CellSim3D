@@ -66,6 +66,7 @@ class Trajectory(object):
         cp = self.simParams["core_params"]
 
         expectedNumFrames = cp["div_time_steps"] + cp["non_div_time_steps"]
+        self.writeInt = cp["traj_write_int"]
 
 
         if self.numFrames is not expectedNumFrames:
@@ -95,6 +96,7 @@ class Trajectory(object):
 
 
     def GetFrame(self, index):
+        index *= self.writeInt
         fGroup = self.h5Handle.get("frame{}".format(index))
         nCells = len(fGroup.items()) - 1
         frame = Frame(index)
