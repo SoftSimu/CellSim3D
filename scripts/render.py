@@ -5,8 +5,9 @@ import os
 import argparse
 import numpy as np
 
-import celldiv
-sys.path.append(os.environ["CELLSIM3D_ROOT"]+"/scripts")
+sys.path.append(os.environ["CELLSIM3D_ROOT"]+"/scripts/cellsim")
+
+import CellSim3DTools as cs
 
 
 argv = sys.argv
@@ -124,79 +125,73 @@ bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cel
 bpy.data.materials['Material'].specular_intensity = args.specular_intensity
 
 # reset camera
-bpy.data.objects["Camera"].location=(0.0, 0.0, 0.0)
-bpy.data.objects["Camera"].rotation_euler=(0, 0, 0)
+# bpy.data.objects["Camera"].location=(0.0, 0.0, 0.0)
+# bpy.data.objects["Camera"].rotation_euler=(0, 0, 0)
 # camConsty=np.tan(0.5*bpy.data.cameras["Camera"].angle_y)
 # camConstx=np.tan(0.5*bpy.data.cameras["Camera"].angle_x)
 # cps=[]
-with celldiv.TrajHandle(filename) as th:
+with cs.Trajectory(filename) as th:
     frameCount = 0
-    try:
-        for i in range(int(th.maxFrames/nSkip)):
+    for frame in th.Frames(nSkip):
+        frameCount += 1
+        if frameCount > args.num_frames:
+            break
 
-            frameCount += 1
-            if frameCount > args.num_frames:
-                break
+        f = frame.cells
 
-            f = th.ReadFrame(inc=nSkip)
+        if len(f) < minInd+1:
+            print("Only ", len(f), "cells in frame ", th.currFrameNum,
+                  " skipping...")
+            continue
 
-            if len(f) < minInd+1:
-                print("Only ", len(f), "cells in frame ", th.currFrameNum,
-                      " skipping...")
-                continue
+        if len(args.inds) > 0:
+            f = [f[a] for a in args.inds]
 
-            if len(args.inds) > 0:
-                f = [f[a] for a in args.inds]
+        f = frame.Positions()
+        # adjust to CoM
+        f -= np.mean(f, axis=0)
 
-            f = np.vstack(f)
-            # adjust to CoM
-            f -= np.mean(f, axis=0)
+        # set camera
+        # camPos = max(np.abs(f[:, 0]).max()/camConstx, np.abs(f[:, 1]).max()/camConsty)*1.1
+        # cps.append(camPos)
+        # bpy.data.objects["Camera"].location=(0, 0, camPos)
 
-            # set camera
-            # camPos = max(np.abs(f[:, 0]).max()/camConstx, np.abs(f[:, 1]).max()/camConsty)*1.1
-            # cps.append(camPos)
-            # bpy.data.objects["Camera"].location=(0, 0, camPos)
-
-            faces = []
-            for mi in range(int(len(f)/192)):
-                for row in firstfaces:
-                    faces.append([(v+mi*192) for v in row])
+        faces = []
+        for mi in range(int(len(f)/192)):
+            for row in firstfaces:
+                faces.append([(v+mi*192) for v in row])
 
 
-            mesh = bpy.data.meshes.new('cellMesh')
-            ob = bpy.data.objects.new('cellObject', mesh)
+        mesh = bpy.data.meshes.new('cellMesh')
+        ob = bpy.data.objects.new('cellObject', mesh)
 
-            bpy.context.scene.objects.link(ob)
-            mesh.from_pydata(f, [], faces)
-            mesh.update()
+        bpy.context.scene.objects.link(ob)
+        mesh.from_pydata(f, [], faces)
+        mesh.update()
 
-            if doSmooth:
-                bpy.ops.object.select_by_type(type='MESH')
-                bpy.context.scene.objects.active = bpy.data.objects['cellObject']
-                bpy.ops.object.editmode_toggle()
-                bpy.ops.mesh.normals_make_consistent(inside=False)
-                bpy.ops.object.editmode_toggle()
-                bpy.ops.object.shade_smooth()
-                bpy.context.scene.objects.active = bpy.data.objects['Cube']
-                bpy.ops.object.make_links_data(type='MATERIAL')             # copy material from Cube
-                bpy.context.scene.objects.active = bpy.data.objects['cellObject']
-                bpy.ops.object.select_all(action='TOGGLE')
-                bpy.ops.object.modifier_add(type='SUBSURF')
-
+        if doSmooth:
             bpy.ops.object.select_by_type(type='MESH')
             bpy.context.scene.objects.active = bpy.data.objects['cellObject']
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.shade_smooth()
             bpy.context.scene.objects.active = bpy.data.objects['Cube']
-            bpy.ops.object.make_links_data(type='MATERIAL')
+            bpy.ops.object.make_links_data(type='MATERIAL')             # copy material from Cube
+            bpy.context.scene.objects.active = bpy.data.objects['cellObject']
             bpy.ops.object.select_all(action='TOGGLE')
+            bpy.ops.object.modifier_add(type='SUBSURF')
 
-            imagename = basename + "%d.png" % frameCount
-            bpy.context.scene.render.filepath = imagename
+        bpy.ops.object.select_by_type(type='MESH')
+        #bpy.context.scene.objects.active = bpy.data.objects['cellObject']
+        bpy.context.scene.objects.active = bpy.data.objects['Cube']
+        bpy.ops.object.make_links_data(type='MATERIAL')
+        bpy.ops.object.select_all(action='TOGGLE')
 
-            bpy.ops.render.render(write_still=True)  # render to file
+        imagename = basename + "%d.png" % frameCount
+        bpy.context.scene.render.filepath = imagename
 
-            bpy.ops.object.select_pattern(pattern='cellObject')
-            bpy.ops.object.delete()                                     # delete mesh...
+        bpy.ops.render.render(write_still=True)  # render to file
 
-
-    except celldiv.IncompleteTrajectoryError:
-        print ("Stopping...")
+        bpy.ops.object.select_pattern(pattern='cellObject')
+        bpy.ops.object.delete()                                     # delete mesh...
