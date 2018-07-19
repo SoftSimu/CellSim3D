@@ -30,3 +30,7 @@ class Frame(object):
 
     def __str__(self):
         return "Frame {} containing {} cells.".format(self.idx, self.numCells)
+
+    def __iter__(self):
+        for c in self.cells:
+            yield c
