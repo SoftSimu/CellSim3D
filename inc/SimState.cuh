@@ -137,6 +137,17 @@ struct SimState{ // contains state on gpu and cpu side
         
         sm = &sim_params; 
     }
+
+    void IncrementNumCellsBy(const long int& n){
+        no_of_cells += n;
+        devPtrs.no_of_cells += n; 
+    }
+
+    void DecrementNumCellsBy(const long int& n){
+        no_of_cells -= n;
+        devPtrs.no_of_cells -= n; 
+    }
+
 };
 
 
