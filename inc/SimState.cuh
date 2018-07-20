@@ -149,7 +149,7 @@ public:
         devPtrs.no_of_cells -= n; 
     }
 
-    const SimStatePtrs& GPUState(){
+    const SimStatePtrs& DeviceState(){
         return devPtrs; 
     }
 
