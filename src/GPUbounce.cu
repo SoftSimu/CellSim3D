@@ -215,24 +215,24 @@ int main(int argc, char *argv[])
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-  CenterOfMass<<<simState.no_of_cells, 256>>>(simState.devPtrs);
+  CenterOfMass<<<simState.no_of_cells, 256>>>(simState.DeviceState());
   CudaErrorCheck();                                          
   
-  bounding_boxes<<<simState.no_of_cells, 32>>>(simState.devPtrs);
+  bounding_boxes<<<simState.no_of_cells, 32>>>(simState.DeviceState());
                                      
   CudaErrorCheck(); 
 
   size_t reductionblocks = (simState.no_of_cells-1)/1024+1;
-  minmaxpre<<<reductionblocks,1024>>>(simState.devPtrs);
+  minmaxpre<<<reductionblocks,1024>>>(simState.DeviceState());
   CudaErrorCheck(); 
-  minmaxpost<<<1,1024>>>(simState.devPtrs);
+  minmaxpost<<<1,1024>>>(simState.DeviceState());
   CudaErrorCheck();
   
-  makeNNlist<<<(simState.no_of_cells-1)/1024 + 1,1024>>>(simState.devPtrs, sim_params);
+  makeNNlist<<<(simState.no_of_cells-1)/1024 + 1,1024>>>(simState.DeviceState(), sim_params);
   CudaErrorCheck(); 
 
   if (sim_params.core_params.correct_com == true){
-      CenterOfMass<<<simState.no_of_cells,256>>>(simState.devPtrs);
+      CenterOfMass<<<simState.no_of_cells,256>>>(simState.DeviceState());
       simState.cellCOMs.x.CopyToHost();
       simState.cellCOMs.y.CopyToHost();
       simState.cellCOMs.z.CopyToHost();
@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
       }
 
       sysCM = sysCM/(simState.no_of_cells);
-      CorrectCoMMotion<<<(simState.no_of_cells*192)/1024 + 1, 1024>>>(simState.devPtrs, sysCM);
+      CorrectCoMMotion<<<(simState.no_of_cells*192)/1024 + 1, 1024>>>(simState.DeviceState(), sysCM);
       CudaErrorCheck(); 
   }
   
@@ -319,10 +319,10 @@ int main(int argc, char *argv[])
 
   std::cout << "Mirrored memory allocated =    " << base_n::used_host_mem/(1024*1024) << "MB" << std::endl;
   
-  CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params); 
+  CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.DeviceState(), sim_params); 
   CudaErrorCheck();
 
-  CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
+  CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState(), sim_params);
   CudaErrorCheck();
 
 
@@ -331,13 +331,13 @@ int main(int argc, char *argv[])
   // Simulation loop
   for (long int step = 1; step < sim_params.core_params.div_time_steps + sim_params.core_params.non_div_time_steps; ++step)
   {
-      Integrate<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
+      Integrate<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState(), sim_params);
       CudaErrorCheck();
 
-      ForwardTime<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs);
+      ForwardTime<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState());
       CudaErrorCheck();
 
-      PressureUpdate <<<simState.no_of_cells/1024 + 1, 1024>>> (simState.devPtrs, sim_params, step);
+      PressureUpdate <<<simState.no_of_cells/1024 + 1, 1024>>> (simState.DeviceState(), sim_params, step);
       CudaErrorCheck(); 
       
       if ( (step)%1000 == 0)
@@ -345,38 +345,38 @@ int main(int argc, char *argv[])
           printf("   time %-8d %d cells, rGrowth %f, maxPop %f\n", step, simState.no_of_cells);
       }
 
-      CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.devPtrs, sim_params);
+      CalculateConForce<<<simState.no_of_cells,threadsperblock>>>(simState.DeviceState(), sim_params);
       CudaErrorCheck();
 
 
-      CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
+      CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState(), sim_params);
       CudaErrorCheck();
 
       // Calculate random Force here...
       // Placeholder
       
-      VelocityUpdateA<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
+      VelocityUpdateA<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState(), sim_params);
       CudaErrorCheck();
 
 
       // Dissipative velocity update part...
       for (int s = 0; s < 1; ++s){ // may be looped over more later.
-          VelocityUpdateB<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
+          VelocityUpdateB<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState(), sim_params);
           CudaErrorCheck();
 
-          CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.devPtrs, sim_params);
+          CalculateDisForce<<<simState.no_of_cells, threadsperblock>>>(simState.DeviceState(), sim_params);
       CudaErrorCheck();
 
       // this loop can be looped until convergence, but that shouldn't
       // be necessary most of the time...
       }
 
-      CenterOfMass<<<simState.no_of_cells,256>>>(simState.devPtrs);
+      CenterOfMass<<<simState.no_of_cells,256>>>(simState.DeviceState());
       CudaErrorCheck();
       if (step <= sim_params.core_params.div_time_steps){
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
-          volumes<<<simState.no_of_cells,192>>>(simState.devPtrs, sim_params);
+          volumes<<<simState.no_of_cells,192>>>(simState.DeviceState(), sim_params);
           CudaErrorCheck();
 
           simState.cellShouldDiv.CopyToHost();
@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
               norm = make_real3(0, 1, 0);              
 #endif
 
-              cell_division<<<1, 192>>>(pCellInd, dCellInd, simState.devPtrs, sim_params, norm);
+              cell_division<<<1, 192>>>(pCellInd, dCellInd, simState.DeviceState(), sim_params, norm);
               CudaErrorCheck();
               simState.numDivisions[pCellInd] += 1;
               newCellInds.push_back(simState.no_of_cells);
@@ -421,11 +421,11 @@ int main(int argc, char *argv[])
           }
           if (divInds.size() > 0){
               simState.resetIndices.ReadIn(divInds.data(), divInds.size());
-              simState.resetIndices.ReadIn(newCellInds.start(), newCellinds.size(), 0, divInds.size());
+              simState.resetIndices.ReadIn(newCellInds.data(), newCellInds.size(), 0, divInds.size());
               
               CudaErrorCheck(); 
 
-              PressureReset <<<(2*divInds.size())/512 + 1, 512>>> (simState.devPtrs, sim_params); 
+              PressureReset <<<(2*divInds.size())/512 + 1, 512>>> (simState.DeviceState(), sim_params); 
               CudaErrorCheck();
               simState.no_new_cells = 0;
           }
@@ -433,22 +433,22 @@ int main(int argc, char *argv[])
         // --------------------------------------- End Cell Division -----------
       }
       
-      bounding_boxes<<<simState.no_of_cells,32>>>(simState.devPtrs);
+      bounding_boxes<<<simState.no_of_cells,32>>>(simState.DeviceState());
 
       CudaErrorCheck();
           
       long int reductionblocks = (simState.no_of_cells-1)/1024+1;
-      minmaxpre<<<reductionblocks,1024>>>(simState.devPtrs);
+      minmaxpre<<<reductionblocks,1024>>>(simState.DeviceState());
 
       CudaErrorCheck(); 
 
-      minmaxpost<<<1,1024>>>(simState.devPtrs);
+      minmaxpost<<<1,1024>>>(simState.DeviceState());
       
       CudaErrorCheck();
 
       simState.numOfNNList.Fill(0);
 
-      makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.devPtrs, sim_params);
+      makeNNlist<<<simState.no_of_cells/512+1,512>>>(simState.DeviceState(), sim_params);
 
       CudaErrorCheck();
 
@@ -470,7 +470,7 @@ int main(int argc, char *argv[])
           }
           
           CorrectCoMMotion<<<(simState.no_of_cells*192)/1024 + 1, 1024>>>
-              (simState.devPtrs, sysCOM);
+              (simState.DeviceState(), sysCOM);
           CudaErrorCheck(); 
       }
 
