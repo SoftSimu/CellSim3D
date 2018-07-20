@@ -52,3 +52,5 @@ __global__ void VelocityUpdateA(SimStatePtrs sim_state, sim_params_struct sim_pa
 __global__ void VelocityUpdateB(SimStatePtrs sim_state, sim_params_struct sim_params);
 
 __global__ void CalculateDisForce(SimStatePtrs sim_state, sim_params_struct sim_params);
+
+__global__ void SumForces(SimStatePtrs sim_state);

@@ -476,8 +476,15 @@ int main(int argc, char *argv[])
 
       if ( step%(sim_params.core_params.traj_write_int) == 0 ){
 
+          SumForces<<<(simState.no_of_cells*192)/1024 +1, 1024>>>
+              (simState.DeviceState());
+          CudaErrorCheck();
+
           simState.pos.CopyToHost();
           simState.vel.CopyToHost();
+          simState.conForce.CopyToHost();
+          simState.disForce.CopyToHost();
+          simState.ranForce.CopyToHost();
           simState.totForce.CopyToHost();
           simState.vol.CopyToHost();
           

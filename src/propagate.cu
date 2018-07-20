@@ -867,10 +867,7 @@ __global__ void CorrectCoMMotion(SimStatePtrs sim_state, real3 sysCM){
 }
 
 
-__global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
-                          R3Nptrs fList, 
-                          long int numNodes,
-                          SimStatePtrs sim_state){
+__global__ void SumForces(SimStatePtrs sim_state){
     __shared__ R3Nptrs conForce;
     __shared__ R3Nptrs disForce;
     __shared__ R3Nptrs ranForce;
