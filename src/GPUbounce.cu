@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
           }
 
           simState.cellShouldDiv.Fill(0, simState.no_of_cells);
-
+          std::vector<int> newCellInds;
           for (long int i = 0; i < divInds.size(); ++i){
               long int pCellInd = divInds[i];
               long int dCellInd = simState.no_of_cells;
@@ -416,14 +416,16 @@ int main(int argc, char *argv[])
               cell_division<<<1, 192>>>(pCellInd, dCellInd, simState.devPtrs, sim_params, norm);
               CudaErrorCheck();
               simState.numDivisions[pCellInd] += 1;
-              simState.no_of_cells += 1;
-              simState.no_new_cells += 1;
+              newCellInds.push_back(simState.no_of_cells);
+              simState.IncrementNumCellsBy(1);
           }
-          if (simState.no_new_cells > 0){
-              simState.resetIndices.ReadIn(&(divInds[0]), divInds.size());
+          if (divInds.size() > 0){
+              simState.resetIndices.ReadIn(divInds.data(), divInds.size());
+              simState.resetIndices.ReadIn(newCellInds.start(), newCellinds.size(), 0, divInds.size());
+              
               CudaErrorCheck(); 
 
-              PressureReset <<<(2*simState.no_new_cells)/512 + 1, 512>>> (simState.devPtrs, sim_params); 
+              PressureReset <<<(2*divInds.size())/512 + 1, 512>>> (simState.devPtrs, sim_params); 
               CudaErrorCheck();
               simState.no_new_cells = 0;
           }
