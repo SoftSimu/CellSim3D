@@ -9,8 +9,9 @@
 #include "State.cuh"
  
 struct SimState{ // contains state on gpu and cpu side
+private:
     SimStatePtrs devPtrs; // state to be given to the gpu
-
+public:
     // all of the below must be synchronized manually and separately
     SimList3D<real> posP;
     SimList3D<real> pos;
@@ -148,6 +149,11 @@ struct SimState{ // contains state on gpu and cpu side
         devPtrs.no_of_cells -= n; 
     }
 
+    const SimStatePtrs& GPUState(){
+        return devPtrs; 
+    }
+
+    
 };
 
 
