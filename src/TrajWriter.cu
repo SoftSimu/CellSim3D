@@ -440,6 +440,7 @@ void TrajWriter::WriteState(const SimState& state){
         if (detailLevel == EVERYTHING){
             //WriteStateVar(state.cellCoMs, "CoMs", -1, state.no_of_cells, frame_id);
             WriteStateVar(state.vol.hostPtr, "volumes", state.no_of_cells, frame_id);
+            WriteStateVar(state.sphericity.hostPtr, "sphericities", state.no_of_cells, frame_id);
         }
     } catch (const TrajException& e){
         std::cerr << "Trajectory exception in " << frameName

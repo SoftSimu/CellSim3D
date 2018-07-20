@@ -23,6 +23,7 @@ typedef struct{
     char* cellShouldDiv;
     real* boundingBoxes;
     real* pressures;
+    real* sphericity;
 
     R3Nptrs mins; 
     R3Nptrs maxs; 

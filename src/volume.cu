@@ -14,6 +14,7 @@ __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params){
     __shared__ real* CMy;
     __shared__ real* CMz;
     __shared__ real* vol; 
+    __shared__ real* psis; 
     __shared__ char* cell_div;
     __shared__ real div_vol;
     __shared__ bool check_sphericity;
@@ -47,6 +48,7 @@ __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params){
         check_sphericity = sim_params.core_params.check_sphericity;
         area_list = sim_state.areas;
         vol = sim_state.vol; 
+        psis = sim_state.sphericity; 
     }
     __syncthreads();
 
@@ -144,6 +146,7 @@ __global__ void volumes(SimStatePtrs sim_state, sim_params_struct sim_params){
             area_list[fullerene] = area;
             float c = cbrtf(volume);
             float psi = 4.835975862049408 * c * c/area;
+            psis[fullerene] = psi; 
             if (abs(1.0f - psi) > 0.05 || psi < 0 || psi > 1){ // why 0.05?
                 cell_div[fullerene] = 0;
                 //printf("cell %d division rejected\n", fullerene);

@@ -487,6 +487,7 @@ int main(int argc, char *argv[])
           simState.ranForce.CopyToHost();
           simState.totForce.CopyToHost();
           simState.vol.CopyToHost();
+          simState.sphericity.CopyToHost();
           
           TW.WriteState(simState);
       }

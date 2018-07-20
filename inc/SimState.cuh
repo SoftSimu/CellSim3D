@@ -26,6 +26,7 @@ public:
     SimList3D<real> cellCOMs;
     SimList1D<real> vol;
     SimList1D<real> areas;
+    SimList1D<real> sphericity;
     SimList1D<char> cellShouldDiv;
     SimList1D<real> boundingBoxes;
     SimList1D<real> pressures;
@@ -79,6 +80,7 @@ public:
         cellCOMs(sim_params.core_params.max_no_of_cells),
         vol(sim_params.core_params.max_no_of_cells),
         areas(sim_params.core_params.max_no_of_cells),
+        sphericity(sim_params.core_params.max_no_of_cells),
         cellShouldDiv(sim_params.core_params.max_no_of_cells),
         boundingBoxes(sim_params.core_params.max_no_of_cells*6),
         pressures(sim_params.core_params.max_no_of_cells),        
@@ -110,6 +112,7 @@ public:
         devPtrs.cellCOMs      = cellCOMs.devPtrs;
         devPtrs.vol           = vol.devPtr;
         devPtrs.areas         = areas.devPtr;
+        devPtrs.sphericity    = sphericity.devPtr;
         devPtrs.cellShouldDiv = cellShouldDiv.devPtr;
 
         devPtrs.boundingBoxes = boundingBoxes.devPtr;
@@ -126,15 +129,15 @@ public:
         devPtrs.nnList        = nnList.devPtr;
         devPtrs.numOfNNList   = numOfNNList.devPtr;
 
-        devPtrs.bondStiffness     = bondStiffness.devPtr;
+        devPtrs.bondStiffness = bondStiffness.devPtr;
 
         devPtrs.R0            = R0.devPtr;
-        devPtrs.theta0 = theta0.devPtr;
+        devPtrs.theta0        = theta0.devPtr;
 
-        devPtrs.resetIndices = resetIndices.devPtr;
+        devPtrs.resetIndices  = resetIndices.devPtr;
 
-        devPtrs.no_of_cells = no_of_cells;
-        devPtrs.no_new_cells = no_new_cells; 
+        devPtrs.no_of_cells   = no_of_cells;
+        devPtrs.no_new_cells  = no_new_cells; 
         
         sm = &sim_params; 
     }
