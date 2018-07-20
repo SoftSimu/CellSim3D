@@ -37,6 +37,12 @@ struct SimList1D: base_n{
         hostPtr = new T[n]; 
         h = hostPtr;
 
+        for (size_t i = 0; i < n; ++i){
+            h[i] = _val; 
+        }
+
+        CopyToDevice();
+
     } catch (const std::exception& e){
         std::cout << "Bad Memory Exception while trying to allocate "
                   << sizeof(T)*n/(1024*1024) << " GB." << std::endl;
