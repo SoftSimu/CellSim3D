@@ -1,131 +1,104 @@
-// Input configuration for celldiv
-// This file follows the json format with support for c-style comments
-
 {
-    // First we have the core parameters for the simulation
-    // The simulation cannot be run without these
-    // RESCALING
-    "version": 0.1,
-    "core_params": {
-        "max_no_of_cells": 100000,
-        "node_mass": 0.04,
-        "rep_range": 0.2,
-        "attr_range": 0.3,
-        "bond_stiff": 1000,
-        "rep_stiff": 100,
-        "attr_stiff": 0.5,
-        "stiff_factor1": 1.0,
-        "inter_membr_fric": 15.0,
+    "core": {
+        "MaxNoofC180s": 100000,
+        "particle_mass": 0.04,
+        "repulsion_range": 0.2,
+        "attraction_range": 0.3,
+        "repulsion_strength": 100.0,
+        "attraction_strength": 0.5,
+        "Youngs_mod": 1000,
+        "stiffFactor1": 1.0,
+        "viscotic_damping": 1,
         "internal_damping": 100.0,
-        "gamma_visc": 5,
+        "gamma_visc": 1.0,
         "division_Vol": 2.9,
+        //"division_Vol": 2.0,
         "random_z_offset?": 0,
-        "z_offset": 0.0,
-        "div_time_steps": 10000,
-        "delta_t": 0.0001,
-        "restart": 0,
-        "traj_write_int": 1,
-        "non_div_time_steps": 5000,
-        "traj_file_name": "example.hf5",
-        "bin_out": 1,
-        "max_pressure": 65.0,
-        "min_pressure": 50.0,
-        "growth_rate": 0.008,
-        "check_sphericity": 1,
-        "angle_pot": 1,
-        "phase_count": 200000,
-        "correct_com": 0
-    },
-
-    // currently unused...
-    "adaptive_params":{
-        "do_adaptive_dt": 0,
+        "z_offset": 0,
+        "div_time_steps": 50000,
+        "time_interval": 0.0001,
+        "Restart": 0,
+        "trajWriteInt": 1000,
+        "non_div_time_steps": 50000,
+        "trajFileName": "inp.xyz",
+        "binaryOutput": 1,
+        "maxPressure": 65.0,
+        "minPressure": 50.0,
+        "growth_rate": 0.002,
+        "checkSphericity": 1,
+        "constrainAngles": 1,
+        "doAdaptive_dt": 0,
         "dt_max": 1e-4,
-        "dt_tol": 1e-8
+        "dt_tol": 1e-8,
+        "phase_count": 2000000000,
+        "write_cont_force": 1,
+        "forces_file": "inp.csv",
+        "correct_com" : 0
     },
-
-    "angle_params":{
-        "angle_pot": 1,
-        "angle_stiffness":1000
-    },
-
-    // Now params related to cell counting
-    // In theory, these params are not needed for the simulation to run.
-    // But, for now, they must be in this file.
-    // They may become truly optional later...
-    "counting_params": {
-        "count_cells": 0,
-        "mit_index_file_name": "example.dat",
-        "count_int_cells_only": 0,
+    "counting": {
+        "countCells": 0,
+        "mit-index_file_name": "inp.dat",
+        "count_only_internal_cells?": 0,
         "radius_cutoff": 0.6,
         "overwrite_mit_ind_file?": 0,
         "cell_count_int": 1000
     },
 
-    // Params related to population modelling
-
     "population": {
-        "do_pop_model": 0,
-        "total_food": 5000.0,
+        "doPopModel": 0,
+        "totalFood": 5000.0,
         "regular_consumption": 2.0,
         "division_consumption": 10.0,
         "death_release_food": 10.0,
         "haylimit": 10,
-        "cell_life_time": 20000
+        "cellLifeTime": 20000
     },
 
-    // Wall modelling parameters
-    // deprecated and unused...
-    "wall_params": {
-        "use_walls": 0,
-        "perp_axis": "z",
-        "d_axis": 1.0,
-        "wall_len": 10.0,
-        "wall_width": 10.0,
-        "thresh_dist": 0.01
+    "walls": { // deprecated, use box params
+        "useWalls": 0,
+        "perpAxis": "z",
+        "dAxis": 1.1,
+        "wallLen": 10.0,
+        "wallWidth": 10.0,
+        "threshDist": 0.01
     },
 
-    // Division parameters
-    "div_params":{ // these params will make the division planes perpendicular
-                   // to the vector defined by the basis vector
-        "use_div_plane_basis": 0,
-        "div_plane_basis_X": 1,
-        "div_plane_basis_Y": 1,
-        "div_Plane_basis_Z": 1
+    "divParams":{
+        "useDivPlaneBasis": 0,
+        "divPlaneBasisX": 0,
+        "divPlaneBasisY": 0,
+        "divPlaneBasisZ": 1
     },
 
-    // Stiffness parameters
-    "stiffness_params":{
-       "use_diff_stiff": 0, // below values must be changed if this is 1
-        "soft_stiff_factor": 0.8,
-        "num_softer_cells": 0, // Don't use this param, it really sucks
-                                  // fractionOfSofterCells is 10x better
-        "frac_softer_cells": -1, // if this is > 0, numberOfSofterCells ignored
-        "daught_same_stiffness": 1,
-        "during_growth": 0, // If this is true, everything below is ignored
-        "closeness_to_center": 0, // cells within R*(1-ctc) will be softened, ctc=0.9 means very close
-        "start_at_pop": 2000,
-        "ran_cell_ind": 0, // if this is one, closenessToCenter is ignored
+    "stiffnessParams":{
+        "useDifferentStiffnesses": 0,
+        "softStiffFactor": 0.8,
+        "numberOfSofterCells": 0,
+        "fractionOfSofterCells": 0.3,
+        "duringGrowth": 1,
+        "daughtSameStiffness": 1,
+        "closenessToCenter": 0,
+        "startAtPop": 2000,
+        "chooseRandomCellIndices": 0,
         "recalc_r0": 0
     },
 
-    // Rigid box parameters
-    "box_params":{
-        "use_rigid_sim_box": 0,
-        "use_pbc": 0,
-        "pbc_ax": "x",
-        "box_len": 6.0,
-        "box_len_x": 20.0,
-        "box_len_y": 20.0,
-        "box_len_z": 20.0,
-        "flatbox": 0,
+    "boxParams":{
+        "useRigidSimulationBox": 1,
+        "usePBCs": 0, // unavailable
+        "pbcAx": "x", // unavailable
+        "boxLength": 6.0, // deprecated
+        "box_len_x": 500.0,
+        "box_len_y": 500.0,
+        "box_len_z": 2.0,
+        "flatbox": 1,
         "dom_len": 1.5,
         "rand_pos": 0
     },
 
     "rand_params":{
         "add_rands": 0,
-        "rand_seed": -1, // Use time if < 0
+        "rand_seed": -1, // use time if < 0
         "rand_dist": 0, /*
                           0 - uniform (default)
                           Others to be impimented
