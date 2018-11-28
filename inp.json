@@ -1,6 +1,6 @@
 {
     "core": {
-        "MaxNoofC180s": 100000,
+        "MaxNoofC180s": 10000,
         "particle_mass": 0.04,
         "repulsion_range": 0.2,
         "attraction_range": 0.3,
