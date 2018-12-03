@@ -106,5 +106,5 @@ higher. Uses the scene set in CellDiv.blend
 Learn more by running
 
 ~~~bash
-  blender -b CellDiv_flat.blend -P scripts/render.py -- --help
+  blender -b CellDiv.blend -P scripts/render.py -- --help
 ~~~
