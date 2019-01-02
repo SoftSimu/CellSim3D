@@ -18,7 +18,12 @@ ap.add_argument("traj", help="trajectory file name",
 
 args = ap.parse_args()
 trajFile = os.path.abspath(args.traj)
-outputFile = os.path.splitext(trajFile)[0] + "_nn.dat"
+fileName, ext = os.path.splitext(trajFile)
+try:
+    os.makedirs(fileName)
+except:
+    pass
+outputFile = fileName + "/" + fileName.split("/")[-1] + "_nn.dat"
 
 
 
