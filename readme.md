@@ -1,3 +1,5 @@
+![Alt Text](https://github.com/SoftSimu/CellSim3D/raw/master/images/mov.gif)
+
 # CellSim3D
 Welcome to the CellSim3D repository. CellSim3D is a software package to simulate the mechanistic aspects of cell division in three dimensions. The code is written in C/C++ and CUDA.
 
@@ -104,5 +106,5 @@ higher. Uses the scene set in CellDiv.blend
 Learn more by running
 
 ~~~bash
-  blender -b CellDiv_flat.blend -P scripts/render.py -- --help
+  blender -b CellDiv.blend -P scripts/render.py -- --help
 ~~~
