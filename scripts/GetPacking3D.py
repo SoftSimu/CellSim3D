@@ -34,6 +34,10 @@ parser.add_argument("--endat", type=int,
                     help="time step to stop processing at")
 parser.add_argument("-k", "--skip", type=int, required=False,
                     help="Frame skip rate")
+
+parser.add_argument("-f", "--flat", type=bool,
+                    help="Flag that enables analysis of epithelia",
+                    default=False, required=False)
 args = parser.parse_args()
 
 trajPaths = [os.path.abspath(p) for p in args.traj]
@@ -91,6 +95,9 @@ def measurePacking(filePath, storePath, name=None):
                 CoMs = np.array([np.mean(cell, axis=0) for cell in frame])
                 sysCoM = np.mean(CoMs, axis=0)
                 CoMs -= sysCoM
+
+                if args.flat == True:
+                    CoMs = CoMs[:, 0:2]
 
                 print("Doing Del of", CoMs.shape[0], "cells at step", step)
                 try:
