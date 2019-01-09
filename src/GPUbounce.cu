@@ -523,7 +523,8 @@ int main(int argc, char *argv[])
   thrust::device_vector<float> d_volumeV(MaxNoofC180s);
   thrust::host_vector<float> h_volume(MaxNoofC180s);
   thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
-  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]); 
+  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]);
+  volume = thrust::raw_pointer_cast(&h_volume[0]);
 
 
   // thrust::device_vector<float> d_R0V(MaxNoofC180s);
@@ -974,12 +975,6 @@ int main(int argc, char *argv[])
 
   // cudaMemcpy(d_X, X, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
 
-  for (int i = 0; i < 192*No_of_C180s; ++i){
-      tempX[i] = 10;
-  }
-
-  cudaMemcpy(d_velListX, tempX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-
   CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      d_X,  d_Y,  d_Z,
                                                      d_CMx, d_CMy, d_CMz,
@@ -1037,7 +1032,7 @@ int main(int argc, char *argv[])
   }
 
   if (write_cont_force){
-      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V,X,Y,Z,P\n");
+      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V,X,Y,Z,P,Vol\n");
       
       cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -1047,6 +1042,8 @@ int main(int argc, char *argv[])
       cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       writeForces(forceFile, 0, No_of_C180s);
   }
 
@@ -1471,7 +1468,8 @@ int main(int argc, char *argv[])
               cudaMemcpy(Z, d_Z, 192*No_of_C180s, cudaMemcpyDeviceToHost);
               
               cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-
+              cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+                    
               writeForces(forceFile, step, No_of_C180s);
           }
       }
@@ -2574,7 +2572,7 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
 
     for (int c =0; c < num_cells; ++c){
         for (int n = 0; n < 180; ++n){
-            fprintf(forceFile, "%d,%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+            fprintf(forceFile, "%d,%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
                     t_step, num_cells, c, n, c*192+n,
                     h_contactForces.x[c*192 + n],
                     h_contactForces.y[c*192 + n],
@@ -2591,7 +2589,8 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
                     X[c*192+n],
                     Y[c*192+n],
                     Z[c*192+n],
-                    pressList[c]
+                    pressList[c],
+                    volume[c]
                 );
                         
         }
