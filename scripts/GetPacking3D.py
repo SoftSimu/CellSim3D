@@ -66,7 +66,7 @@ def measurePacking(filePath, storePath, name=None):
     except:
         pass
 
-    dataPath = storePath + "data.dat"
+    dataPath = storePath + "data_best.dat"
     # Now read trajectory file and get the centre of masses of
     # all cells at every time step
     if os.path.isfile(dataPath):
@@ -90,6 +90,8 @@ def measurePacking(filePath, storePath, name=None):
                 break
 
             nCells = len(frame)
+
+            frame = [cell[:180] for cell in frame]
 
             if nCells > 3:
                 CoMs = np.array([np.mean(cell, axis=0) for cell in frame])
@@ -120,105 +122,5 @@ def measurePacking(filePath, storePath, name=None):
 
     return dataPath
 
-fig, ax = plt.subplots()
-figll, axll = plt.subplots()
-im = []
-cm = plt.get_cmap('inferno')
-
-def logNormal(x, s):
-    return 1/(s*x*np.sqrt(2*np.pi) * np.exp(-0.5*(np.log(x)/s)**2))
-
-def fitfunc(x, m, f, mi, c, d):
-    return m*np.exp(-1 * ( (np.log(x + f*mi) - c)**2)/d)
-
-
-mmax = 0
-def fitPacking(dataPath, col , interval=10):
-    """Function to fit the resulting distribution of the packing. Assumes
-    that interval of 10 timesteps is enough.
-    """
-
-    if not os.path.isfile(dataPath):
-        print("Something went wrong with {0}, rerun".format(filePath))
-        return
-
-    # code for fitting the resulting distribution
-
-    # First get the average it st devs
-    data = []
-    with open(dataPath, "r") as dFile:
-        data = list(csv.reader(dFile))[(-1*interval):]
-
-    data = [[float(v) for v in l] for l in data]
-    maxLen = max([len(l) for l in data])
-
-    for l in data:
-        if len(l) < maxLen:
-            for i in range(maxLen - len(l)):
-                l.append(0)
-
-    data = np.vstack(data)
-    mean = np.mean(data, axis=0)
-    stddev = np.std(data, axis=0)
-    y = mean
-    x = np.arange(y.shape[0])
-    m = y.max()
-    mi = np.argmax(m)
-    f = 0.3
-    c = 2.7
-    d = 0.04
-
-    global mmax
-    mmax = y.max()
-    guesses = np.array([m, f, mi, c, d])
-
-    p, pcov = curve_fit(fitfunc, xdata = x,
-                        ydata = y, p0=guesses)
-
-    xx = np.linspace(0, x.max(), 100)
-
-    m, f, mi, c, d = p
-    fit = fitfunc(xx, m, f, mi, c, d)
-
-    #ax.errorbar(x, y, yerr=stddev, fmt='.', color=cm(col), alpha=0.6)
-    ax.plot(x, y,'.', lw = 2.5, color=cm(col), alpha=0.6)
-
-    # This line is hard to read. Honestly I don't see why any one would want
-    # to read it. So I'll leave it as it is. It is just latex markup combined
-    # with str.format and the fact that everything has to be escaped.
-    l = "${max:.2f} \\times \\exp{{ \\left[ -\\frac{{1}}{{{den:.2f}}} \\left[ \ln\\left(n + {fmaxi:0.2f}\\right) - {cunt:0.2f}\\right]^2 \\right] }}$".format(max=m, fmaxi=f*mi, cunt=c, den=d)
-
-
-    ax.plot(xx, fit, '-', label=l, lw=1.5, color=cm(col), alpha=0.6)
-
-    axll.semilogy(x, y, '.', lw=1.5, color=cm(col), alpha=0.6)
-    axll.semilogy(xx, fit, '-', label=l, lw=1.5, color=cm(col), alpha=0.6)
-
-
-
-
-
 for i in range(len(trajPaths)):
-    fitPacking(dataPath = measurePacking(trajPaths[i], storePaths[i]), col= i*1.0/len(trajPaths), interval=20)
-
-
-ax.set_xlabel("n")
-ax.set_ylabel("fraction")
-y = np.linspace(0, 1.1*mmax, 1000)
-x = 12*np.ones(1000)
-ax.plot(x, y, 'g-', lw=3.0, label="$n=12$")
-
-axll.set_xlabel("n")
-axll.set_ylabel("fraction")
-axll.set_ylim(1e-8, 1)
-
-h, l = ax.get_legend_handles_labels()
-fig.legend(h, l)
-fig.set_size_inches(10,5)
-
-figll.set_size_inches(10, 5)
-h, l = axll.get_legend_handles_labels()
-figll.legend(h, l)
-
-fig.savefig("fit.png")
-figll.savefig("llfit.png")
+    measurePacking(trajPaths[i], storePaths[i])
