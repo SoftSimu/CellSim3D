@@ -6,7 +6,7 @@ ibis==1.6.0
 ipython==6.1.0
 ipython-genutils==0.2.0
 jedi==0.10.2
-Jinja2==2.9.6
+Jinja2>=2.10.0
 MarkupSafe==1.0
 matplotlib==2.0.2
 numpy==1.13.1
