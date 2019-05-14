@@ -5,7 +5,9 @@ import os
 import argparse
 import numpy as np
 
-sys.path.append("/home/pranav/dev/celldiv/scripts")
+#Default: violet stiff (healthy), orange soft (ill)
+
+sys.path.append("/Users/Torsa_Legend/Desktop/ROBE TESI/Progr/scripts")
 import celldiv
 
 
@@ -61,6 +63,10 @@ parser.add_argument("-r", "--res", type=int, default=1, required=False,
 parser.add_argument("-cc", "--cell-color", type=int, nargs=3, required=False,
                     default=[72, 38, 153],
                     help="RGB values of cell color. From 0 to 255")
+                    
+parser.add_argument("-sc", "--softcell-color", type=int, nargs=3, required=False,
+                    default=[153, 72, 38],
+                    help="RGB values of color of cells with different stiffness, if present. From 0 to 255")
 
 parser.add_argument("-bc", "--background-color", type=int, nargs=3,
                     required=False, default=[255,255,255],
@@ -120,20 +126,36 @@ if len(args.inds) > 0:
 
 stopAt = args.num_frames
 
-# Set material color
-bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cell_color]
-bpy.data.materials['Material'].specular_intensity = args.specular_intensity
+bpy.context.scene.objects.active = bpy.data.objects['Cube']
+bpy.ops.object.delete() 
+
+lamp = bpy.data.lamps['Lamp']
+lamp.energy = 5  # 10 is the max value for energy
+lamp.type = 'SUN'  # in ['POINT', 'SUN', 'SPOT', 'HEMI', 'AREA']
+lamp.distance = 100
+
+#mio
+math = bpy.data.materials.new("hm")
+math.diffuse_color = [ (1.0/255.0)*c for c in args.cell_color] # it was (1.0/255.0)*c
+math.specular_intensity = args.specular_intensity
+
+mats = bpy.data.materials.new("sm")
+mats.diffuse_color = [ (1.0/255.0)*c for c in args.softcell_color]
+mats.specular_intensity = args.specular_intensity
+
+
+
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     try:
         for i in range(int(th.maxFrames/nSkip)):
-
+            
             frameCount += 1
             if frameCount > args.num_frames:
                 break
 
             f = th.ReadFrame(inc=nSkip)
-
+            
             if len(f) < minInd+1:
                 print("Only ", len(f), "cells in frame ", th.currFrameNum,
                       " skipping...")
@@ -142,21 +164,49 @@ with celldiv.TrajHandle(filename) as th:
             if len(args.inds) > 0:
                 f = [f[a] for a in args.inds]
 
-            f = np.vstack(f)
-            # adjust to CoM
-            f -= np.mean(f, axis=0)
-            faces = []
-            for mi in range(int(len(f)/192)):
+            f0=[]
+            f1=[]
+            if sum(th.currTypes) > 0.1: #there is at least one cell with nonzero index
+                for cc in range(len(th.currTypes)):
+                   if (th.currTypes[cc]):
+                      f1.append(f[cc])
+                   else:
+                      f0.append(f[cc])
+            
+           
+            if len(f0) > 0:
+              f=f0
+              f = np.vstack(f)   
+              faces = []
+              for mi in range(int(len(f)/192)):
                 for row in firstfaces:
                     faces.append([(v+mi*192) for v in row])
+              mesh = bpy.data.meshes.new('cellMesh')
+              ob0 = bpy.data.objects.new('cellObject', mesh)
+              mat0 = bpy.data.materials['hm']
+              ob0.data.materials.append(mat0)
+               
+              bpy.context.scene.objects.link(ob0)
+              mesh.from_pydata(f, [], faces)
+              mesh.update()
 
-
-            mesh = bpy.data.meshes.new('cellMesh')
-            ob = bpy.data.objects.new('cellObject', mesh)
-
-            bpy.context.scene.objects.link(ob)
-            mesh.from_pydata(f, [], faces)
-            mesh.update()
+            
+            #Soft cells
+            if len(f1) > 0:
+              f=f1
+              f = np.vstack(f)
+              faces = []
+              for mi in range(int(len(f)/192)):
+                for row in firstfaces:
+                    faces.append([(v+mi*192) for v in row])        
+              mesh1 = bpy.data.meshes.new('scellMesh')
+              ob1 = bpy.data.objects.new('scellObject', mesh1)
+              mat1 = bpy.data.materials['sm']
+              ob1.data.materials.append(mat1)
+              
+              bpy.context.scene.objects.link(ob1)
+              mesh1.from_pydata(f, [], faces)
+              mesh1.update()
 
             if doSmooth:
                 bpy.ops.object.select_by_type(type='MESH')
@@ -165,16 +215,32 @@ with celldiv.TrajHandle(filename) as th:
                 bpy.ops.mesh.normals_make_consistent(inside=False)
                 bpy.ops.object.editmode_toggle()
                 bpy.ops.object.shade_smooth()
-                bpy.context.scene.objects.active = bpy.data.objects['Cube']
-                bpy.ops.object.make_links_data(type='MATERIAL')             # copy material from Cube
+                
+                bpy.ops.object.select_by_type(type='MESH')
+                bpy.context.scene.objects.active = bpy.data.objects['scellObject']
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.mesh.normals_make_consistent(inside=False)
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.shade_smooth()
+                                
                 bpy.context.scene.objects.active = bpy.data.objects['cellObject']
                 bpy.ops.object.select_all(action='TOGGLE')
                 bpy.ops.object.modifier_add(type='SUBSURF')
+                
+                bpy.context.scene.objects.active = bpy.data.objects['scellObject']
+                bpy.ops.object.select_all(action='TOGGLE')
+                bpy.ops.object.modifier_add(type='SUBSURF')
+                
+
 
             bpy.ops.object.select_by_type(type='MESH')
             bpy.context.scene.objects.active = bpy.data.objects['cellObject']
-            bpy.context.scene.objects.active = bpy.data.objects['Cube']
-            bpy.ops.object.make_links_data(type='MATERIAL')
+            
+            bpy.context.scene.objects.active = bpy.data.objects['scellObject']
+
+            #mia
+            bpy.ops.view3d.camera_to_view_selected()
+            
             bpy.ops.object.select_all(action='TOGGLE')
 
             imagename = basename + "%d.png" % frameCount
@@ -183,7 +249,11 @@ with celldiv.TrajHandle(filename) as th:
             bpy.ops.render.render(write_still=True)  # render to file
 
             bpy.ops.object.select_pattern(pattern='cellObject')
-            bpy.ops.object.delete()                                     # delete mesh...
+            bpy.ops.object.delete()                  # delete mesh...
+            
+            #roba mia
+            bpy.ops.object.select_pattern(pattern='scellObject')
+            bpy.ops.object.delete()  
 
 
     except celldiv.IncompleteTrajectoryError:
