@@ -136,7 +136,7 @@ lamp.distance = 100
 
 #mio
 math = bpy.data.materials.new("hm")
-math.diffuse_color = [ (1.0/255.0)*c for c in args.cell_color] # it was (1.0/255.0)*c
+math.diffuse_color = [ (1.0/255.0)*c for c in args.cell_color] 
 math.specular_intensity = args.specular_intensity
 
 mats = bpy.data.materials.new("sm")
@@ -238,7 +238,7 @@ with celldiv.TrajHandle(filename) as th:
             
             bpy.context.scene.objects.active = bpy.data.objects['scellObject']
 
-            #mia
+
             bpy.ops.view3d.camera_to_view_selected()
             
             bpy.ops.object.select_all(action='TOGGLE')
@@ -251,7 +251,6 @@ with celldiv.TrajHandle(filename) as th:
             bpy.ops.object.select_pattern(pattern='cellObject')
             bpy.ops.object.delete()                  # delete mesh...
             
-            #roba mia
             bpy.ops.object.select_pattern(pattern='scellObject')
             bpy.ops.object.delete()  
 
