@@ -12,6 +12,8 @@ linkObjects = $(patsubst %, $(objDir)%, $(objects))
 eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand
 opt = -O3
 
+CELLSIM3D_ROOT = $(PWD)
+
 debug: opt= -O0
 debug: oflags += $(debug)
 debug: eflags += $(debug)
@@ -51,8 +53,12 @@ $(objDir)BondKernels.o : src/BondKernels.cu
 $(objDir)GPUbounce.o : src/GPUbounce.cu
 	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
 
-CellDiv: $(linkObjects) $(objDir)jsoncpp.o
+CellDiv: $(linkObjects)
 	$(compiler) $(eflags)
+	echo "export PYTHONPATH=${CELLSIM3D_ROOT}/scripts/:${PYTHONPATH}" > $(objDir)CellSim3D.rc
+	echo "export PATH=${CELLSIM3D_ROOT}/bin:${PATH}" >> $(objDir)CellSim3D.rc
+	echo "${CELLSIM3D_ROOT}"
+
 
 # Third party libraries
 $(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h

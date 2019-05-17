@@ -5,9 +5,7 @@ import os
 import argparse
 import numpy as np
 
-sys.path.append("/home/pranav/dev/celldiv/scripts")
 import celldiv
-
 
 argv = sys.argv
 
@@ -70,14 +68,17 @@ parser.add_argument("-si", "--specular-intensity", type=float, required=False,
                     default = 0.0,
                     help="Set specular-intensity (shininess). From 0.0 to 1.0")
 
+parser.add_argument("--only-frame", type=int, required=False, default = -1,
+                    help="Only render this frame.")
+
 args = parser.parse_args(argv)
 
 imageindex = 0
 firstfaces = []
 bpy.data.worlds["World"].horizon_color=[ (1.0/255.0)*c for c in args.background_color]
 
-bpy.data.scenes["Scene"].render.alpha_mode='SKY'
-
+bpy.data.scenes["Scene"].render.alpha_mode='TRANSPARENT'
+bpy.data.scenes["Scene"].render.image_settings.color_mode="RGBA"
 doSmooth = args.smooth
 if doSmooth:
     print("Doing smoothing. Consider avoiding this feature...")
@@ -121,16 +122,20 @@ if len(args.inds) > 0:
 stopAt = args.num_frames
 
 # Set material color
-bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cell_color]
+#bpy.data.materials['Material'].diffuse_color = [ (1/255.0) * c for c in args.cell_color]
 bpy.data.materials['Material'].specular_intensity = args.specular_intensity
+
 with celldiv.TrajHandle(filename) as th:
     frameCount = 1
     try:
         for i in range(int(th.maxFrames/nSkip)):
 
-            frameCount += 1
             if frameCount > args.num_frames:
                 break
+
+            if i <= args.only_frame:
+                print("Not there yet")
+                continue
 
             f = th.ReadFrame(inc=nSkip)
 
@@ -142,13 +147,15 @@ with celldiv.TrajHandle(filename) as th:
             if len(args.inds) > 0:
                 f = [f[a] for a in args.inds]
 
-            f = np.vstack(f)
+            f = np.vstack([c[:180] for c in f])
+
             # adjust to CoM
             f -= np.mean(f, axis=0)
+
             faces = []
-            for mi in range(int(len(f)/192)):
+            for mi in range(int(len(f)/180)):
                 for row in firstfaces:
-                    faces.append([(v+mi*192) for v in row])
+                    faces.append([(v+mi*180) for v in row])
 
 
             mesh = bpy.data.meshes.new('cellMesh')
@@ -166,7 +173,7 @@ with celldiv.TrajHandle(filename) as th:
                 bpy.ops.object.editmode_toggle()
                 bpy.ops.object.shade_smooth()
                 bpy.context.scene.objects.active = bpy.data.objects['Cube']
-                bpy.ops.object.make_links_data(type='MATERIAL')             # copy material from Cube
+                bpy.ops.object.make_links_data(type='Material')             # copy material from Cube
                 bpy.context.scene.objects.active = bpy.data.objects['cellObject']
                 bpy.ops.object.select_all(action='TOGGLE')
                 bpy.ops.object.modifier_add(type='SUBSURF')
@@ -177,6 +184,13 @@ with celldiv.TrajHandle(filename) as th:
             bpy.ops.object.make_links_data(type='MATERIAL')
             bpy.ops.object.select_all(action='TOGGLE')
 
+            # for p in f:
+            #     bpy.ops.mesh.primitive_uv_sphere_add(location=list(p), size=0.01)
+            #     bpy.context.scene.objects.active = bpy.data.objects['Cube']
+            #     bpy.ops.object.make_links_data(type='MATERIAL')
+            #     bpy.ops.object.select_all(action='TOGGLE')
+
+
             imagename = basename + "%d.png" % frameCount
             bpy.context.scene.render.filepath = imagename
 
@@ -184,7 +198,7 @@ with celldiv.TrajHandle(filename) as th:
 
             bpy.ops.object.select_pattern(pattern='cellObject')
             bpy.ops.object.delete()                                     # delete mesh...
-
+            frameCount += 1
 
     except celldiv.IncompleteTrajectoryError:
         print ("Stopping...")
