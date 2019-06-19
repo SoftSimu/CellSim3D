@@ -18,6 +18,7 @@ args = parser.parse_args()
 
 trajPath = os.path.abspath(args.traj)
 
+filler = "C  0.0  0.0  0.0\n"
 
 def GetMaxPart():
     print("Scanning trajectory for parameters...")
@@ -30,7 +31,8 @@ def GetMaxPart():
 def WriteFrame(frame, n):
     nP = len(frame)*180
     outHandle.write("%d\n" % n)
-    outHandle.write("%d, t = %d\n" % (nP, th.currFrameNum))
+    #outHandle.write("%d, t = %d\n" % (nP, th.currFrameNum))
+    outHandle.write("{} cells {} particles, t={}".format(len(frame), nP, th.currFrameNum))
     CoM = np.mean(np.vstack(frame), axis=0)
     for c in frame:
         c = c[:-12] - CoM
@@ -44,7 +46,7 @@ def WriteFrame(frame, n):
                 outHandle.write(filler)
 
 n = GetMaxPart()
-filler = "C  0.0  0.0  0.0\n"
+
 with cd.TrajHandle(trajPath) as th, open(args.out, "w") as outHandle:
     if args.frame != -1:
         frame = th.ReadFrame(frameNum=args.frame)

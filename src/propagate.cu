@@ -322,6 +322,12 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         gForce = 3*Pressure*calcUnitVec(r_CM);
 
+        float3 nodePos = r_CM;
+
+        float3 p = make_float3(0.f, 1.f, 0.f); 
+
+        gForce = gForce + 300*p*dot(nodePos, p);
+
         //gForce = -10*(volList[rank] - div_vol)*calcUnitVec(r_CM);
         //gForce = -10*(mag(r_CM) - r_CM_o)*calcUnitVec(r_CM);
         
@@ -786,3 +792,45 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
         fList.z[idx] = fConList.z[idx] + fDisList.z[idx] + fRanList.z[idx];
     }
 }
+
+__global__ void CalcMigForce(R3Nptrs fMigList, R3Nptrs cellPosList, long int numCells,
+                             R3Nptrs cellPolList, R3Nptrs cellCMList){
+    size_t cellIdx = blockIdx.x;
+    size_t nodeIdx = threadIdx.x;
+    size_t globalNodeIdx = cellIdx*192 + nodeIdx;
+
+    float3 cellPolarity = make_float3(cellPolList.x[cellIdx],
+                                      cellPolList.y[cellIdx],
+                                      cellPolList.z[cellIdx]);
+
+    float3 cellCM = make_float3(cellCMList.x[cellIdx],
+                                cellCMList.y[cellIdx],
+                                cellCMList.z[cellIdx]);
+    
+    float3 migForce = make_float3(0.f, 0.f, 0.f); 
+
+    if (nodeIdx < 180){
+        float3 r_CM = make_float3(cellPosList.x[cellIdx],
+                                  cellPosList.y[cellIdx],
+                                  cellPosList.z[cellIdx]) - cellCM;
+        
+        migForce = 500*(1 + dot(r_CM, cellPolarity))*calcUnitVec(r_CM);
+        //print_float3(migForce);
+    }
+
+    fMigList.x[globalNodeIdx] = migForce.x; 
+    fMigList.y[globalNodeIdx] = migForce.y; 
+    fMigList.z[globalNodeIdx] = migForce.z;
+    
+}
+
+
+__global__ void AddMigForce(R3Nptrs fMigList, R3Nptrs fConList, long int numNodes){
+    size_t idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < numNodes){
+        fConList.x[idx] += fMigList.x[idx];
+        fConList.y[idx] += fMigList.y[idx];
+        fConList.z[idx] += fMigList.z[idx];
+    }
+}
+

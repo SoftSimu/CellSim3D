@@ -30,20 +30,31 @@ class Visualizer(object):
 
     def DisplayFrame(self, frameNum: int = None, inc: int = None) -> None:
         if self.pF != frameNum:
-            bpy.ops.object.select_pattern(pattern='cellObj%d' % self.ind)
+            bpy.ops.object.select_pattern(pattern='cellObj')
             bpy.ops.object.delete()
-        fr = self.th.ReadFrame(frameNum).tolist()
+        fr = self.th.ReadFrame(frameNum)
+        fr = np.vstack(fr)
+        fr -= np.mean(fr, axis=0)
+
         f = []
         for c in range(int(len(fr)/192)):
             for r in self.firstfaces:
                 f.append([(v + c*192) for v in r])
 
 
-        mesh = bpy.data.meshes.new("cellMesh%d" % self.ind)
-        ob = bpy.data.objects.new("cellObj%d" % self.ind, mesh)
+        mesh = bpy.data.meshes.new('cellMesh')
+        ob = bpy.data.objects.new('cellObject', mesh)
+
         bpy.context.scene.objects.link(ob)
         mesh.from_pydata(fr, [], f)
         mesh.update()
+
+        bpy.ops.object.select_by_type(type='MESH')
+        bpy.context.scene.objects.active = bpy.data.objects['cellObject']
+        #bpy.context.scene.objects.active = bpy.data.objects['Cube']
+        bpy.ops.object.make_links_data(type='MATERIAL')
+        bpy.ops.object.select_all(action='TOGGLE')
+
         self.pF = self.th.currFrameNum
 
     def close(self):

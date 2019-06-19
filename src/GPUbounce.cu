@@ -1,6 +1,6 @@
 //#define FORCE_DEBUG
 //#define PRINT_VOLUMES
-//#define TURNOFF_RAN
+#define TURNOFF_RAN
 //#define DEBUG_RAND
 //#define OUTPUT_ADP_ERROR
 //#degine RO_DEBUG
@@ -204,7 +204,11 @@ float *d_XMM, *d_YMM, *d_ZMM;
 
 R3Nptrs d_fConList;
 R3Nptrs d_fDisList;
-R3Nptrs d_fRanList; 
+R3Nptrs d_fRanList;
+R3Nptrs d_fMigList;
+R3Nptrs d_cellPosList;
+
+R3Nptrs d_cellPolList; 
 
 R3Nptrs d_contactForces;
 R3Nptrs h_contactForces;
@@ -239,6 +243,8 @@ float *d_CMx, *d_CMy, *d_CMz;
 float *CMx, *CMy, *CMz;
 float sysCMx = 1.0, sysCMy = 1.0, sysCMz = 1.0;
 float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0;
+
+R3Nptrs d_cellCMList; 
 
 //float Pressure;          // pressure
 //float Temperature;       // equation of state relates Pressure and Temperature
@@ -413,7 +419,21 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
-  
+  if ( cudaSuccess != cudaMalloc((void **)&d_fMigList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_fMigList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_fMigList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_cellPolList.x, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_cellPolList.y, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_cellPolList.z, MaxNoofC180s*sizeof(float))) return -1;
+
+
+  d_cellPosList.x = d_X; 
+  d_cellPosList.y = d_Y; 
+  d_cellPosList.z = d_Z;
+
+  d_cellCMList.x = d_CMx; 
+  d_cellCMList.y = d_CMy; 
+  d_cellCMList.z = d_CMz; 
 
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
   cudaMemset(d_C180_sign, 0, 180*sizeof(int));
@@ -462,6 +482,20 @@ int main(int argc, char *argv[])
   cudaMemset(d_fRanList.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.z, 0, 192*MaxNoofC180s*sizeof(float));
+
+  cudaMemset(d_fMigList.x, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_fMigList.y, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_fMigList.z, 0, 192*MaxNoofC180s*sizeof(float));
+
+  cudaMemset(d_cellPolList.x, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_cellPolList.y, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_cellPolList.z, 0, MaxNoofC180s*sizeof(float));
+
+  thrust::host_vector<float> h_Ypol(MaxNoofC180s);
+  thrust::fill(h_Ypol.begin(), h_Ypol.end(), 1.f);
+
+  if (cudaSuccess != cudaMemcpy(d_cellPolList.y, thrust::raw_pointer_cast(&h_Ypol[0]), MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
+
 
   cudaMemset(d_area, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
@@ -1426,6 +1460,22 @@ int main(int argc, char *argv[])
               printf("\b\b softer\n"); 
           }
 
+          // Start migrating biatch
+          
+          
+      }
+
+      if (growthDone){
+          if (step%1000==0){
+              cudaMemset(d_fMigList.x, 0, 192*No_of_C180s);
+              cudaMemset(d_fMigList.y, 0, 192*No_of_C180s);
+              cudaMemset(d_fMigList.z, 0, 192*No_of_C180s);
+
+              CalcMigForce<<<No_of_C180s, 192>>>(d_fMigList, d_cellPosList, No_of_C180s, d_cellPolList, d_cellCMList);
+          }
+
+          // Add migration force...
+          AddMigForce<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_fMigList, d_fConList, No_of_C180s*192);
       }
 
       if (correct_com == true){

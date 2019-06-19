@@ -109,7 +109,7 @@ __host__ __device__ inline float3 calcUnitVec(const float3 a){
 }
 
 __host__ __device__ inline void print_float3(float3 a){
-    printf("(%f, %f, %f)", a.x, a.y, a.z);
+    printf("(%f, %f, %f)\n", a.x, a.y, a.z);
 }
 
 __host__ __device__ inline bool good_float3(float3 a){

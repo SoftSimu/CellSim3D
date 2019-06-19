@@ -149,3 +149,8 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
                                   R3Nptrs d_fRanList);
+
+__global__ void CalcMigForce(R3Nptrs fMigList, R3Nptrs cellPosList, long int numCells,
+                             R3Nptrs cellPolList, R3Nptrs cellCMList);
+
+__global__ void AddMigForce(R3Nptrs fMigList, R3Nptrs fConList, long int numNodes);

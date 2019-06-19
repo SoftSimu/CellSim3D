@@ -75,9 +75,10 @@ args = parser.parse_args(argv)
 
 imageindex = 0
 firstfaces = []
-bpy.data.worlds["World"].horizon_color=[ (1.0/255.0)*c for c in args.background_color]
+#bpy.data.worlds["World"].horizon_color=[ c/256.0 for c in args.background_color]
+#bpy.data.worlds["World"].horizon_color="{}{}{}".format(args.background_color[0], args.background_color[1], args.background_color[2])
 
-bpy.data.scenes["Scene"].render.alpha_mode='TRANSPARENT'
+#bpy.data.scenes["Scene"].render.alpha_mode='TRANSPARENT'
 bpy.data.scenes["Scene"].render.image_settings.color_mode="RGBA"
 doSmooth = args.smooth
 if doSmooth:
@@ -190,11 +191,23 @@ with celldiv.TrajHandle(filename) as th:
             #     bpy.ops.object.make_links_data(type='MATERIAL')
             #     bpy.ops.object.select_all(action='TOGGLE')
 
+            bpy.ops.object.constraint_add(type="TRACK_TO")
+            bpy.context.object.constraints["Track To"].target = bpy.data.objects["cellObject"]
+
+            bpy.context.object.constraints["Track To"].track_axis = "TRACK_Z"
+            bpy.context.object.constraints["Track To"].up_axis = "UP_Z"
+
+
+
+
+
 
             imagename = basename + "%d.png" % frameCount
             bpy.context.scene.render.filepath = imagename
 
             bpy.ops.render.render(write_still=True)  # render to file
+
+            #bpy.ops.constraint.delete()
 
             bpy.ops.object.select_pattern(pattern='cellObject')
             bpy.ops.object.delete()                                     # delete mesh...
