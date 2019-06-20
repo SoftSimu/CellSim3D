@@ -55,8 +55,8 @@ $(objDir)GPUbounce.o : src/GPUbounce.cu
 
 CellDiv: $(linkObjects)
 	$(compiler) $(eflags)
-	echo "export PYTHONPATH=${CELLSIM3D_ROOT}/scripts/:${PYTHONPATH}" > $(objDir)CellSim3D.rc
-	echo "export PATH=${CELLSIM3D_ROOT}/bin:${PATH}" >> $(objDir)CellSim3D.rc
+	echo "export PYTHONPATH=${CELLSIM3D_ROOT}/scripts/:\$$PYTHONPATH" > $(objDir)CellSim3D.rc
+	echo "export PATH=${CELLSIM3D_ROOT}/bin:\$$PATH" >> $(objDir)CellSim3D.rc
 	echo "${CELLSIM3D_ROOT}"
 
 
