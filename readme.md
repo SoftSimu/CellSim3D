@@ -9,12 +9,12 @@ If you use the code, please cite the following papers:
 
 The 3D model is based on the 2D model introduced in
 
-A new model for cell division and migration with spontaneous topology changes, A. Mkrtchyan, J.A. Åström and M. Karttunen, Soft Matter 10, 4332-4339 (2014).
+A new model for cell division and migration with spontaneous topology changes, A. Mkrtchyan, J.A. Åström and M. Karttunen, Soft Matter 10, 4332-4339 (2014). [http://dx.doi.org/10.1039/C4SM00489B]
 
 3D model:
 
 CellSim3D: GPU Accelerated Software for Simulations of Cellular Growth and Division in Three Dimensions,
-P. Madhikar, J.A. Astrom, J. Westerholm, M. Karttunen, submitted
+Pranav Madhikar, Jan Åström, Jan Westerholm, Mikko Karttunen, Computer Physics Communications 232, 206-213 (2018).[https://doi.org/10.1016/j.cpc.2018.05.024]
 
 ## Compilation
 CellSim3D can be compiled easily with the packaged makefile. First
