@@ -901,9 +901,9 @@ int main(int argc, char *argv[])
   if (usePBCs){
       boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
       //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = floor(Minx[0] - 0.1);
-      boxMin[1] = floor(Minx[2] - 0.1);
-      boxMin[2] = floor(Minx[4] - 0.1);
+      boxMin[0] = 0;
+      boxMin[1] = 0;
+      boxMin[2] = 0;
       
   }
   if (constrainAngles){
@@ -2594,6 +2594,7 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
                 );
                         
         }
+
 
     }
 }
