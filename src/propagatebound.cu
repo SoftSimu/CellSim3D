@@ -206,7 +206,7 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 
 
 
-__global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
+__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float Minx, float Miny, float Minz,
                            float attrac,
                            int Xdiv, int Ydiv, int Zdiv,
@@ -221,28 +221,21 @@ __global__ void makeNNlist(int No_of_C180s, float *d_bounding_xyz,
   if ( fullerene < No_of_C180s )
 	{
 
-	  int startx = (int)((d_bounding_xyz[6*fullerene+0]-attrac
-						  - Minx)/DL);
-	  if ( startx < 0 ) startx = 0;
-	  int endx   = (int)((d_bounding_xyz[6*fullerene+1]+attrac
-						  - Minx)/DL);
-	  if ( endx >= Xdiv ) endx = Xdiv-1;
-	  int starty = (int)((d_bounding_xyz[6*fullerene+2]-attrac
-						  - Miny)/DL);
-	  if ( starty < 0 ) starty = 0;
-	  int  endy  = (int)((d_bounding_xyz[6*fullerene+3]+attrac
-						  - Miny)/DL);
-	  if ( endy >= Ydiv ) endy = Ydiv-1;
-	  int startz = (int)((d_bounding_xyz[6*fullerene+4]-attrac
-						  - Minz)/DL);
-	  if ( startz < 0 ) startz = 0;
-	  int  endz  = (int)((d_bounding_xyz[6*fullerene+5]+attrac
-						  - Minz)/DL);
-	  if ( endz >= Zdiv ) endz = Zdiv-1;
+	  int posx = (int)(CMx[fullerene]/DL);
+	  if ( posx < 0 ) startx = 0;
+	  if ( posx >= Xdiv ) endx = Xdiv-1;
+	  
+	  int posy = (int)(CMy[fullerene]/DL);
+	  if ( posy < 0 ) starty = 0;
+	  if ( posy >= Ydiv ) endy = Ydiv-1;
+	  
+	  int posz = (int)(CMz[fullerene]/DL);
+	  if ( posz < 0 ) startz = 0;
+	  if ( posz >= Zdiv ) endz = Zdiv-1;
 
-	  for ( int j1 = startx; j1 <= endx; ++j1 )
-              for ( int j2 = starty; j2 <= endy; ++j2 )
-		  for ( int j3 = startz; j3 <= endz; ++j3 )
+	  for ( int j1 = posx - 1; j1 <= posx + 1; ++j1 )
+              for ( int j2 = posy - 1; j2 <= posy + 1; ++j2 )
+		 			 for ( int j3 = posz - 1; j3 <= posz + 1; ++j3 )
 			{
 			  int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR

@@ -894,7 +894,8 @@ int main(int argc, char *argv[])
 
   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
   //DL = divVol; 
-  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
+  CudaErrorCheck(); 
+  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz , Minx[0], Minx[2], Minx[4],
                                          attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
   CudaErrorCheck(); 
 
