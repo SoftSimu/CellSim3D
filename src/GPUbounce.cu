@@ -881,15 +881,16 @@ int main(int argc, char *argv[])
   // Setup simulation box, if needed (non-pbc)
   if (useRigidSimulationBox){
       printf("   Setup rigid (non-PBC) box...\n"); 
-      boxLength = boxLength*ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
+     // boxLength = boxLength*ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
       //if (boxLength < minBoxLength) boxLength = minBoxLength
       //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = floor(Minx[0]);
-      boxMin[1] = floor(Minx[2]);
-      boxMin[2] = floor(Minx[4]);
+      boxMin[0] = 0;
+      boxMin[1] = 0;
+      boxMin[2] = 0;
       printf("   Done!\n");
       printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
-      printf("   Simulation box length = %f\n", boxLength);
+      printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
+     // printf("   Simulation box length = %f\n", boxLength);
   }
 
   
