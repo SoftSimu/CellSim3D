@@ -736,31 +736,24 @@ int main(int argc, char *argv[])
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+ // CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                     d_X, d_Y, d_Z,
                                     d_CMx, d_CMy, d_CMz);
   
-  bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_X,d_Y,d_Z,
-                                     d_bounding_xyz, d_CMx, d_CMy, d_CMz);
+  //bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_X,d_Y,d_Z,
+  //                                   d_bounding_xyz, d_CMx, d_CMy, d_CMz);
 
-  CudaErrorCheck(); 
+  //CudaErrorCheck(); 
 
   reductionblocks = (No_of_C180s-1)/1024+1;
-  minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-                                       d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-  CudaErrorCheck(); 
-  minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-  CudaErrorCheck(); 
-  cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
+  //minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
+  //                                     d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+ // CudaErrorCheck(); 
+  //minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+ // CudaErrorCheck(); 
+ // cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
   //  DL = 3.8f;
-  DL = 2.9f;
-  //DL = divVol; 
-  Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
-  Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-  Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
-  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
-                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-  CudaErrorCheck(); 
+  
   globalrank = 0;
 
 
@@ -887,13 +880,25 @@ int main(int argc, char *argv[])
       boxMin[0] = 0;
       boxMin[1] = 0;
       boxMin[2] = 0;
+ 
+      DL = 2.9f;
+      Xdiv = (int)((boxMax.x - boxMin[0])/DL+1);
+      Ydiv = (int)((boxMax.y - boxMin[1])/DL+1);
+      Zdiv = (int)((boxMax.z - boxMin[2])/DL+1);
+     
       printf("   Done!\n");
       printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
       printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
      // printf("   Simulation box length = %f\n", boxLength);
   }
 
-  
+  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+  //DL = divVol; 
+  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
+                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+  CudaErrorCheck(); 
+
+
   cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck(); 
 
