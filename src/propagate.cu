@@ -185,11 +185,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float *d_CMx, float *d_CMy, float *d_CMz,
                            float* d_R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, const float *d_time,
-                           float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
-                           float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                           int Xdiv, int Ydiv, int Zdiv,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
@@ -357,19 +356,19 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         NooflocalNN = 0;
 
-        int startx = (int)((X -Minx)/DL);
-        if ( startx < 0 ) startx = 0;
-        if ( startx >= Xdiv ) startx = Xdiv-1;
+        int posX = (int)(X/DL);
+        if ( posX < 0 ) posX = 0;
+        if ( posX >= Xdiv ) posX = Xdiv-1;
 
-        int starty = (int)((Y - Miny)/DL);
-        if ( starty < 0 ) starty = 0;
-        if ( starty >= Ydiv ) starty = Ydiv-1;
+        int posY = (int)(Y/DL);
+        if ( posY < 0 ) posY = 0;
+        if ( posY >= Ydiv ) posY = Ydiv-1;
 
-        int startz = (int)((Z - Minz)/DL);
-        if ( startz < 0 ) startz = 0;
-        if ( startz >= Zdiv ) startz = Zdiv-1;
+        int posZ = (int)(Z/DL);
+        if ( posZ < 0 ) posZ = 0;
+        if ( posZ >= Zdiv ) posZ = Zdiv-1;
 
-        int index = startz*Xdiv*Ydiv + starty*Xdiv + startx;
+        int index = posZ*Xdiv*Ydiv + posY*Xdiv + startx;
         float3 contactForce = make_float3(0.f, 0.f, 0.f);
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
@@ -379,16 +378,17 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             if ( nn_rank == rank )
                 continue;
 
-            deltaX  = (X-d_bounding_xyz[nn_rank*6+1]>0.0f)*(X-d_bounding_xyz[nn_rank*6+1]);
-            deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
+            deltaX  = X - d_CMx[nn_rank];
+            //deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
 
-            deltaY  = (Y-d_bounding_xyz[nn_rank*6+3]>0.0f)*(Y-d_bounding_xyz[nn_rank*6+3]);
-            deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+            deltaY  = Y - d_CMy[nn_rank];
+            //deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
 
-            deltaZ  = (Z-d_bounding_xyz[nn_rank*6+5]>0.0f)*(Z-d_bounding_xyz[nn_rank*6+5]);
-            deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+            deltaZ  = Z-d_CMz[nn_rank];
+            //deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
 
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > attraction_range*attraction_range )
+                // 2.5 is a fixed large R
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - 2.5 > attraction_range*attraction_range )
                 continue;
 
             ++NooflocalNN;
