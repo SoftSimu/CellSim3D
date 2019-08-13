@@ -892,17 +892,22 @@ int main(int argc, char *argv[])
      // printf("   Simulation box length = %f\n", boxLength);
   }
 
+
+ 
   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
   //DL = divVol; 
   CudaErrorCheck(); 
+  
+  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck(); 
+
+  
   makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz , Minx[0], Minx[2], Minx[4],
                                          attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
   CudaErrorCheck(); 
 
 
-  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck(); 
-
+ 
 
   // Code to set up pbc things
   if (usePBCs){
@@ -1316,33 +1321,40 @@ int main(int argc, char *argv[])
 
       // ----------------------------------------- End Cell Death --------------
 
-      bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
-                                         d_X,d_Y,d_Z,
-                                         d_bounding_xyz, d_CMx, d_CMy, d_CMz);
-      CudaErrorCheck();
+     // bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
+     //                                    d_X,d_Y,d_Z,
+     //                                    d_bounding_xyz, d_CMx, d_CMy, d_CMz);
+     // CudaErrorCheck();
       
       
 
           
-      reductionblocks = (No_of_C180s-1)/1024+1;
-      minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-                                           d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-      CudaErrorCheck(); 
+      //reductionblocks = (No_of_C180s-1)/1024+1;
+     // minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
+     //                                      d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+    //  CudaErrorCheck(); 
 
-      minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
+    //  minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
       
-      CudaErrorCheck(); 
+    //  CudaErrorCheck(); 
 
       cudaMemset(d_NoofNNlist, 0, 1024*1024);
 
-      cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
-      Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
-      Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-      Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
+      makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz , Minx[0], Minx[2], Minx[4],
+        attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+        
+        CudaErrorCheck(); 
 
-      makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
-                                             attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-      CudaErrorCheck();
+
+    //  cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
+    //  Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
+   //   Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
+   //   Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
+
+
+    //  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
+    //                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+    //  CudaErrorCheck();
 
       if (!growthDone && step > Time_steps+1){
           printf("Cell growth halted.\nProceeding with MD simulation without growth...\n");
