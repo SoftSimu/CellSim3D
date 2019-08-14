@@ -207,7 +207,6 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 
 
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
-                           float Minx, float Miny, float Minz,
                            float attrac,
                            int Xdiv, int Ydiv, int Zdiv,
                            int *d_NoofNNlist, int *d_NNlist, float DL)
@@ -222,38 +221,59 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 	{
 
 	  int posx = (int)(CMx[fullerene]/DL);
-	  if ( posx < 0 ) startx = 0;
-	  if ( posx >= Xdiv ) endx = Xdiv-1;
+	  if ( posx < 0 ) posx = 0;
+	  if ( posx > Xdiv ) posx = Xdiv;
 	  
 	  int posy = (int)(CMy[fullerene]/DL);
-	  if ( posy < 0 ) starty = 0;
-	  if ( posy >= Ydiv ) endy = Ydiv-1;
+	  if ( posy < 0 ) posy = 0;
+	  if ( posy > Ydiv ) posy = Ydiv;
 	  
 	  int posz = (int)(CMz[fullerene]/DL);
-	  if ( posz < 0 ) startz = 0;
-	  if ( posz >= Zdiv ) endz = Zdiv-1;
+	  if ( posz < 0 ) posz = 0;
+	  if ( posz >= Zdiv ) posz = Zdiv;
 
-	  for ( int j1 = posx - 1; j1 <= posx + 1; ++j1 )
-              for ( int j2 = posy - 1; j2 <= posy + 1; ++j2 )
-		 			 for ( int j3 = posz - 1; j3 <= posz + 1; ++j3 )
-			{
-			  int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+	 
+
+		
+	 
+	  		for (  int j1 = posx - 1; (j1 <= posx + 1) && (j1 <=Xdiv) ; ++j1 ){
+				
+				if(j1 < 0) continue;
+			
+				for (  int j2 = posy - 1; (j2 <= posy + 1) && (j2 <=Ydiv); ++j2 ){
+					
+					if(j2<0) continue;
+					
+					for (  int j3 = posz - 1 ; (j3 <= posz + 1) && (j3 <=Zdiv); ++j3 ){
+			
+						if(j3<0) continue;		
+
+			  			int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  if ( index > 32 )
-				{
-                                    printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+			  			if ( index > 32 )
+						{
+                                 printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   // for ( int k = 0; k < 32; ++k )
                                   //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
                                   
                                   // printf("\n");
-				  continue;
-				}
+				  			continue;
+						}
 #endif
-			  d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  			d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+					}
+	
+				}
 			}
+
+
 	}
 
+
 }
+
+
 
 
 __global__ void minmaxpost( int No_of_C180s,

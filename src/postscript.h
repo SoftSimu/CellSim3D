@@ -18,9 +18,12 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 __global__ void minmaxpost( int No_of_C180s,
                     float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
 
-__global__ void makeNNlist( int No_of_C180s, float *d_bounding_xyz,
-                        float Minx, float Miny, float Minz, float attrac, int Xdiv, int Ydiv, int Zdiv,
-                        int *d_NoofNNlist, int *d_NNlist, float DL);
+
+  __global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
+                           float attrac,
+                           int Xdiv, int Ydiv, int Zdiv,
+                           int *d_NoofNNlist, int *d_NNlist, float DL);
+
 
 __global__ void CenterOfMass( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
@@ -49,19 +52,18 @@ int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0, float* d_pressList, float* d_Youngs_mod , float cellStiffness,
+                           float* d_R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, const float *d_time,
-                           float d_bounding_xyz[],
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
-                           float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                           int Xdiv, int Ydiv, int Zdiv,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                            float wall1, float wall2,
-                           float threshDist, bool useWalls,
+                           float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod,
-                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* d_volList, const float div_vol);
+                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* volList, const float div_vol);
 
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
@@ -136,13 +138,13 @@ __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fDisList, float dt, long int num_nodes, float m);
 
-__global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+__global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
+                                   float *d_CMx, float *d_CMy, float *d_CMz, float r_CM_o,
                                    float gamma_int,
-                                   float d_bounding_xyz[],
                                    float attraction_range,
                                    float gamma_ext,
-                                   float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                                   int Xdiv, int Ydiv, int Zdiv,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList);

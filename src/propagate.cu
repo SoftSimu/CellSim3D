@@ -368,7 +368,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         if ( posZ < 0 ) posZ = 0;
         if ( posZ >= Zdiv ) posZ = Zdiv-1;
 
-        int index = posZ*Xdiv*Ydiv + posY*Xdiv + startx;
+        int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
         float3 contactForce = make_float3(0.f, 0.f, 0.f);
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
@@ -387,8 +387,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             deltaZ  = Z-d_CMz[nn_rank];
             //deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
 
-                // 2.5 is a fixed large R
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - 2.5 > attraction_range*attraction_range )
+               
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
                 continue;
 
             ++NooflocalNN;
@@ -522,11 +522,11 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
+                                   float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
                                    float gamma_int,
-                                   float d_bounding_xyz[],
                                    float attraction_range,
                                    float gamma_ext,
-                                   float Minx, float Miny,  float Minz, int Xdiv, int Ydiv, int Zdiv,
+                                   int Xdiv, int Ydiv, int Zdiv,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList){
@@ -598,7 +598,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         if ( posZ < 0 ) posZ = 0;
         if ( posZ >= Zdiv ) posZ = Zdiv-1;
 
-        int index = posZ*Xdiv*Ydiv + posY*Xdiv + startx;
+        int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
@@ -614,7 +614,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             deltaZ  = Z - d_CMz[nn_rank];
            // deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
 
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - 2.5 > attraction_range*attraction_range )
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
                 continue;
 
             ++NooflocalNN;

@@ -736,9 +736,9 @@ int main(int argc, char *argv[])
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
- // CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                    d_X, d_Y, d_Z,
-                                    d_CMx, d_CMy, d_CMz);
+//  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+//                                    d_X, d_Y, d_Z,
+//                                    d_CMx, d_CMy, d_CMz);
   
   //bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_X,d_Y,d_Z,
   //                                   d_bounding_xyz, d_CMx, d_CMy, d_CMz);
@@ -881,11 +881,14 @@ int main(int argc, char *argv[])
       boxMin[1] = 0;
       boxMin[2] = 0;
  
-      DL = 2.9f;
-      Xdiv = (int)((boxMax.x - boxMin[0])/DL+1);
-      Ydiv = (int)((boxMax.y - boxMin[1])/DL+1);
-      Zdiv = (int)((boxMax.z - boxMin[2])/DL+1);
-     
+      DL = divVol * 2;
+      Xdiv = ceil((boxMax.x - boxMin[0])/DL);
+      printf (" %d \n",Xdiv);
+      Ydiv = ceil((boxMax.y - boxMin[1])/DL);
+      printf (" %d \n",Ydiv);
+      Zdiv = ceil((boxMax.z - boxMin[2])/DL);
+      printf (" %d \n",Zdiv);  
+
       printf("   Done!\n");
       printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
       printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
@@ -898,11 +901,19 @@ int main(int argc, char *argv[])
   //DL = divVol; 
   CudaErrorCheck(); 
   
+  /*
+  cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  CudaErrorCheck();
+  for(int i=0;i<No_of_C180s;i++){
+  printf (" %f \n",CMx[i]);
+  }
+  */
+
   cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck(); 
 
   
-  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz , Minx[0], Minx[2], Minx[4],
+  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
                                          attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
   CudaErrorCheck(); 
 
@@ -991,11 +1002,11 @@ int main(int argc, char *argv[])
                                                      d_X,  d_Y,  d_Z,
                                                      d_CMx, d_CMy, d_CMz,
                                                      d_R0, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     internal_damping, d_time, d_bounding_xyz,
+                                                     internal_damping, d_time,
                                                      attraction_strength, attraction_range,
                                                      repulsion_strength, repulsion_range,
                                                      viscotic_damping, mass,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                     Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                      wall1, wall2,
                                                      threshDist, useWalls,
                                                      d_velListX, d_velListY, d_velListZ,
@@ -1005,11 +1016,11 @@ int main(int argc, char *argv[])
 
   CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                                                      d_X, d_Y, d_Z,
+                                                     d_CMx, d_CMy, d_CMz,r_CM_o,
                                                      internal_damping,
-                                                     d_bounding_xyz,
                                                      attraction_range,
                                                      viscotic_damping,
-                                                     Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv,
+                                                     Xdiv, Ydiv, Zdiv,
                                                      d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                      d_velListX, d_velListY, d_velListZ,
                                                      d_fDisList);
@@ -1117,11 +1128,11 @@ int main(int argc, char *argv[])
                                                       d_X,  d_Y,  d_Z,
                                                       d_CMx, d_CMy, d_CMz,
                                                       d_R0, d_pressList, d_Youngs_mod , stiffness1, 
-                                                      internal_damping, d_time, d_bounding_xyz,
+                                                      internal_damping, d_time,
                                                       attraction_strength, attraction_range,
                                                       repulsion_strength, repulsion_range,
                                                       viscotic_damping, mass,
-                                                      Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                      Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                       wall1, wall2,
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
@@ -1131,16 +1142,16 @@ int main(int argc, char *argv[])
 
 
       CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                         d_X, d_Y, d_Z,
-                                                         internal_damping,
-                                                         d_bounding_xyz,
-                                                         attraction_range,
-                                                         viscotic_damping,
-                                                         Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv,
-                                                         d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                         d_velListX, d_velListY, d_velListZ,
-                                                         d_fDisList);
-      CudaErrorCheck();
+                                                        d_X, d_Y, d_Z,
+                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                        internal_damping,
+                                                        attraction_range,
+                                                        viscotic_damping,
+                                                        Xdiv, Ydiv, Zdiv,
+                                                        d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                        d_velListX, d_velListY, d_velListZ,
+                                                        d_fDisList);
+    CudaErrorCheck();
 
       // Calculate random Force here...
       if (add_rands){
@@ -1161,15 +1172,15 @@ int main(int argc, char *argv[])
           CudaErrorCheck();
           
           CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                             d_X, d_Y, d_Z,
-                                                             internal_damping,
-                                                             d_bounding_xyz,
-                                                             attraction_range,
-                                                             viscotic_damping,
-                                                             Minx[0], Minx[2], Minx[4], Xdiv, Ydiv, Zdiv,
-                                                             d_NoofNNlist, d_NNlist, DL, gamma_visc,
-                                                             d_velListX, d_velListY, d_velListZ,
-                                                             d_fDisList);
+                                                            d_X, d_Y, d_Z,
+                                                            d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                            internal_damping,
+                                                            attraction_range,
+                                                            viscotic_damping,
+                                                            Xdiv, Ydiv, Zdiv,
+                                                            d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                            d_velListX, d_velListY, d_velListZ,
+                                                            d_fDisList);
           CudaErrorCheck();
       }
 
@@ -1340,7 +1351,11 @@ int main(int argc, char *argv[])
 
       cudaMemset(d_NoofNNlist, 0, 1024*1024);
 
-      makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz , Minx[0], Minx[2], Minx[4],
+      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+      //DL = divVol; 
+      CudaErrorCheck(); 
+
+      makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
         
         CudaErrorCheck(); 
