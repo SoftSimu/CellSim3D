@@ -922,12 +922,24 @@ int main(int argc, char *argv[])
 
   // Code to set up pbc things
   if (usePBCs){
-      boxLength = ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
-      //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = 0;
-      boxMin[1] = 0;
-      boxMin[2] = 0;
-      
+    printf("   Setup PBC box...\n"); 
+    
+    boxMin[0] = 0;
+    boxMin[1] = 0;
+    boxMin[2] = 0;
+
+    DL = divVol * 2;
+    Xdiv = ceil((boxMax.x - boxMin[0])/DL);
+    printf (" %d \n",Xdiv);
+    Ydiv = ceil((boxMax.y - boxMin[1])/DL);
+    printf (" %d \n",Ydiv);
+    Zdiv = ceil((boxMax.z - boxMin[2])/DL);
+    printf (" %d \n",Zdiv);  
+
+    printf("   Done!\n");
+    printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
+    printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
+   // printf("   Simulation box length = %f\n", boxLength);
   }
   if (constrainAngles){
       // Code to initialize equillibrium angles
