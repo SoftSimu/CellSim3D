@@ -21,8 +21,8 @@ __global__ void minmaxpost( int No_of_C180s,
 
   __global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac,
-                           int Xdiv, int Ydiv, int Zdiv,
-                           int *d_NoofNNlist, int *d_NNlist, float DL);
+                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, bool usePBCs);
 
 
 __global__ void CenterOfMass( int No_of_C180s,

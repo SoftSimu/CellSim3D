@@ -895,12 +895,6 @@ int main(int argc, char *argv[])
      // printf("   Simulation box length = %f\n", boxLength);
   }
 
-
- 
-  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-  //DL = divVol; 
-  CudaErrorCheck(); 
-  
   /*
   cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
   CudaErrorCheck();
@@ -908,15 +902,6 @@ int main(int argc, char *argv[])
   printf (" %f \n",CMx[i]);
   }
   */
-
-  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck(); 
-
-  
-  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-  CudaErrorCheck(); 
-
 
  
 
@@ -941,6 +926,24 @@ int main(int argc, char *argv[])
     printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
    // printf("   Simulation box length = %f\n", boxLength);
   }
+
+
+  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck(); 
+
+  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+  //DL = divVol; 
+  CudaErrorCheck(); 
+
+
+  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+    attraction_range, Xdiv, Ydiv, Zdiv,boxMax,d_NoofNNlist,
+    d_NNlist, DL, usePBCs);
+    
+    CudaErrorCheck(); 
+
+
+
   if (constrainAngles){
       // Code to initialize equillibrium angles
       float3 p, ni, nj, nk;
@@ -1379,7 +1382,7 @@ int main(int argc, char *argv[])
       CudaErrorCheck(); 
 
       makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
+        attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DL,usePBCs);
         
         CudaErrorCheck(); 
 

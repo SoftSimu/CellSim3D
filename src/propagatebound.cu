@@ -208,68 +208,96 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac,
-                           int Xdiv, int Ydiv, int Zdiv,
-                           int *d_NoofNNlist, int *d_NNlist, float DL)
+                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int *d_NoofNNlist, int *d_NNlist, float DL,bool usePBCs)
 {
 
 
-  int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
 
-  if ( fullerene < No_of_C180s )
+	if ( fullerene < No_of_C180s )
 	{
-
-	  int posx = (int)(CMx[fullerene]/DL);
-	  if ( posx < 0 ) posx = 0;
-	  if ( posx > Xdiv ) posx = Xdiv;
 	  
-	  int posy = (int)(CMy[fullerene]/DL);
-	  if ( posy < 0 ) posy = 0;
-	  if ( posy > Ydiv ) posy = Ydiv;
-	  
-	  int posz = (int)(CMz[fullerene]/DL);
-	  if ( posz < 0 ) posz = 0;
-	  if ( posz >= Zdiv ) posz = Zdiv;
-
+		if(usePBCs) {
+	  		int posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DL); 	
+	  	} else{ 
+	 		int posx = (int)(CMx[fullerene]/DL);
+	  		if ( posx < 0 ) posx = 0;
+	  		if ( posx > Xdiv ) posx = Xdiv;
+	  	}
+	  	if(usePBCs){ 
+	  		int posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DL); 	
+	  	} else{
+	  		int posy = (int)(CMy[fullerene]/DL);
+	  		if ( posy < 0 ) posy = 0;
+	  		if ( posy > Ydiv ) posy = Ydiv;
+	  	}
+	  	if(usePBCs){
+	  		int posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxMax.z) * boxMax.z )/DL); 	
+	  	}else{
+	   		int posz = (int)(CMz[fullerene]/DL);
+	  		if ( posz < 0 ) posz = 0;
+	  		if ( posz >= Zdiv ) posz = Zdiv;
+	  	}
 	 
-
-		
+		int j1 = 0;
+	  	int j2 = 0;
+	  	int j3 = 0;
 	 
-	  		for (  int j1 = posx - 1; (j1 <= posx + 1) && (j1 <=Xdiv) ; ++j1 ){
+	  	for (  int i = -1; i < 2 ; ++i ){
 				
-				if(j1 < 0) continue;
-			
-				for (  int j2 = posy - 1; (j2 <= posy + 1) && (j2 <=Ydiv); ++j2 ){
-					
-					if(j2<0) continue;
-					
-					for (  int j3 = posz - 1 ; (j3 <= posz + 1) && (j3 <=Zdiv); ++j3 ){
-			
-						if(j3<0) continue;		
+			j1 = posx + i;
 
-			  			int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+			if(usePBCs){
+				j1 = j1 - floor(j1/Xdiv) * Xdiv;	 
+			}else{	
+				if(j1 < 0 || j1 > Xdiv) continue;
+			}
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+
+				if(usePBCs){
+					j2 = j2 - floor(j2/Ydiv) * Ydiv;	 
+				}else{	
+					if(j2 < 0 || j2 > Ydiv) continue;
+				}
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+					j3 = posz + k;
+
+					if(usePBCs){
+						j3 = j3 - floor(j3/Zdiv) * Zdiv;	 
+					}else{
+						if(j3 < 0 || j3 > Zdiv) continue;
+					}
+		
+
+			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  			if ( index > 32 )
-						{
-                                 printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+			  		if ( index > 32 )
+					{
+                         printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   // for ( int k = 0; k < 32; ++k )
                                   //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
                                   
                                   // printf("\n");
-				  			continue;
-						}
-#endif
-			  			d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
-					
+						  continue;
 					}
-	
+#endif
+			  		d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
 				}
+	
 			}
+		}
 
 
 	}
-
 
 }
 
