@@ -786,3 +786,40 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
         fList.z[idx] = fConList.z[idx] + fDisList.z[idx] + fRanList.z[idx];
     }
 }
+
+
+
+__global__ void CoorUpdatePBC (float* d_X, float* d_Y, float* d_Z,
+                               float *d_CMx, float *d_CMy, float *d_CMz,
+                               float3 boxMax, float divVol, const float div_vol){
+
+    
+    const int cellInd = blockIdx.x;
+    const int node = threadIdx.x;
+
+    
+    if (cellInd < numCells && node < 180){
+
+        if(d_CMx[cellInd] > boxMax.x + divVol  || d_CMx[cellInd] < -divVol) {
+
+            d_X[node] = d_X[node] - floor( d_X[node] / boxMax.x) * boxMax.x
+
+        } 
+    
+    
+        if(d_CMy[cellInd] > boxMax.y + divVol || d_CMy[cellInd] < -divVol){
+
+            d_Y[node] = d_Y[node] - floor( d_Y[node] / boxMax.y) * boxMax.y
+
+        }
+    
+    
+        if(d_CMz[cellInd] > boxMax.z + divVol || d_CMz[cellInd] < -divVol){
+
+            d_Z[node] = d_Z[node] - floor( d_Z[node] / boxMax.z) * boxMax.z
+
+
+        }
+    }
+
+}

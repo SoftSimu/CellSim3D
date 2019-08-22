@@ -151,3 +151,7 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
                                   R3Nptrs d_fRanList);
+
+__global__ void CoorUpdatePBC (float* d_X, float* d_Y, float* d_Z,
+                               float *d_CMx, float *d_CMy, float *d_CMz,
+                               float3 boxMax, float divVol, const float div_vol);
