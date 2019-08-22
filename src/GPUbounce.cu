@@ -1100,6 +1100,17 @@ int main(int argc, char *argv[])
                                                  No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
       CudaErrorCheck();
 
+
+      if(usePBCs){
+      CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_XP, d_YP, d_ZP,
+                                                        d_X, d_Y, d_Z,
+                                                        d_CMx, d_CMy, d_CMz,
+                                                        boxMax, divVol, No_of_C180s);
+
+      CudaErrorCheck();
+                    
+      }
+
       ForwardTime<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP, 
                                                    d_X , d_Y , d_Z ,
                                                    d_XM, d_YM, d_ZM,
