@@ -1712,7 +1712,7 @@ int initialize_C180s(int Orig_No_of_C180s)
       initz[i] -= sumz; 
   }
 
-  if (useRigidSimulationBox){
+  if (useRigidSimulationBox || usePBCs){
       float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
       printf("Check radius = %f\n", rCheck);
       float3 allCMs[Orig_No_of_C180s];
