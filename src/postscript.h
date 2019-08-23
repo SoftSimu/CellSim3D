@@ -57,13 +57,13 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
-                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,
+                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* volList, const float div_vol);
+                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol);
 
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
@@ -144,7 +144,7 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
                                    float gamma_int,
                                    float attraction_range,
                                    float gamma_ext,
-                                   int Xdiv, int Ydiv, int Zdiv,  bool usePBCs,
+                                   int Xdiv, int Ydiv, int Zdiv,  bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList);

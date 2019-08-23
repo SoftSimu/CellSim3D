@@ -881,7 +881,7 @@ int main(int argc, char *argv[])
       boxMin[1] = 0;
       boxMin[2] = 0;
  
-      DL = divVol * 2;
+      DL = divVol;
       Xdiv = ceil((boxMax.x - boxMin[0])/DL);
       printf (" %d \n",Xdiv);
       Ydiv = ceil((boxMax.y - boxMin[1])/DL);
@@ -913,7 +913,7 @@ int main(int argc, char *argv[])
     boxMin[1] = 0;
     boxMin[2] = 0;
 
-    DL = divVol * 2;
+    DL = divVol;
     Xdiv = ceil((boxMax.x - boxMin[0])/DL);
     printf (" %d \n",Xdiv);
     Ydiv = ceil((boxMax.y - boxMin[1])/DL);
@@ -1021,12 +1021,12 @@ int main(int argc, char *argv[])
                                                      attraction_strength, attraction_range,
                                                      repulsion_strength, repulsion_range,
                                                      viscotic_damping, mass,
-                                                     Xdiv, Ydiv, Zdiv, usePBCs, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                     Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                      wall1, wall2,
                                                      threshDist, useWalls,
                                                      d_velListX, d_velListY, d_velListZ,
                                                      useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                     constrainAngles, d_theta0, d_fConList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
+                                                     constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol); 
   CudaErrorCheck();
 
   CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
@@ -1035,7 +1035,7 @@ int main(int argc, char *argv[])
                                                      internal_damping,
                                                      attraction_range,
                                                      viscotic_damping,
-                                                     Xdiv, Ydiv, Zdiv, usePBCs,
+                                                     Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                      d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                      d_velListX, d_velListY, d_velListZ,
                                                      d_fDisList);
@@ -1158,12 +1158,12 @@ int main(int argc, char *argv[])
                                                       attraction_strength, attraction_range,
                                                       repulsion_strength, repulsion_range,
                                                       viscotic_damping, mass,
-                                                      Xdiv, Ydiv, Zdiv, usePBCs, d_NoofNNlist, d_NNlist, DL, gamma_visc,
+                                                      Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                       wall1, wall2,
                                                       threshDist, useWalls,
                                                       d_velListX, d_velListY, d_velListZ,
                                                       useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
-                                                      constrainAngles, d_theta0, d_fConList, r_CM_o, boxMax, d_contactForces, d_volume, divVol); 
+                                                      constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol); 
       CudaErrorCheck();
 
 
@@ -1173,7 +1173,7 @@ int main(int argc, char *argv[])
                                                         internal_damping,
                                                         attraction_range,
                                                         viscotic_damping,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs,
+                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList);
@@ -1203,7 +1203,7 @@ int main(int argc, char *argv[])
                                                             internal_damping,
                                                             attraction_range,
                                                             viscotic_damping,
-                                                            Xdiv, Ydiv, Zdiv, usePBCs,
+                                                            Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                             d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                             d_velListX, d_velListY, d_velListZ,
                                                             d_fDisList);

@@ -188,13 +188,13 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
-                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,
+                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
-                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, float3 boxMax, R3Nptrs d_contactForces, const float* volList, const float div_vol)
+                                bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -355,28 +355,31 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         // interfullerene attraction and repulsion
         
         NooflocalNN = 0;
-
+        
+        int posX = 0;    
+        int posY = 0;
+        int posZ = 0;
         
         if(usePBCs){
-            int posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
-        } else    
-            int posX = (int)(X/DL);
+            posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
+        } else {   
+            posX = (int)(X/DL);
             if ( posX < 0 ) posX = 0;
             if ( posX > Xdiv ) posX = Xdiv;
         }
 
 		if(usePBCs){
-            int posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
-        } else    
-            int posY = (int)(Y/DL);
+            posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
+        } else {   
+            posY = (int)(Y/DL);
             if ( posY < 0 ) posY = 0;
             if ( posY > Ydiv ) posY = Ydiv;
         }
 
         if(usePBCs){
-            int posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
-        } else    
-            int posZ = (int)(Z/DL);
+            posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
+        } else {   
+            posZ = (int)(Z/DL);
             if ( posZ < 0 ) posZ = 0;
             if ( posZ > Zdiv ) posZ = Zdiv;
         }
@@ -396,15 +399,15 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                 continue;
                 
             deltaX  = X - d_CMx[nn_rank];
-            if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+            if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
             // deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
     
             deltaY  = Y - d_CMy[nn_rank];
-            if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y 
+            if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y; 
             // deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
                 
             deltaZ  = Z - d_CMz[nn_rank];
-            if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z
+            if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             // deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
     
 
@@ -434,13 +437,13 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                 nnAtomInd += nn_atom;
 
                 deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
-                if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+                if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
             
                 deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
-                if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y
+                if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
             
                 deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
-                if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z
+                if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             
                 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
 
@@ -552,7 +555,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float gamma_int,
                                    float attraction_range,
                                    float gamma_ext,
-                                   int Xdiv, int Ydiv, int Zdiv, bool usePBCs,
+                                   int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList){
@@ -614,26 +617,31 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         int NooflocalNN = 0;
         int localNNs[10];
 
+        
+        int posX = 0;    
+        int posY = 0;
+        int posZ = 0;
+
         if(usePBCs){
-            int posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
-        } else    
-            int posX = (int)(X/DL);
+            posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
+        } else {   
+            posX = (int)(X/DL);
             if ( posX < 0 ) posX = 0;
             if ( posX > Xdiv ) posX = Xdiv;
         }
 
 		if(usePBCs){
-            int posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
-        } else    
-            int posY = (int)(Y/DL);
+            posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
+        } else {   
+            posY = (int)(Y/DL);
             if ( posY < 0 ) posY = 0;
             if ( posY > Ydiv ) posY = Ydiv;
         }
 
         if(usePBCs){
-            int posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
-        } else    
-            int posZ = (int)(Z/DL);
+            posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
+        } else {   
+            posZ = (int)(Z/DL);
             if ( posZ < 0 ) posZ = 0;
             if ( posZ > Zdiv ) posZ = Zdiv;
         }
@@ -647,15 +655,15 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             if ( nn_rank == cellInd ) continue;
 
             deltaX  = X - d_CMx[nn_rank];
-            if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+            if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
             // deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
 
             deltaY  = Y - d_CMy[nn_rank];
-            if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y 
+            if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y; 
             // deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
             
             deltaZ  = Z - d_CMz[nn_rank];
-            if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z
+            if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             // deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
 
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
@@ -677,13 +685,13 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             {
                 deltaX = X - d_X[nn_rank*192+nn_atom];
-                if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+                if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
                    
                 deltaY = Y - d_Y[nn_rank*192+nn_atom];
-                if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y
+                if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
                   
                 deltaZ = Z - d_Z[nn_rank*192+nn_atom];
-                if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z                 
+                if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
                 
 
                 R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
@@ -853,8 +861,8 @@ __global__ void CoorUpdatePBC (float *d_XP, float *d_YP, float *d_ZP,
 
         if(d_CMx[cellInd] > boxMax.x + divVol  || d_CMx[cellInd] < -divVol) {
 
-            d_XP[node] = d_XP[node] - floor( d_XP[node] / boxMax.x) * boxMax.x
-            d_X[node] = d_X[node] - floor( d_X[node] / boxMax.x) * boxMax.x
+            d_XP[node] = d_XP[node] - floor( d_XP[node] / boxMax.x) * boxMax.x;
+            d_X[node] = d_X[node] - floor( d_X[node] / boxMax.x) * boxMax.x;
 
 
         } 
@@ -862,16 +870,16 @@ __global__ void CoorUpdatePBC (float *d_XP, float *d_YP, float *d_ZP,
     
         if(d_CMy[cellInd] > boxMax.y + divVol || d_CMy[cellInd] < -divVol){
 
-            d_YP[node] = d_YP[node] - floor( d_YP[node] / boxMax.y) * boxMax.y
-            d_Y[node] = d_Y[node] - floor( d_Y[node] / boxMax.y) * boxMax.y
+            d_YP[node] = d_YP[node] - floor( d_YP[node] / boxMax.y) * boxMax.y;
+            d_Y[node] = d_Y[node] - floor( d_Y[node] / boxMax.y) * boxMax.y;
 
         }
     
     
         if(d_CMz[cellInd] > boxMax.z + divVol || d_CMz[cellInd] < -divVol){
 
-            d_ZP[node] = d_ZP[node] - floor( d_ZP[node] / boxMax.z) * boxMax.z
-            d_Z[node] = d_Z[node] - floor( d_Z[node] / boxMax.z) * boxMax.z
+            d_ZP[node] = d_ZP[node] - floor( d_ZP[node] / boxMax.z) * boxMax.z;
+            d_Z[node] = d_Z[node] - floor( d_Z[node] / boxMax.z) * boxMax.z;
 
 
         }
