@@ -188,7 +188,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float viscotic_damping, float mass,
-                           int Xdiv, int Ydiv, int Zdiv,
+                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
@@ -356,19 +356,36 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         NooflocalNN = 0;
 
-        int posX = (int)(X/DL);
-        if ( posX < 0 ) posX = 0;
-        if ( posX >= Xdiv ) posX = Xdiv-1;
+        
+        if(usePBCs){
+            int posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
+        } else    
+            int posX = (int)(X/DL);
+            if ( posX < 0 ) posX = 0;
+            if ( posX > Xdiv ) posX = Xdiv;
+        }
 
-        int posY = (int)(Y/DL);
-        if ( posY < 0 ) posY = 0;
-        if ( posY >= Ydiv ) posY = Ydiv-1;
+		if(usePBCs){
+            int posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
+        } else    
+            int posY = (int)(Y/DL);
+            if ( posY < 0 ) posY = 0;
+            if ( posY > Ydiv ) posY = Ydiv;
+        }
 
-        int posZ = (int)(Z/DL);
-        if ( posZ < 0 ) posZ = 0;
-        if ( posZ >= Zdiv ) posZ = Zdiv-1;
+        if(usePBCs){
+            int posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
+        } else    
+            int posZ = (int)(Z/DL);
+            if ( posZ < 0 ) posZ = 0;
+            if ( posZ > Zdiv ) posZ = Zdiv;
+        }
+
 
         int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
+
+
+
         float3 contactForce = make_float3(0.f, 0.f, 0.f);
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
@@ -377,15 +394,19 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             
             if ( nn_rank == rank )
                 continue;
-
+                
             deltaX  = X - d_CMx[nn_rank];
-            //deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
-
+            if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+            // deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
+    
             deltaY  = Y - d_CMy[nn_rank];
-            //deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
-
-            deltaZ  = Z-d_CMz[nn_rank];
-            //deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+            if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y 
+            // deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+                
+            deltaZ  = Z - d_CMz[nn_rank];
+            if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z
+            // deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+    
 
                
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
@@ -413,9 +434,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                 nnAtomInd += nn_atom;
 
                 deltaX = d_X[rank*192+atom]-d_X[nn_rank*192+nn_atom];
+                if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+            
                 deltaY = d_Y[rank*192+atom]-d_Y[nn_rank*192+nn_atom];
+                if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y
+            
                 deltaZ = d_Z[rank*192+atom]-d_Z[nn_rank*192+nn_atom];
-
+                if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z
+            
                 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
 
                 if ( R >= attraction_range*attraction_range )
