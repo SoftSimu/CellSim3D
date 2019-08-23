@@ -526,7 +526,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float gamma_int,
                                    float attraction_range,
                                    float gamma_ext,
-                                   int Xdiv, int Ydiv, int Zdiv,
+                                   int Xdiv, int Ydiv, int Zdiv, bool usePBCs,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList){
@@ -571,9 +571,11 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         normal = d_C180_sign[nodeInd]*normal;
 
+        
         float X = d_X[globalNodeInd];
         float Y = d_Y[globalNodeInd];
         float Z = d_Z[globalNodeInd];
+        
 
         float deltaX = 0;
         float deltaY = 0;
@@ -586,17 +588,30 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         int NooflocalNN = 0;
         int localNNs[10];
 
-        int posX = (int)(X/DL);
-        if ( posX < 0 ) posX = 0;
-        if ( posX >= Xdiv ) posX = Xdiv-1;
+        if(usePBCs){
+            int posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
+        } else    
+            int posX = (int)(X/DL);
+            if ( posX < 0 ) posX = 0;
+            if ( posX > Xdiv ) posX = Xdiv;
+        }
 
-        int posY = (int)(Y/DL);
-        if ( posY < 0 ) posY = 0;
-        if ( posY >= Ydiv ) posY = Ydiv-1;
+		if(usePBCs){
+            int posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
+        } else    
+            int posY = (int)(Y/DL);
+            if ( posY < 0 ) posY = 0;
+            if ( posY > Ydiv ) posY = Ydiv;
+        }
 
-        int posZ = (int)(Z/DL);
-        if ( posZ < 0 ) posZ = 0;
-        if ( posZ >= Zdiv ) posZ = Zdiv-1;
+        if(usePBCs){
+            int posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
+        } else    
+            int posZ = (int)(Z/DL);
+            if ( posZ < 0 ) posZ = 0;
+            if ( posZ > Zdiv ) posZ = Zdiv;
+        }
+
 
         int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
         
@@ -606,13 +621,16 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             if ( nn_rank == cellInd ) continue;
 
             deltaX  = X - d_CMx[nn_rank];
+            if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
             // deltaX += (d_bounding_xyz[nn_rank*6+0]-X>0.0f)*(d_bounding_xyz[nn_rank*6+0]-X);
 
             deltaY  = Y - d_CMy[nn_rank];
-           // deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
-
+            if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y 
+            // deltaY += (d_bounding_xyz[nn_rank*6+2]-Y>0.0f)*(d_bounding_xyz[nn_rank*6+2]-Y);
+            
             deltaZ  = Z - d_CMz[nn_rank];
-           // deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
+            if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z
+            // deltaZ += (d_bounding_xyz[nn_rank*6+4]-Z>0.0f)*(d_bounding_xyz[nn_rank*6+4]-Z);
 
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
                 continue;
@@ -633,8 +651,14 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             {
                 deltaX = X - d_X[nn_rank*192+nn_atom];
+                if(usePBCs) deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x
+                   
                 deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                if(usePBCs) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y
+                  
                 deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                if(usePBCs) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z                 
+                
 
                 R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
 

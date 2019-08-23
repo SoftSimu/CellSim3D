@@ -1035,7 +1035,7 @@ int main(int argc, char *argv[])
                                                      internal_damping,
                                                      attraction_range,
                                                      viscotic_damping,
-                                                     Xdiv, Ydiv, Zdiv,
+                                                     Xdiv, Ydiv, Zdiv, usePBCs,
                                                      d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                      d_velListX, d_velListY, d_velListZ,
                                                      d_fDisList);
@@ -1173,7 +1173,7 @@ int main(int argc, char *argv[])
                                                         internal_damping,
                                                         attraction_range,
                                                         viscotic_damping,
-                                                        Xdiv, Ydiv, Zdiv,
+                                                        Xdiv, Ydiv, Zdiv, usePBCs,
                                                         d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList);
@@ -1203,7 +1203,7 @@ int main(int argc, char *argv[])
                                                             internal_damping,
                                                             attraction_range,
                                                             viscotic_damping,
-                                                            Xdiv, Ydiv, Zdiv,
+                                                            Xdiv, Ydiv, Zdiv, usePBCs,
                                                             d_NoofNNlist, d_NNlist, DL, gamma_visc,
                                                             d_velListX, d_velListY, d_velListZ,
                                                             d_fDisList);

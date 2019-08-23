@@ -144,7 +144,7 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
                                    float gamma_int,
                                    float attraction_range,
                                    float gamma_ext,
-                                   int Xdiv, int Ydiv, int Zdiv,
+                                   int Xdiv, int Ydiv, int Zdiv,  bool usePBCs,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList);
