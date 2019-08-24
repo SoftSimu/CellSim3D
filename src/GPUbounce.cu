@@ -1092,7 +1092,12 @@ int main(int argc, char *argv[])
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
-      //printf("step %d\n", step);
+     
+
+
+
+    
+    //printf("step %d\n", step);
       numNodes = No_of_C180s*192;
       Integrate<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP,
                                                  d_X, d_Y, d_Z,
@@ -1104,21 +1109,12 @@ int main(int argc, char *argv[])
       CudaErrorCheck();
 
 
-      if(usePBCs){
-      CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_XP, d_YP, d_ZP,
-                                                        d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,
-                                                        boxMax, divVol, No_of_C180s);
-
-      CudaErrorCheck();
-                    
-      }
-
       ForwardTime<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP, 
                                                    d_X , d_Y , d_Z ,
                                                    d_XM, d_YM, d_ZM,
                                                    No_of_C180s);
       CudaErrorCheck();
+
 
 
       // save previous step forces in g
@@ -1210,10 +1206,14 @@ int main(int argc, char *argv[])
           CudaErrorCheck();
       }
 
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_X, d_Y, d_Z,
+      
+      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z,
                                         d_CMx, d_CMy, d_CMz);
-      CudaErrorCheck();
+
+        CudaErrorCheck();
+
+
+
       if (step <= Time_steps && rGrowth > 0){
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
@@ -1376,6 +1376,21 @@ int main(int argc, char *argv[])
     //  CudaErrorCheck(); 
 
       cudaMemset(d_NoofNNlist, 0, 1024*1024);
+
+
+
+        if(usePBCs){
+        
+            CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+                                                          d_XM, d_YM, d_ZM,
+                                                          d_CMx, d_CMy, d_CMz,
+                                                          boxMax, divVol, No_of_C180s);
+  
+
+
+            CudaErrorCheck();
+        }
+
 
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
       //DL = divVol; 

@@ -847,42 +847,67 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
 
 
 
-__global__ void CoorUpdatePBC (float *d_XP, float *d_YP, float *d_ZP,
-                               float *d_X, float *d_Y, float *d_Z, 
+__global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
+                               float *d_XM, float *d_YM, float *d_ZM,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells){
 
     
-    const int cellInd = blockIdx.x;
-    const int node = threadIdx.x;
+    int cellInd = blockIdx.x;
+    int node = threadIdx.x;
+    int nodeInd = cellInd*192 + node;
 
     
     if (cellInd < numCells && node < 180){
 
-        if(d_CMx[cellInd] > boxMax.x + divVol  || d_CMx[cellInd] < -divVol) {
+        
+        if(d_CMx[cellInd] > boxMax.x + divVol ){ 
 
-            d_XP[node] = d_XP[node] - floor( d_XP[node] / boxMax.x) * boxMax.x;
-            d_X[node] = d_X[node] - floor( d_X[node] / boxMax.x) * boxMax.x;
-
+            d_X[nodeInd] = d_X[nodeInd] - boxMax.x;
+            d_XM[nodeInd] = d_XM[nodeInd] - boxMax.x;
+     
 
         } 
-    
-    
-        if(d_CMy[cellInd] > boxMax.y + divVol || d_CMy[cellInd] < -divVol){
 
-            d_YP[node] = d_YP[node] - floor( d_YP[node] / boxMax.y) * boxMax.y;
-            d_Y[node] = d_Y[node] - floor( d_Y[node] / boxMax.y) * boxMax.y;
+        if(d_CMx[cellInd] < -divVol){
+
+            d_X[nodeInd] = d_X[nodeInd] + boxMax.x;
+            d_XM[nodeInd] = d_XM[nodeInd] + boxMax.x;
+
+        }
+    
+    
+        if(d_CMy[cellInd] > boxMax.y + divVol) {
+
+            d_Y[nodeInd] = d_Y[nodeInd] - boxMax.y;
+            d_YM[nodeInd] = d_YM[nodeInd] - boxMax.y;
+
+        }
+    
+        if(d_CMy[cellInd] < -divVol){
+
+            d_Y[nodeInd] = d_Y[nodeInd] + boxMax.y;
+            d_YM[nodeInd] = d_YM[nodeInd] + boxMax.y;
+
+        }
+
+
+    
+        if(d_CMz[cellInd] > boxMax.z + divVol){
+
+            d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
+            d_ZM[nodeInd] = d_ZM[nodeInd] - boxMax.z;
 
         }
     
     
-        if(d_CMz[cellInd] > boxMax.z + divVol || d_CMz[cellInd] < -divVol){
+        if(d_CMz[cellInd] < -divVol){
 
-            d_ZP[node] = d_ZP[node] - floor( d_ZP[node] / boxMax.z) * boxMax.z;
-            d_Z[node] = d_Z[node] - floor( d_Z[node] / boxMax.z) * boxMax.z;
-
+            d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
+            d_ZM[nodeInd] = d_ZM[nodeInd] + boxMax.z;
 
         }
+    
     }
 
 }
