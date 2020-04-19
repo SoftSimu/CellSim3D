@@ -44,7 +44,12 @@ void CudaFailure();
         }\
     }
 
-float mass;                                        //  M
+float asym[1];
+float* MassArray;
+float* d_MassArray;
+float mass;    
+float* GrowthRate;
+float* d_GrowthRate;                                        //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
 float repulsion_strength, attraction_strength;     //  ST1, ST2
 
@@ -179,7 +184,10 @@ bool flatbox;
 bool useRigidSimulationBox;
 bool usePBCs; 
 float* d_boxMin;
-bool rand_pos; 
+bool rand_pos;
+bool impurity;
+bool line;
+float L  = 2.5f;  
 
 // randomness parameters
 
@@ -262,7 +270,10 @@ long int CPUMemory;
 
 int frameCount = 1;
 
-bool correct_com = false; 
+bool correct_com = false;
+bool asymDivision;
+
+ 
 
 int main(int argc, char *argv[])
 {
@@ -300,6 +311,25 @@ int main(int argc, char *argv[])
   if ( read_json_params(inpFile)          != 0 ) return(-1);
 
   printf("%d\n", MaxNoofC180s); 
+
+
+/*******************************************************************/
+
+ 	int LineCell = 0;
+	if ( line ){
+		LineCell = (int) (boxMax.x/L);
+		if ( impurity ){
+			No_of_threads =  No_of_threads - 1 + LineCell;
+		} else {
+			No_of_threads = LineCell;	
+		}
+	
+	} 
+	printf("Number of initial cells are:   %d\n", No_of_threads);  	
+		
+
+
+/********************************************************************/
 
   Side_length   = (int)( sqrt( (double)No_of_threads )+0.5);
   if ( No_of_threads > MaxNoofC180s // Side_length*Side_length != No_of_threads
@@ -613,6 +643,81 @@ int main(int argc, char *argv[])
 
   CudaErrorCheck();
 
+/******************************************************************************************/
+
+  // Set the growth rate for the cells
+  if ( cudaSuccess != cudaMalloc( (void **)&d_GrowthRate, MaxNoofC180s*sizeof(float))) return(-1);
+  cudaMemset(d_GrowthRate, 0, MaxNoofC180s*sizeof(float));  
+
+  GrowthRate = (float *)calloc(MaxNoofC180s, sizeof(float));
+  
+  if (line){	
+  
+	for (int i =  0; i < MaxNoofC180s; ++i){
+		
+		if(i < (Orig_No_of_C180s-LineCell) && impurity){	 
+			GrowthRate[i] = 0; 
+		}else{
+	       		GrowthRate[i] = rMax; 
+		}
+
+	}
+
+  
+  }else{
+       
+      for (int i =  0; i < MaxNoofC180s; ++i){
+
+		if(i < (Orig_No_of_C180s-1) && impurity){	 
+	      		GrowthRate[i] = 0; 
+		}else{
+   		        GrowthRate[i] = rMax; 
+		}
+	}
+
+  }
+  cudaMemcpy(d_GrowthRate, GrowthRate, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+
+/*****************************************************************************************/
+
+  // Set the mass for the cells
+  if ( cudaSuccess != cudaMalloc( (void **)&d_MassArray, MaxNoofC180s*sizeof(float))) return(-1);
+  cudaMemset(d_MassArray, 0, MaxNoofC180s*sizeof(float));  
+
+  MassArray = (float *)calloc(MaxNoofC180s, sizeof(float));
+
+  if (line){	
+  
+	for (int i =  0; i < MaxNoofC180s; ++i){
+		
+		if(i < (Orig_No_of_C180s-LineCell) && impurity){	 
+			MassArray[i] = 100000; 
+		}else{
+	       		MassArray[i] = mass; 
+		}
+
+	}
+  
+  }else{
+       
+      for (int i =  0; i < MaxNoofC180s; ++i){
+
+		if(i < (Orig_No_of_C180s-1) && impurity){	 
+	      		MassArray[i] = 100000; 
+		}else{
+   		        MassArray[i] = mass; 
+		}
+	}
+
+  }
+  cudaMemcpy(d_MassArray, MassArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+
+/**********************************************************************************/
+
+
+
   // Set the Youngs_mod for the cells
   youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
   for (int i =  0; i < MaxNoofC180s; ++i){
@@ -855,14 +960,36 @@ int main(int argc, char *argv[])
   }
 
 
+/******************************************************************************************/
+
   // Initialize pressures
 
-  for (int cell = 0; cell < No_of_C180s; cell++){
-      pressList[cell] = minPressure;
+  if (line){
+
+  	for (int cell = 0; cell < No_of_C180s; cell++){
+		if(cell < (Orig_No_of_C180s-LineCell) && impurity){	 
+			pressList[cell] = 0; 
+		}else{
+	       		pressList[cell] = minPressure; 
+		}
+	}
+
+   }else{
+
+	for (int cell = 0; cell < No_of_C180s; cell++){
+		if(cell < (Orig_No_of_C180s-1) && impurity){	 
+	      		pressList[cell] = 0; 
+		}else{
+   		        pressList[cell] = minPressure; 
+		}
+	}	
   }
 
   cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
+
+/******************************************************************************************/
+
 
   float rGrowth = 0;
   bool growthDone = false;
@@ -1089,6 +1216,9 @@ int main(int argc, char *argv[])
 
 
   int numNodes = No_of_C180s*192;
+  asym[0] = 0.5;
+  
+
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -1103,7 +1233,7 @@ int main(int argc, char *argv[])
                                                  d_X, d_Y, d_Z,
                                                  d_XM, d_YM, d_ZM, 
                                                  d_velListX, d_velListY, d_velListZ, 
-                                                 d_time, mass,
+                                                 d_time,  d_MassArray,
                                                  d_fConList, d_fDisList, d_fRanList,
                                                  No_of_C180s, add_rands, d_rngStates, rand_scale_factor);
       CudaErrorCheck();
@@ -1131,7 +1261,7 @@ int main(int argc, char *argv[])
       else {
       rGrowth = rMax;
       }
-      PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, minPressure, maxPressure, rGrowth, No_of_C180s,
+      PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, minPressure, maxPressure, d_GrowthRate, No_of_C180s,
                                                        useDifferentStiffnesses, stiffness1, d_Youngs_mod, step,
                                                        phase_count);
       CudaErrorCheck(); 
@@ -1183,14 +1313,14 @@ int main(int argc, char *argv[])
       }
       
       VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                        d_fConList, d_fRanList, delta_t, numNodes, mass);
+                                                        d_fConList, d_fRanList, delta_t, numNodes, d_MassArray);
       CudaErrorCheck();
 
 
       // Dissipative velocity update part...
       for (int s = 0; s < 1; ++s){
           VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                           d_fDisList, delta_t, numNodes, mass);
+                                                           d_fDisList, delta_t, numNodes, d_MassArray);
           CudaErrorCheck();
           
           CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
@@ -1292,13 +1422,17 @@ int main(int argc, char *argv[])
           
           NDIV[globalrank] += 1;
 
+	  if (asymDivision){ 
+	      ranmar(asym, 1);	
+	  } 
+
           cell_division<<<1,256>>>(globalrank,
                                    d_XP, d_YP, d_ZP, 
                                    d_X, d_Y, d_Z,
                                    d_XM, d_YM, d_ZM, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ, 
-                                   No_of_C180s, d_ran2, repulsion_range);
+                                   No_of_C180s, d_ran2, repulsion_range,asym[0]);
           CudaErrorCheck()
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
@@ -1749,10 +1883,11 @@ int initialize_C180s(int Orig_No_of_C180s)
       int c = 0;
       float rands[3];
 
-      if (rand_pos){
-          while (true){
+     if (rand_pos){
+          
+	while (true){
               ranmar(rands, 3);
-              float3 CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
+              CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
                                       rands[1]*(boxMax.y - 1.f)  + 1.f,
                                       0.f);
               if (flatbox == 1){
@@ -1761,7 +1896,7 @@ int initialize_C180s(int Orig_No_of_C180s)
                   CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
               }
 
-
+	      	
               bool farEnough = true;
               
               farEnough = !(CM.x+rCheck > boxMax.x ||
@@ -1775,15 +1910,18 @@ int initialize_C180s(int Orig_No_of_C180s)
                   }
               }
           
+ 
               if (farEnough){
+
                   allCMs[c] = CM; 
                   c++;
               }
           
               if (c == Orig_No_of_C180s){
-                  break;
+		break;
               }
           }
+	
 
           for (int cellInd = 0; cellInd < Orig_No_of_C180s; ++cellInd){
               for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
@@ -1792,14 +1930,108 @@ int initialize_C180s(int Orig_No_of_C180s)
                   Z[cellInd*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
               }
           }
-      } else {
+      
 
+	
+     } else if ( impurity ){
+	
+		c = Orig_No_of_C180s-1;
+		if ( line ){
+			
+			   int LineCell = (int) (boxMax.x/L);
+		           for ( rank = 0; rank < LineCell; rank++ )
+           		   {
+                                 
+           	      		 CM.x = L*rank + 0.5*L;
+            	      		 CM.y = rCheck;
+            	      		 CM.z = center.z;
+				 allCMs[c] = CM; 
+            	  	         c--;
+
+           		  }		
+		
+	
+		} else {			
+	
+			CM = center;	      
+        		allCMs[c] = CM; 
+        		c--;  
+		}
+
+		while (true){
+        	      
+		      ranmar(rands, 3);
+        	      CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
+        	                              rands[1]*(boxMax.y - 1.f)  + 1.f,
+        	                              0.f);
+        	      if (flatbox == 1){
+        	          CM.z = boxMax.z/2;
+        	      } else {
+        	          CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
+        	      }
+
+	      		
+        	      bool farEnough = true;
+              
+        	      farEnough = !(CM.x+rCheck > boxMax.x ||
+        	                    CM.y+rCheck > boxMax.y ||
+        	                    CM.z+rCheck > boxMax.z);
+              
+        	      for (int nInd = Orig_No_of_C180s-1; nInd > c; --nInd){
+        	          if (mag(allCMs[nInd] - CM) < 2*rCheck){
+        	              farEnough = false;
+        	              break;
+        	          }
+        	      }
+          
+
+		      if (farEnough){
+
+        	          allCMs[c] = CM; 
+        	          c--;
+        	      }
+        	  
+        	      if (c == -1){
+			break;
+        	      }
+               }
+			 
+
+
+          for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
+              for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+                  X[cellInd*192 + nodeInd] = initx[nodeInd] + allCMs[cellInd].x;
+                  Y[cellInd*192 + nodeInd] = inity[nodeInd] + allCMs[cellInd].y;
+                  Z[cellInd*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
+              }
+          }
+
+	
+
+	
+     } else if ( line && !impurity) {  	
+	
+           int LineCell = (int) (boxMax.x/L);
+           for ( rank = 0; rank < LineCell; ++rank )
+           {
+
+            	  for ( atom = 0 ; atom < 180 ; ++atom)
+            	  {
+            	      X[rank*192+atom] = initx[atom] + L*rank + 0.5*L;
+            	      Y[rank*192+atom] = inity[atom] + rCheck;
+            	      Z[rank*192+atom] = initz[atom] + center.z;
+            	  }
+
+           }	
+	
+	
+     } else {
+ 
           // crash because this doesn't work right now.
           // printf("Simulation in a box must be with random positions\n");
           // exit(12);
 
           rCheck *= 1.2;
-          float3 center = 0.5*boxMax;
 
           for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
           {
@@ -2111,6 +2343,7 @@ int read_json_params(const char* inpFile){
         divPlaneBasis[0] = divParams["divPlaneBasisX"].asFloat();
         divPlaneBasis[1] = divParams["divPlaneBasisY"].asFloat();
         divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
+	asymDivision = divParams["asymDivision"].asBool();
     }
 
     Json::Value stiffnessParams = inpRoot.get("stiffnessParams", Json::nullValue);
@@ -2145,6 +2378,8 @@ int read_json_params(const char* inpFile){
         boxMax.z = boxParams["box_len_z"].asFloat();
         flatbox = boxParams["flatbox"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
+	impurity = boxParams["impurity"].asBool();
+	line = boxParams["line"].asBool();
     }
     
     
@@ -2158,7 +2393,8 @@ int read_json_params(const char* inpFile){
     }
 
     Json::Value randParams = inpRoot.get("rand_params", Json::nullValue);
-
+	impurity = boxParams["impurity"].asBool();
+	line = boxParams["line"].asBool();
     if (randParams == Json::nullValue){
         printf("ERROR: Cannot load randomness parameters\n");
         return -1;
@@ -2239,6 +2475,10 @@ int read_json_params(const char* inpFile){
     printf("      correct_com         = %d\n", correct_com);
     
     
+
+    if (asymDivision){
+        printf("asymmetric cell division \n");
+    }    
 
     if ( radFrac < 0.4 || radFrac > 0.8 || radFrac < 0 ){
         printf("radFrac not in [0.4, 0.8] setting to 1.\n");
