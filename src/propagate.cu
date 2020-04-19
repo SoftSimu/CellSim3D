@@ -740,12 +740,20 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z, 
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
-                          float *d_time, float m,
+                          float *d_time, float* MassArray,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
                           int numCells, bool add_rands,
                           curandState *rngStates, float rand_scale_factor){
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
+
+
+    __shared__ float m;
+        
+    if (threadIdx.x == 0){
+    	m = MassArray[cellInd];
+    }
+    __syncthreads();
     
     
     if (cellInd < numCells && node < 180){
@@ -771,8 +779,18 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fConList, R3Nptrs fRanList,
-                                float dt, long int num_nodes, float m){
+                                float dt, long int num_nodes, float* MassArray){
+   
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+
+    __shared__ float m;
+        
+   if (threadIdx.x == 0){
+   	m = MassArray[blockIdx.x];
+   }
+  
+   __syncthreads();
+
 
     if (nodeInd < num_nodes){
         float root_dt = sqrtf(dt);
@@ -782,9 +800,18 @@ __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
     }
 }
 
+
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
-                                R3Nptrs fDisList, float dt, long int num_nodes, float m){
+                                R3Nptrs fDisList, float dt, long int num_nodes, float* MassArray){
+    
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+
+    __shared__ float m;
+        
+        if (threadIdx.x == 0){
+            m = MassArray[blockIdx.x];
+        }
+        __syncthreads();
 
     if (nodeInd < num_nodes){
         d_VX[nodeInd] = d_VX[nodeInd] + 0.5*dt*(fDisList.x[nodeInd])/m;
@@ -792,6 +819,7 @@ __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
         d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*dt*(fDisList.z[nodeInd])/m;
     }
 }
+
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,

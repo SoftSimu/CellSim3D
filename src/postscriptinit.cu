@@ -188,7 +188,7 @@ __global__ void  cell_division(int rank,
                                float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float *d_randNorm, float repulsion_range){
+                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym){
     int newrank = No_of_C180s;
     __shared__ float CMx, CMy, CMz;
   
@@ -225,7 +225,7 @@ __global__ void  cell_division(int rank,
         float Y = d_Y[rank*192+atom]; 
         float Z = d_Z[rank*192+atom]; 
          
-        CalcAndUpdateDaughtPos(rank, atom, 0.5*repulsion_range,
+        CalcAndUpdateDaughtPos(rank, atom, (1-asym)*repulsion_range,
                                CMx, CMy, CMz,
                                X, Y, Z,
                                d_XP, d_YP, d_ZP, 
@@ -240,7 +240,7 @@ __global__ void  cell_division(int rank,
         planeNz = -1*planeNz;
 
         // Now repeat for the second daughter
-        CalcAndUpdateDaughtPos(newrank, atom, 0.5*repulsion_range,
+        CalcAndUpdateDaughtPos(newrank, atom, asym*repulsion_range,
                                CMx, CMy, CMz,
                                X, Y, Z,
                                d_XP, d_YP, d_ZP, 
