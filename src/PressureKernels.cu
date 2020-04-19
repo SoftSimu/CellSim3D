@@ -2,7 +2,7 @@
 #include "postscript.h"
 
 __global__ void PressureUpdate (float* d_pressList, float minPressure,
-                                float maxPressure, float inc, int No_of_C180s,
+                                float maxPressure, float* inc, int No_of_C180s,
                                 bool useDifferentStiffnesses,
                                 float stiffness1, float* d_youngs_mod, int step,
                                 int phase_count){
@@ -15,13 +15,13 @@ __global__ void PressureUpdate (float* d_pressList, float minPressure,
         if (useDifferentStiffnesses == true){
             if (step < phase_count){
                 if (d_pressList[cellInd] < maxPressure){
-                    d_pressList[cellInd] += inc;
+                    d_pressList[cellInd] += inc[cellInd];
                 }
             }
             else{
                 if (d_youngs_mod[cellInd] == stiffness1){
                     if (d_pressList[cellInd] < maxPressure){
-                        d_pressList[cellInd] += inc;
+                        d_pressList[cellInd] += inc[cellInd];
                     }
                 }
                 else {
@@ -34,7 +34,7 @@ __global__ void PressureUpdate (float* d_pressList, float minPressure,
         }
         else {
             if (d_pressList[cellInd] < maxPressure){
-                d_pressList[cellInd] += inc;
+                d_pressList[cellInd] += inc[cellInd];
             }
         }
     }

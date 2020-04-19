@@ -10,7 +10,7 @@ __global__ void  cell_division(int rank,
                                float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ,
-                               int No_of_C180s, float *d_randNorm, float repulsion_range);
+                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym);
 
 __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
                            float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
@@ -69,7 +69,7 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
                           float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
-                          float *d_time, float mass,
+                          float *d_time, float* MassArray,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
                           int numCells, bool add_rands,
                           curandState *rngStates, float rand_scale_factor);
@@ -107,7 +107,7 @@ inline float getRmax2();
 inline int num_cells_far();
 
 __global__ void PressureUpdate (float* d_pressList, float minPressure,
-                                float maxPressure, float inc, int No_of_C180s,
+                                float maxPressure, float* inc, int No_of_C180s,
                                 bool useDifferentStiffnesses, float stiffness1,
                                 float* d_younds_mod, int step, int phase_count);
 
@@ -133,10 +133,10 @@ __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fConList, R3Nptrs fRanList,
-                                float dt, long int num_nodes, float m);
+                                float dt, long int num_nodes, float* MassArray);
 
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
-                                R3Nptrs fDisList, float dt, long int num_nodes, float m);
+                                R3Nptrs fDisList, float dt, long int num_nodes, float* MassArray);
 
 __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
