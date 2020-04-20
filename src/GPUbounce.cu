@@ -1882,6 +1882,8 @@ int initialize_C180s(int Orig_No_of_C180s)
 
       int c = 0;
       float rands[3];
+      float3 center = 0.5*boxMax;	
+      float3 CM;
 
      if (rand_pos){
           
