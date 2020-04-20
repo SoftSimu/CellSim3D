@@ -67,7 +67,8 @@
         "useDivPlaneBasis": 0,
         "divPlaneBasisX": 0,
         "divPlaneBasisY": 0,
-        "divPlaneBasisZ": 1
+        "divPlaneBasisZ": 1,
+	    "asymDivision": 0
     },
 
     "stiffnessParams":{
@@ -93,7 +94,9 @@
         "box_len_z": 2.0,
         "flatbox": 1,
         "dom_len": 1.5,
-        "rand_pos": 0
+        "rand_pos": 0,
+	    "impurity": 1,
+	    "line": 1
     },
 
     "rand_params":{
