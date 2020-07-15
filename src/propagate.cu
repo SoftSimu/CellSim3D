@@ -362,6 +362,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         if(usePBCs){
             posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
+            posX = posX - floor((float)posX/(float)Xdiv) * Xdiv;
         } else {   
             posX = (int)(X/DL);
             if ( posX < 0 ) posX = 0;
@@ -370,6 +371,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 		if(usePBCs){
             posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
+            posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
         } else {   
             posY = (int)(Y/DL);
             if ( posY < 0 ) posY = 0;
@@ -378,6 +380,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         if(usePBCs){
             posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
+            posZ = posZ - floor((float)posZ/(float)Zdiv) * Zdiv;
         } else {   
             posZ = (int)(Z/DL);
             if ( posZ < 0 ) posZ = 0;
@@ -624,6 +627,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         if(usePBCs){
             posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DL);
+            posX = posX - floor((float)posX/(float)Xdiv) * Xdiv;
         } else {   
             posX = (int)(X/DL);
             if ( posX < 0 ) posX = 0;
@@ -632,6 +636,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 		if(usePBCs){
             posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DL);
+            posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
         } else {   
             posY = (int)(Y/DL);
             if ( posY < 0 ) posY = 0;
@@ -640,6 +645,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         if(usePBCs){
             posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DL);
+            posZ = posZ - floor((float)posZ/(float)Zdiv) * Zdiv;
         } else {   
             posZ = (int)(Z/DL);
             if ( posZ < 0 ) posZ = 0;

@@ -225,21 +225,21 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 		int posz = 0;		
 
 		if(usePBCs) {
-	  		posx = (int)(( CMx[fullerene] - (int)( CMx[fullerene] / boxMax.x) * boxMax.x )/DL); 	
+			posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DL); 	
 	  	} else{ 
 	 		posx = (int)(CMx[fullerene]/DL);
 	  		if ( posx < 0 ) posx = 0;
 	  		if ( posx > Xdiv ) posx = Xdiv;
 	  	}
 	  	if(usePBCs){ 
-	  		 posy = (int)(( CMy[fullerene] - (int)( CMy[fullerene] / boxMax.y) * boxMax.y )/DL); 	
+			posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DL); 	
 	  	} else{
 	  		posy = (int)(CMy[fullerene]/DL);
 	  		if ( posy < 0 ) posy = 0;
 	  		if ( posy > Ydiv ) posy = Ydiv;
 	  	}
 	  	if(usePBCs){
-	  		posz = (int)(( CMz[fullerene] - (int)( CMz[fullerene] / boxMax.z) * boxMax.z )/DL); 	
+			posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxMax.z) * boxMax.z )/DL);	
 	  	}else{
 	   		posz = (int)(CMz[fullerene]/DL);
 	  		if ( posz < 0 ) posz = 0;
@@ -255,7 +255,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 			j1 = posx + i;
 
 			if(usePBCs){
-				j1 = j1 - (int)(j1/Xdiv) * Xdiv;	 
+				j1 = j1 - floor((float)j1/(float)Xdiv) * Xdiv;	 
 			}else{	
 				if(j1 < 0 || j1 > Xdiv) continue;
 			}
@@ -265,7 +265,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 				j2 = posy + j;
 
 				if(usePBCs){
-					j2 = j2 - (int)(j2/Ydiv) * Ydiv;	 
+					j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
 				}else{	
 					if(j2 < 0 || j2 > Ydiv) continue;
 				}
@@ -275,7 +275,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					j3 = posz + k;
 
 					if(usePBCs){
-						j3 = j3 - (int)(j3/Zdiv) * Zdiv;	 
+						j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
 					}else{
 						if(j3 < 0 || j3 > Zdiv) continue;
 					}
