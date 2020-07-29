@@ -11,6 +11,7 @@
         "viscotic_damping": 1,
         "internal_damping": 100.0,
         "gamma_visc": 1.0,
+        "shear_rate": 0.1,
         "division_Vol": 2.9,
         //"division_Vol": 2.0,
         "random_z_offset?": 0,
@@ -68,7 +69,7 @@
         "divPlaneBasisX": 0,
         "divPlaneBasisY": 0,
         "divPlaneBasisZ": 1,
-	    "asymDivision": 0
+	 "asymDivision": 0
     },
 
     "stiffnessParams":{
@@ -86,7 +87,8 @@
 
     "boxParams":{
         "useRigidSimulationBox": 1,
-        "usePBCs": 0, // unavailable
+        "usePBCs": 0,
+        "useLEbc": 0,
         "pbcAx": "x", // unavailable
         "boxLength": 6.0, // deprecated
         "box_len_x": 500.0,
@@ -95,8 +97,9 @@
         "flatbox": 1,
         "dom_len": 1.5,
         "rand_pos": 0,
-	    "impurity": 1,
-	    "line": 1
+        "rand_vel": 0,
+	"impurity": 1,
+	 "line": 1
     },
 
     "rand_params":{
