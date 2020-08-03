@@ -182,7 +182,9 @@ float wallLStart, wallLEnd;
 
 float boxLength, boxMin[3];
 float3 boxMax;
+float3 BoxMin;
 bool flatbox; 
+bool LineCenter; 
 bool useRigidSimulationBox;
 bool usePBCs; 
 bool useLEbc;
@@ -278,7 +280,7 @@ int frameCount = 1;
 
 bool correct_com = false;
 bool asymDivision;
-
+int Orig_No_of_C180s;
  
 
 int main(int argc, char *argv[])
@@ -286,7 +288,7 @@ int main(int argc, char *argv[])
   int i;
   int globalrank,step;
   int noofblocks, threadsperblock, prevnoofblocks;
-  int Orig_No_of_C180s, newcells;
+  int newcells;
   int reductionblocks;
   FILE *outfile;
   FILE *trajfile; // pointer to xyz file
@@ -324,17 +326,20 @@ int main(int argc, char *argv[])
 
 /*******************************************************************/
 
- 	int LineCell = 0;
-	if ( line ){
-		LineCell = (int) (boxMax.x/L);
-		if ( impurity ){
-			No_of_threads =  No_of_threads - 1 + LineCell;
-		} else {
-			No_of_threads = LineCell;	
-		}
-	
-	} 
-	printf("Number of initial cells are:   %d\n", No_of_threads);  	
+	int LineCell = 0;	
+	if (Restart == 0){
+
+		if ( line ){
+			LineCell = (int) ((boxMax.x - BoxMin.x)/L);
+			if ( impurity ){
+				No_of_threads =  No_of_threads - 1 + LineCell;
+			} else {
+				No_of_threads = LineCell;	
+			}
+		
+		} 
+		printf("Number of initial cells are:   %d\n", No_of_threads);  	
+	}	
 		
 
 
@@ -355,12 +360,31 @@ int main(int argc, char *argv[])
   GPUMemory = 0L;
   CPUMemory = 0L;
 
+
+
+  X = (float *)calloc(192*MaxNoofC180s,sizeof(float));
+  Y = (float *)calloc(192*MaxNoofC180s,sizeof(float));
+  Z = (float *)calloc(192*MaxNoofC180s,sizeof(float));
+  bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
+  velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
+  velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
+  velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  GrowthRate = (float *)calloc(MaxNoofC180s, sizeof(float));
+  MassArray = (float *)calloc(MaxNoofC180s, sizeof(float));
+  youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
+  pressList = (float *)calloc(MaxNoofC180s, sizeof(float));  
+
+  CPUMemory += 6L*192L*MaxNoofC180s*sizeof(float);
+  CPUMemory += MaxNoofC180s*10L*sizeof(float);
+
+
+
   h_R0 = (float *)calloc(192*3, sizeof(float));
 
   //if ( read_global_params()               != 0 ) return(-1);
-  
+  if (Restart == 1 ) if( ReadRestartFile() != 0 ) return(-1); 
   if ( generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
-  if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
+  if (Restart == 0 ) if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   NDIV = (int *)calloc(MaxNoofC180s,sizeof(int));
   CPUMemory += MaxNoofC180s*sizeof(int);
@@ -452,6 +476,8 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc( (void **)&d_MassArray, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc( (void **)&d_GrowthRate, MaxNoofC180s*sizeof(float))) return -1;
   
 
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
@@ -483,6 +509,8 @@ int main(int argc, char *argv[])
   cudaMemset(d_Maxy, 0, 1024*sizeof(float));
   cudaMemset(d_Minz, 0, 1024*sizeof(float));
   cudaMemset(d_Maxz, 0, 1024*sizeof(float));
+  cudaMemset(d_GrowthRate, 0, MaxNoofC180s*sizeof(float)); 
+  cudaMemset(d_MassArray, 0, MaxNoofC180s*sizeof(float)); 
   CudaErrorCheck();
 
   cudaMemset(d_velListX, 0, 192*MaxNoofC180s*sizeof(float));
@@ -579,7 +607,6 @@ int main(int argc, char *argv[])
   
 
   
-  bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -595,7 +622,6 @@ int main(int argc, char *argv[])
   Maxz  = (float *)calloc(1024, sizeof(float));
   NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
-  pressList = (float *)calloc(MaxNoofC180s, sizeof(float));
   resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
   
   CPUMemory += MaxNoofC180s*7L*sizeof(float);
@@ -608,13 +634,11 @@ int main(int argc, char *argv[])
   CPUMemory += 3*180*sizeof(float); 
 
 
-  cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  //cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
-  velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
-  velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
-  velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
 
-  if (rand_vel){
+
+  if (rand_vel & !Restart ){
   	 
   	if ( initialize_Vel(Orig_No_of_C180s) != 0 ) return(-1);
   	cudaMemcpy(d_velListX, velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
@@ -623,8 +647,6 @@ int main(int argc, char *argv[])
   	 
   }
 
-
-  
 
   
 
@@ -645,15 +667,6 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_56,   C180_56,   7*92*sizeof(int),cudaMemcpyHostToDevice);
 
-  cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_XM, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YM, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZM, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
 
   float tempX[192*No_of_C180s];
 
@@ -662,13 +675,13 @@ int main(int argc, char *argv[])
 
   CudaErrorCheck();
 
+  for (int i =  0; i < MaxNoofC180s; ++i) MassArray[i] = mass;
+	
+  if (Restart == 0) {	
+
 /******************************************************************************************/
 
   // Set the growth rate for the cells
-  if ( cudaSuccess != cudaMalloc( (void **)&d_GrowthRate, MaxNoofC180s*sizeof(float))) return(-1);
-  cudaMemset(d_GrowthRate, 0, MaxNoofC180s*sizeof(float));  
-
-  GrowthRate = (float *)calloc(MaxNoofC180s, sizeof(float));
   
   if (line){	
   
@@ -695,16 +708,10 @@ int main(int argc, char *argv[])
 	}
 
   }
-  cudaMemcpy(d_GrowthRate, GrowthRate, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck();
 
 /*****************************************************************************************/
 
   // Set the mass for the cells
-  if ( cudaSuccess != cudaMalloc( (void **)&d_MassArray, MaxNoofC180s*sizeof(float))) return(-1);
-  cudaMemset(d_MassArray, 0, MaxNoofC180s*sizeof(float));  
-
-  MassArray = (float *)calloc(MaxNoofC180s, sizeof(float));
 
   if (line){	
   
@@ -730,19 +737,43 @@ int main(int argc, char *argv[])
 	}
 
   }
-  cudaMemcpy(d_MassArray, MassArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck();
 
+     
 /**********************************************************************************/
 
+  // Initialize pressures
+
+  if (line){
+
+  	for (int cell = 0; cell < No_of_C180s; cell++){
+		if(cell < (Orig_No_of_C180s-LineCell) && impurity){	 
+			pressList[cell] = 0; 
+		}else{
+	       		pressList[cell] = minPressure; 
+		}
+	}
+
+   }else{
+
+	for (int cell = 0; cell < No_of_C180s; cell++){
+		if(cell < (Orig_No_of_C180s-1) && impurity){	 
+	      		pressList[cell] = 0; 
+		}else{
+   		        pressList[cell] = minPressure; 
+		}
+	}	
+  }
+
+/******************************************************************************************/
 
 
   // Set the Youngs_mod for the cells
-  youngsModArray = (float *)calloc(MaxNoofC180s, sizeof(float));
   for (int i =  0; i < MaxNoofC180s; ++i){
       youngsModArray[i] = stiffness1; 
   }
   
+
+
   if (useDifferentStiffnesses){
       printf("Making some cells softer... \n");
       if (closenessToCenter > 0.f && closenessToCenter < 1.f){
@@ -796,25 +827,70 @@ int main(int argc, char *argv[])
               return 12516;
           }
 
-          if (useRigidSimulationBox){
+          if (!useRigidSimulationBox){
               for (int i =0; i < c; ++i){
                   youngsModArray[i] = stiffness2; 
               }
           } else {
               float rands[1];
-              for (int i =0; i < c; ++i){
-                  ranmar(rands, 1);
-                  int ind = round(rands[0]*No_of_C180s);
-                  youngsModArray[ind] = stiffness2; 
-              }
+	      int coun;
+	      coun = c;	
+	      while(true){
+		
+		
+		ranmar(rands, 1);
+                int ind = round(rands[0]*No_of_C180s);
+
+		if ( youngsModArray[ind] == stiffness2 ) continue;                 
+		
+		youngsModArray[ind] = stiffness2;
+		coun--;
+		if (coun == 0 ) break;
+
+	      }		
+
           }
           printf("Made %d cells softer\n", c);
       }
   }
 
+
+  
+ } // end of restart if else
+
+
+/**************************************************************************************************************/
+ 
+ // copy to device after read restart or initialize values
+  cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  cudaMemcpy(d_XM, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_YM, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ZM, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  cudaMemcpy(d_velListX, velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velListY, velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_velListZ, velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
   cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
-  
+  cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  cudaMemcpy(d_MassArray, MassArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  cudaMemcpy(d_GrowthRate, GrowthRate, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+
+
+/**************************************************************************************************************/
+
+
   // initialize device rng
 
 
@@ -979,43 +1055,12 @@ int main(int argc, char *argv[])
   }
 
 
-/******************************************************************************************/
-
-  // Initialize pressures
-
-  if (line){
-
-  	for (int cell = 0; cell < No_of_C180s; cell++){
-		if(cell < (Orig_No_of_C180s-LineCell) && impurity){	 
-			pressList[cell] = 0; 
-		}else{
-	       		pressList[cell] = minPressure; 
-		}
-	}
-
-   }else{
-
-	for (int cell = 0; cell < No_of_C180s; cell++){
-		if(cell < (Orig_No_of_C180s-1) && impurity){	 
-	      		pressList[cell] = 0; 
-		}else{
-   		        pressList[cell] = minPressure; 
-		}
-	}	
-  }
-
-  cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck();
-
-/******************************************************************************************/
-
-
   float rGrowth = 0;
   bool growthDone = false;
   
-  boxMin[0] = 0;
-  boxMin[1] = 0;
-  boxMin[2] = 0;
+  boxMin[0] = BoxMin.x;
+  boxMin[1] = BoxMin.y;
+  boxMin[2] = BoxMin.z;
   
   // Setup simulation box, if needed (non-pbc)
   if (useRigidSimulationBox){
@@ -1023,20 +1068,17 @@ int main(int argc, char *argv[])
      // boxLength = boxLength*ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
       //if (boxLength < minBoxLength) boxLength = minBoxLength
       //if (Side_length < 5) boxLength = boxLength * 5; 
-      boxMin[0] = 0;
-      boxMin[1] = 0;
-      boxMin[2] = 0;
  
       DL = divVol;
-      Xdiv = ceil((boxMax.x - boxMin[0])/DL);
+      Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
       printf (" %d \n",Xdiv);
-      Ydiv = ceil((boxMax.y - boxMin[1])/DL);
+      Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
       printf (" %d \n",Ydiv);
-      Zdiv = ceil((boxMax.z - boxMin[2])/DL);
-      printf (" %d \n",Zdiv);  
+      Zdiv = ceil((boxMax.z - BoxMin.z)/DL);
+      printf (" %d \n",Zdiv); 
 
       printf("   Done!\n");
-      printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
+      printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", BoxMin.x, BoxMin.y, BoxMin.z);
       printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
      // printf("   Simulation box length = %f\n", boxLength);
   }
@@ -1058,6 +1100,10 @@ int main(int argc, char *argv[])
     boxMin[0] = 0;
     boxMin[1] = 0;
     boxMin[2] = 0;
+    BoxMin.x = 0.0;
+    BoxMin.y = 0.0;
+    BoxMin.z = 0.0;
+  
 
     DL = divVol;
     Xdiv = ceil((boxMax.x - boxMin[0])/DL);
@@ -1075,7 +1121,7 @@ int main(int argc, char *argv[])
     printf (" %f \n",DLp.z);
 
     printf("   Done!\n");
-    printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", boxMin[0], boxMin[1], boxMin[2]);
+    printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", BoxMin.x, BoxMin.y, BoxMin.z);
     printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
    // printf("   Simulation box length = %f\n", boxLength);
   }
@@ -1090,7 +1136,7 @@ int main(int argc, char *argv[])
   CudaErrorCheck(); 
 
 
-if(usePBCs){
+   if(usePBCs){
         
        CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
                                                           d_XM, d_YM, d_ZM,
@@ -1109,7 +1155,7 @@ if(usePBCs){
                         
         CudaErrorCheck();	
 	
-	}
+    }
 
 
 
@@ -1220,7 +1266,7 @@ if(usePBCs){
                                                      	wall1, wall2,
                                                      	threshDist, useWalls,
                                                      	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
                                                      	Pshift, useLEbc); 
                                                      	
@@ -1254,7 +1300,7 @@ if(usePBCs){
                                                      	wall1, wall2,
                                                      	threshDist, useWalls,
                                                      	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
                                                      	useRigidBoxZ);
                                                      	
@@ -1288,7 +1334,7 @@ if(usePBCs){
                                                      	wall1, wall2,
                                                      	threshDist, useWalls,
                                                      	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
                                                      	Pshift,useRigidBoxZ);
                                                      	
@@ -1311,6 +1357,13 @@ if(usePBCs){
   
   }
   
+  	  volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+                                     d_X, d_Y, d_Z,
+                                     d_CMx , d_CMy, d_CMz,
+                                     d_volume, d_cell_div, divVol,
+                                     checkSphericity, d_area, phase_count, step,
+                                     stiffness1, useDifferentStiffnesses, d_Youngs_mod,
+                                     recalc_r0);
   
 
 
@@ -1340,9 +1393,8 @@ if(usePBCs){
       fprintf(trajfile, "Header End\n");
       write_traj(0, trajfile);
   }
-
   if (write_cont_force){
-      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V,X,Y,Z,P,Vol\n");
+      fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,VX,VY,VZ,V,X,Y,Z,P,Vol,Area\n");
       
       cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -1354,8 +1406,10 @@ if(usePBCs){
       cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 
       cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
       writeForces(forceFile, 0, No_of_C180s);
   }
+
 
   //return 0;
 
@@ -1404,7 +1458,7 @@ if(usePBCs){
             if (rGrowth < 0) rGrowth =0; 
       }
       else {
-      rGrowth = rMax;
+      		rGrowth = rMax;
       }
       PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, minPressure, maxPressure, d_GrowthRate, No_of_C180s,
                                                        useDifferentStiffnesses, stiffness1, d_Youngs_mod, step,
@@ -1434,7 +1488,7 @@ if(usePBCs){
                                                      	wall1, wall2,
                                                      	threshDist, useWalls,
                                                      	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
                                                      	Pshift, useLEbc); 
                                                      	
@@ -1468,7 +1522,7 @@ if(usePBCs){
                                                      	wall1, wall2,
                                                      	threshDist, useWalls,
                                                      	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
                                                      	useRigidBoxZ);
                                                      	
@@ -1502,7 +1556,7 @@ if(usePBCs){
                                                      	wall1, wall2,
                                                      	threshDist, useWalls,
                                                      	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, d_boxMin, Youngs_mod,
+                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
                                                      	Pshift,useRigidBoxZ);
                                                      	
@@ -1702,6 +1756,8 @@ if(usePBCs){
               youngsModArray[No_of_C180s] = stiffness1; 
           }
           
+          GrowthRate[No_of_C180s] = GrowthRate[globalrank];
+          
           ++No_of_C180s;
           if (No_of_C180s > MaxNoofC180s){
               printf("ERROR: Population is %d, only allocated enough memory for %d\n",
@@ -1723,6 +1779,9 @@ if(usePBCs){
             cudaMemcpy(d_Youngs_mod, youngsModArray,
                        sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
             CudaErrorCheck();
+            
+            cudaMemcpy(d_GrowthRate, GrowthRate, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  	    CudaErrorCheck();
 
         }
 
@@ -2038,6 +2097,11 @@ if(usePBCs){
       }
 
   }
+  
+  if ( writeRestartFile(step, frameCount) != 0 ){
+ 	printf("Unable to call Restart Kernel. \n");
+	return(-1);
+   }
 
   cudaFree( (void *)d_bounding_xyz );
   cudaFree( (void *)d_XP );
@@ -2097,11 +2161,6 @@ int initialize_C180s(int Orig_No_of_C180s)
 
   printf("      Initializing positions for %d fullerenes...\n", Orig_No_of_C180s);
 
-  X = (float *)calloc(192*MaxNoofC180s,sizeof(float));
-  Y = (float *)calloc(192*MaxNoofC180s,sizeof(float));
-  Z = (float *)calloc(192*MaxNoofC180s,sizeof(float));
-
-  bounding_xyz = (float *)calloc(MaxNoofC180s,6*sizeof(float));
 
   CPUMemory += 3L*192L*MaxNoofC180s*sizeof(float);
   CPUMemory += MaxNoofC180s*6L*sizeof(float);
@@ -2145,49 +2204,55 @@ int initialize_C180s(int Orig_No_of_C180s)
       initz[i] -= sumz; 
   }
 
-  if (useRigidSimulationBox || usePBCs || useLEbc){
-      float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
-      printf("Check radius = %f\n", rCheck);
-      float3 allCMs[Orig_No_of_C180s];
+  float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
+  printf("Check radius = %f\n", rCheck);
+  float3 allCMs[Orig_No_of_C180s];
 
-      float vol = 0;
-      int k = 0;
+  float vol = 0;
+  int k = 0;
       
-      vol = boxMax.x*boxMax.y*boxMax.z;
-      k = floor(vol/0.786);
+  vol = (boxMax.x - BoxMin.x)*(boxMax.y - BoxMin.y)*(boxMax.z - BoxMin.z);
+  k = floor(vol/0.786);
       
-      if (k < Orig_No_of_C180s){
-          fprintf(stderr, "ERROR: Simulation box is too small\n");
-          fprintf(stderr, "       Big enough for %d\n", k);
-          return 27;
-      }
+  if (k < Orig_No_of_C180s){
+      fprintf(stderr, "ERROR: Simulation box is too small\n");
+      fprintf(stderr, "       Big enough for %d\n", k);
+      return 27;
+  }
 
-      printf("Can fit upto %d cells\n", k);
+  printf("Can fit upto %d cells\n", k);
 
-      int c = 0;
-      float rands[3];
-      float3 center = 0.5*boxMax;	
-      float3 CM;
+  int c = 0;
+  float rands[3];
+  float3 center = 0.5*boxMax;	
+  float3 CM;
+  float yoffset;
+  yoffset = BoxMin.y + 1;
+  if (LineCenter == 1) {
+	yoffset = center.y; 
+  }
 
-     if (rand_pos){
+  if (rand_pos && !impurity){
           
 	while (true){
               ranmar(rands, 3);
-              CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
-                                      rands[1]*(boxMax.y - 1.f)  + 1.f,
+              CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+                                      rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
                                       0.f);
               if (flatbox == 1){
-                  CM.z = boxMax.z/2;
+                  CM.z = (boxMax.z - BoxMin.z)/2;
               } else {
-                  CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
+                  CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
               }
 
 	      	
               bool farEnough = true;
               
-              farEnough = !(CM.x+rCheck > boxMax.x ||
-                            CM.y+rCheck > boxMax.y ||
-                            CM.z+rCheck > boxMax.z);
+              
+              farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+                            CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+                            CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z);
+              
               
               for (int nInd = 0; nInd < c; ++nInd){
                   if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -2224,12 +2289,12 @@ int initialize_C180s(int Orig_No_of_C180s)
 		c = Orig_No_of_C180s-1;
 		if ( line ){
 			
-			   int LineCell = (int) (boxMax.x/L);
+			   int LineCell = (int) ((boxMax.x - BoxMin.x )/L);
 		           for ( rank = 0; rank < LineCell; rank++ )
            		   {
                                  
            	      		 CM.x = L*rank + 0.5*L;
-            	      		 CM.y = rCheck;
+            	      		 CM.y = yoffset;
             	      		 CM.z = center.z;
 				 allCMs[c] = CM; 
             	  	         c--;
@@ -2247,21 +2312,21 @@ int initialize_C180s(int Orig_No_of_C180s)
 		while (true){
         	      
 		      ranmar(rands, 3);
-        	      CM = make_float3(rands[0]*(boxMax.x - 1.f)  + 1.f,
-        	                              rands[1]*(boxMax.y - 1.f)  + 1.f,
-        	                              0.f);
-        	      if (flatbox == 1){
-        	          CM.z = boxMax.z/2;
-        	      } else {
-        	          CM.z = rands[2]*(boxMax.z - 1.f)  + 1.f;
-        	      }
+              	      CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+                                      rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
+                                      0.f);
+              		if (flatbox == 1){
+               	   CM.z = (boxMax.z - BoxMin.z)/2;
+              		}else {
+                  		CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+              		}
 
 	      		
         	      bool farEnough = true;
               
-        	      farEnough = !(CM.x+rCheck > boxMax.x ||
-        	                    CM.y+rCheck > boxMax.y ||
-        	                    CM.z+rCheck > boxMax.z);
+        	      farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+        	                    CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+        	                    CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
               
         	      for (int nInd = Orig_No_of_C180s-1; nInd > c; --nInd){
         	          if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -2297,14 +2362,14 @@ int initialize_C180s(int Orig_No_of_C180s)
 	
      } else if ( line && !impurity) {  	
 	
-           int LineCell = (int) (boxMax.x/L);
+           int LineCell = (int) ((boxMax.x - BoxMin.x )/L);
            for ( rank = 0; rank < LineCell; ++rank )
            {
 
             	  for ( atom = 0 ; atom < 180 ; ++atom)
             	  {
             	      X[rank*192+atom] = initx[atom] + L*rank + 0.5*L;
-            	      Y[rank*192+atom] = inity[atom] + rCheck;
+            	      Y[rank*192+atom] = inity[atom] + yoffset;
             	      Z[rank*192+atom] = initz[atom] + center.z;
             	  }
 
@@ -2336,9 +2401,9 @@ int initialize_C180s(int Orig_No_of_C180s)
 
       // check all the fucking positions...
       for (int i = 0; i < Orig_No_of_C180s*192; ++i){
-          if (X[i] > boxMax.x ||
-              Y[i] > boxMax.y ||
-              Z[i] > boxMax.z){
+          if (X[i] > boxMax.x || X[i] < BoxMin.x ||
+              Y[i] > boxMax.y || Y[i] < BoxMin.y ||
+              Z[i] > boxMax.z || Z[i] < BoxMin.z ){
 
               printf("shit is in the fan\n");
               printf("%f %f %f\n", X[i], Y[i], Z[i]);
@@ -2346,22 +2411,7 @@ int initialize_C180s(int Orig_No_of_C180s)
           }
                                
       }
-  }
-  else{
-      for ( rank = 0; rank < Orig_No_of_C180s; ++rank )
-      {
-          ey=rank%Side_length;
-          ex=rank/Side_length;
 
-          for ( atom = 0 ; atom < 180 ; ++atom)
-          {
-              X[rank*192+atom] = initx[atom] + L1*ex + 0.5*L1;
-              Y[rank*192+atom] = inity[atom] + L1*ey + 0.5*L1;
-              Z[rank*192+atom] = initz[atom] + boxMax.z/2;
-          }
-
-      }
-  }
 
   return(0);
 }
@@ -2514,24 +2564,39 @@ int read_fullerene_nn(void)
 
   printf("Calculating equilibrium bond lengths\n");
 
+  float initX[181], initY[181], initZ[181];
+
+  infil = fopen("C180","r");
+  if ( infil == NULL ) {printf("Unable to open file C180\n");return(-1);}
+  for ( int atom = 0 ; atom < 180 ; ++atom)
+  {
+  	if ( fscanf(infil,"%f %f %f",&initX[atom], &initY[atom], &initZ[atom]) != 3 )
+  	{
+              printf("   Unable to read file C180 on line %d\n",atom+1);
+              fclose(infil);
+              return(-1);
+          }
+  }
+  fclose(infil);
+		
+
   for (int i = 0; i < 180; ++i){
       int N1 = C180_nn[0 + i];
       int N2 = C180_nn[192 + i];
       int N3 = C180_nn[384 + i];
 
       float3 a, b; 
-      a = make_float3(X[i], Y[i], Z[i]);
+      a = make_float3(initX[i], initY[i], initZ[i]);
 
-      b = make_float3(X[N1], Y[N1], Z[N1]);
+      b = make_float3(initX[N1], initY[N1], initZ[N1]);
       h_R0[0 + i] = mag(a-b);
 
-      b = make_float3(X[N2], Y[N2], Z[N2]);
+      b = make_float3(initX[N2], initY[N2], initZ[N2]);
       h_R0[192 + i] = mag(a-b);
 
-      b = make_float3(X[N3], Y[N3], Z[N3]);
+      b = make_float3(initX[N3], initY[N3], initZ[N3]);
       h_R0[384 + i] = mag(a-b);
   }
-
   return(0);
 }
 
@@ -2697,7 +2762,11 @@ int read_json_params(const char* inpFile){
         boxMax.x = boxParams["box_len_x"].asFloat();
         boxMax.y = boxParams["box_len_y"].asFloat(); 
         boxMax.z = boxParams["box_len_z"].asFloat();
+        BoxMin.x = boxParams["BoxMin_x"].asFloat();
+        BoxMin.y = boxParams["BoxMin_y"].asFloat(); 
+        BoxMin.z = boxParams["BoxMin_z"].asFloat();
         flatbox = boxParams["flatbox"].asBool();
+        LineCenter = boxParams["LineCenter"].asBool();
         rand_vel = boxParams["rand_vel"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
 	impurity = boxParams["impurity"].asBool();
@@ -2786,6 +2855,9 @@ int read_json_params(const char* inpFile){
     printf("      box_len_x           = %f\n", boxMax.x);
     printf("      box_len_y           = %f\n", boxMax.y);
     printf("      box_len_z           = %f\n", boxMax.z);
+    printf("      BoxMin_x            = %f\n", BoxMin.x);
+    printf("      BoxMin_y            = %f\n", BoxMin.y);
+    printf("      BoxMin_z            = %f\n", BoxMin.z);
     printf("      flatbox             = %d\n", flatbox); 
     printf("      doAdaptive_dt       = %d\n", doAdaptive_dt); 
     printf("      dt_max              = %f\n", dt_max); 
@@ -3241,4 +3313,119 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
 
     }
 }
+
+
+int writeRestartFile(int t_step, int frameCount){
+	
+	FILE *Restartfile;
+	Restartfile = fopen ("Restart.xyz", "w");
+        if ( Restartfile == NULL)
+  	{
+      	    printf("Failed to open Restart file \n" );
+      	    return -1;
+  	}
+
+	int cellType = 0;
+	float p = 0;
+	float m = 0;
+	float g = 0;
+	float y = 0;
+
+	fwrite(&t_step, sizeof(int), 1, Restartfile);
+	fwrite(&frameCount, sizeof(int), 1, Restartfile); 
+	fwrite(&No_of_C180s, sizeof(int), 1, Restartfile);   
+ 
+        	
+        for (int c = 0; c < No_of_C180s; c++){
+		p = pressList[c];
+		m = MassArray[c];
+		g = GrowthRate[c];
+		y = youngsModArray[c];
+        		
+		fwrite(&c, sizeof(int), 1, Restartfile);
+        	fwrite(X + (c*192), sizeof(float), 192, Restartfile); 
+        	fwrite(Y + (c*192), sizeof(float), 192, Restartfile); 
+        	fwrite(Z + (c*192), sizeof(float), 192, Restartfile);
+		fwrite(velListX + (c*192), sizeof(float), 192, Restartfile);
+            	fwrite(velListY + (c*192), sizeof(float), 192, Restartfile);
+		fwrite(velListZ + (c*192), sizeof(float), 192, Restartfile);
+		fwrite(&p, sizeof(float), 1, Restartfile);
+		fwrite(&m, sizeof(float), 1, Restartfile);
+	        fwrite(&g, sizeof(float), 1, Restartfile);
+            	fwrite(&y, sizeof(float), 1, Restartfile);
+        }
+
+   
+   fclose(Restartfile);
+   return 0;
+
+}
+
+int ReadRestartFile( ){
+
+  FILE *infil;
+  int s;
+  int f;
+  int nCell;
+  int CellType;  
+  int CellInd;
+  int shift;
+  
+
+  printf("Reading Restart.xyz ...\n");
+  infil = fopen("Restart.xyz","rb");
+  
+  if ( infil == NULL ) {
+    printf("Unable to open file Restart.xyz \n");
+    return(-1);
+  }
+
+
+
+  if ( fread(&s, sizeof(int),1,infil) != 1 ){ 
+	printf("Data missing from trajectory. \n");
+	return(-1);
+  } else printf("\nstep %d \n",s -1);
+
+  if ( fread(&f, sizeof(int),1,infil) != 1 ){ 
+	printf("Data missing from trajectory. \n");
+	return(-1);
+  } else printf("frame number is: %d \n",f - 1);
+
+  if ( fread(&nCell, sizeof(int),1,infil) != 1 ) { 
+	printf("Data missing from trajectory. \n");
+	return(-1);
+  }
+
+  No_of_threads = nCell;	
+  No_of_C180s = nCell;
+  Orig_No_of_C180s = nCell;
+
+  printf("Number of the initial Cells is: %d \n",Orig_No_of_C180s);
+  
+
+  for (int c = 0; c < Orig_No_of_C180s; c++){
+
+    shift = c*192;
+    
+    if ( fread(&CellInd, sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    if ( fread(&X[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    if ( fread(&Y[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    if ( fread(&Z[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    if ( fread(&velListX[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    if ( fread(&velListY[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    if ( fread(&velListZ[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    if ( fread(&pressList[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    if ( fread(&MassArray[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    if ( fread(&GrowthRate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    if ( fread(&youngsModArray[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");  
+
+	
+   }
+
+   fclose(infil);
+   return 0;
+
+}
+	
 

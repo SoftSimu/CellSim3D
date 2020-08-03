@@ -74,7 +74,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
                            float Pshift, bool useLEbc);
                            
@@ -92,7 +92,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
                            bool useRigidBoxZ);
                            
@@ -109,7 +109,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
                            float Pshift , bool useRigidBoxZ);
                            
@@ -144,6 +144,11 @@ void ranmar(float rvec[], int len);
 void write_traj(int t_step, FILE* trajfile);
 void write_vel(int t_step, FILE* velFile);
 void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount);
+
+// read and write restart function
+int writeRestartFile(int t_step, int frameCount);
+int ReadRestartFile();
+
 
 // Function to get the indeces of dividing cells
 inline void count_and_get_div();

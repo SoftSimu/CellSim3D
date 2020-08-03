@@ -193,7 +193,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
                            float Pshift ,bool useLEbc)
 {
@@ -484,7 +484,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         // add forces from simulation box if needed:
         float gap1, gap2; 
 
-        gap1 = d_X[atomInd] /* - 0 */;
+        gap1 = d_X[atomInd] - BoxMin.x;
         gap2 = boxMax.x - d_X[atomInd]; 
 
         if (gap1 < threshDist){
@@ -495,26 +495,26 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             FX += 100*Youngs_mod*(gap2 - threshDist);
         }
             
-        gap1 = d_Y[atomInd];
+        gap1 = d_Y[atomInd] - BoxMin.y;
         gap2 = boxMax.y - d_Y[atomInd];
 
         if (gap1 < threshDist){
             FY += -100*Youngs_mod*(gap1 - threshDist);
-         }
-
-        if (gap2 < threshDist){
-            FY += 100*Youngs_mod*(gap2 - threshDist);
-         }
-
-        gap1 = d_Z[atomInd];
-        gap2 = boxMax.z - d_Z[atomInd];
-
-        if (gap1 < threshDist){
-           FZ += -100*Youngs_mod*(gap1 - threshDist);
         }
 
         if (gap2 < threshDist){
-           FZ += 100*Youngs_mod*(gap2 - threshDist);
+            FY += 100*Youngs_mod*(gap2 - threshDist);
+        }
+
+        gap1 = d_Z[atomInd] - BoxMin.z;
+        gap2 = boxMax.z - d_Z[atomInd];
+	
+        if (gap1 < threshDist){
+            FZ += -100*Youngs_mod*(gap1 - threshDist);
+        }
+	
+        if (gap2 < threshDist){
+            FZ += 100*Youngs_mod*(gap2 - threshDist);
         }
 
         
@@ -544,7 +544,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
                            bool useRigidBoxZ)
 {
@@ -897,7 +897,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float* d_boxMin, float Youngs_mod, 
+                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
                            float Pshift , bool useRigidBoxZ)
 {

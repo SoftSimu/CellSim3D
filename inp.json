@@ -89,17 +89,22 @@
         "useRigidSimulationBox": 1,
         "usePBCs": 0,
         "useLEbc": 0,
+        "useRigidBoxZ": 1,
         "pbcAx": "x", // unavailable
         "boxLength": 6.0, // deprecated
         "box_len_x": 500.0,
         "box_len_y": 500.0,
         "box_len_z": 2.0,
+         "BoxMin_x": 0.0,
+	"BoxMin_y": 0.0,
+	"BoxMin_z": 0.0,
         "flatbox": 1,
+	"LineCenter": 1,
         "dom_len": 1.5,
         "rand_pos": 0,
         "rand_vel": 0,
-	"impurity": 1,
-	 "line": 1
+	"impurity": 0,
+	 "line": 0
     },
 
     "rand_params":{
