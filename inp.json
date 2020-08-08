@@ -104,6 +104,7 @@
         "rand_pos": 0,
         "rand_vel": 0,
 	"impurity": 0,
+	"impurityNum": 0,
 	 "line": 0
     },
 

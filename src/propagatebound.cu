@@ -206,9 +206,8 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 
 
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
-                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float DL,bool usePBCs,bool useLEbc,
-                           float Pshift)
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           int *d_NoofNNlist, int *d_NNlist, float DL)
 {
 
 
@@ -224,16 +223,16 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 		int posz = 0;		
 
 
-	 	posx = (int)(CMx[fullerene]/DL);
+	 	posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
 
-	  	posy = (int)(CMy[fullerene]/DL);
+	  	posy = (int)((CMy[fullerene]-BoxMin.y)/DL);
 	  	if ( posy < 0 ) posy = 0;
 	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
 
-	   	posz = (int)(CMz[fullerene]/DL);
+	   	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
 	  	
