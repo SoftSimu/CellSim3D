@@ -72,8 +72,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, R3Nptrs d_ExtForces, const float* volList, const float div_vol,
                            int impurityNum);
+
                            
 
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -139,7 +140,7 @@ void ranmar(float rvec[], int len);
 
 // Function to write the trajectory
 void write_traj(int t_step, FILE* trajfile);
-void write_vel(int t_step, FILE* velFile);
+void write_vel(int t_step, FILE* velFile,int frameCount);
 void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount);
 
 // read and write restart function

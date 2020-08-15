@@ -194,7 +194,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, R3Nptrs d_ExtForces, const float* volList, const float div_vol,
                            int impurityNum )
 {
     // __shared__ curandState rngState;
@@ -288,6 +288,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	float FX = 0.f;
         	float FY = 0.f;
         	float FZ = 0.f;
+        	float FX_ext = 0.f;
+        	float FY_ext = 0.f;
+        	float FZ_ext = 0.f;
 
         	int nnAtomInd;
         
@@ -459,6 +462,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	FX += contactForce.x;
         	FY += contactForce.y;
         	FZ += contactForce.z; 
+        	
+        	FX_ext += contactForce.x;
+        	FY_ext += contactForce.y;
+        	FZ_ext += contactForce.z; 
 
 #ifdef FORCE_DEBUG
 
@@ -489,10 +496,12 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	if (gap1 < threshDist){
             		FX += -100*Youngs_mod*(gap1 - threshDist);
+            		FX_ext += -100*Youngs_mod*(gap1 - threshDist);
         	}
 
         	if (gap2 < threshDist){
             		FX += 100*Youngs_mod*(gap2 - threshDist);
+            		FX_ext += 100*Youngs_mod*(gap2 - threshDist);
         	}
             
         	gap1 = d_Y[atomInd] - BoxMin.y;
@@ -500,10 +509,12 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	if (gap1 < threshDist){
             		FY += -100*Youngs_mod*(gap1 - threshDist);
+            		FY_ext += -100*Youngs_mod*(gap1 - threshDist);
         	}
 
         	if (gap2 < threshDist){
             		FY += 100*Youngs_mod*(gap2 - threshDist);
+            		FY_ext += 100*Youngs_mod*(gap2 - threshDist);
         	}
 
         	gap1 = d_Z[atomInd] - BoxMin.z;
@@ -511,10 +522,12 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	
         	if (gap1 < threshDist){
             		FZ += -100*Youngs_mod*(gap1 - threshDist);
+            		FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
         	}
 	
         	if (gap2 < threshDist){
             		FZ += 100*Youngs_mod*(gap2 - threshDist);
+            		FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
         	}
 
         
@@ -526,6 +539,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	d_contactForces.x[atomInd] = FX;
         	d_contactForces.y[atomInd] = FY;
        	d_contactForces.z[atomInd] = FZ;
+       	
+       	d_ExtForces.x[atomInd] = FX_ext;
+        	d_ExtForces.y[atomInd] = FY_ext;
+       	d_ExtForces.z[atomInd] = FZ_ext;
    	}
    }
 }
