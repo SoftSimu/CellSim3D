@@ -96,7 +96,7 @@
         "box_len_x": 500.0,
         "box_len_y": 500.0,
         "box_len_z": 2.0,
-         "BoxMin_x": 0.0,
+        "BoxMin_x": 0.0,
 	"BoxMin_y": 0.0,
 	"BoxMin_z": 0.0,
         "flatbox": 1,

@@ -244,19 +244,19 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 	  	for (  int i = -1; i < 2 ; ++i ){
 				
 			j1 = posx + i;
-			if(j1 < 0 || j1 > Xdiv) continue;
+			if(j1 < 0 || j1 > Xdiv-1) continue;
 			
 
 			for (  int j = -1; j < 2; ++j ){
 					
 				j2 = posy + j;
-				if(j2 < 0 || j2 > Ydiv) continue;
+				if(j2 < 0 || j2 > Ydiv-1) continue;
 				
 	
 				for (  int k = -1 ; k < 2; ++k ){
 			
 					j3 = posz + k;
-					if(j3 < 0 || j3 > Zdiv) continue;
+					if(j3 < 0 || j3 > Zdiv-1) continue;
 		
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
@@ -327,7 +327,7 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 					
 					if(useRigidBoxZ){
 					
-						if(j3 < 0 || j3 > Zdiv) continue;
+						if(j3 < 0 || j3 > Zdiv-1) continue;
 					
 					}else{	
 					

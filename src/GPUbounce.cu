@@ -1003,7 +1003,7 @@ int main(int argc, char *argv[])
       //if (boxLength < minBoxLength) boxLength = minBoxLength
       //if (Side_length < 5) boxLength = boxLength * 5; 
  
-      DL = divVol;
+      DL = 1.2;
       Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
       printf (" %d \n",Xdiv);
       Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
@@ -1039,7 +1039,7 @@ int main(int argc, char *argv[])
     BoxMin.z = 0.0;
   
 
-    DL = divVol;
+    DL = 1.2;
     Xdiv = ceil((boxMax.x - boxMin[0])/DL);
     DLp.x = (boxMax.x - boxMin[0])/Xdiv;
     printf (" %d \n",Xdiv);
@@ -2891,12 +2891,12 @@ int read_json_params(const char* inpFile){
         return -1;
     }
 
-    if (Time_steps%trajWriteInt != 0){
+    if ((Time_steps + equiStepCount)%trajWriteInt != 0){
         printf ("Invalid trajectory write interval. Time steps must be divisible by it. \n");
         return -1;
     }
 
-    if (newCellCountInt > Time_steps){
+    if (newCellCountInt > Time_steps + 1){
         printf("New cell counting interval is too large. \n");
         return -1;
     }

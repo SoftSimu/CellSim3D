@@ -359,6 +359,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	// interfullerene attraction and repulsion
         
         	NooflocalNN = 0;
+        	float range;
+        	range = (attraction_range + 1) * (attraction_range + 1);
         
         	int posX = 0;    
         	int posY = 0;
@@ -401,7 +403,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
                
-	            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
+	            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
 	                continue;
 
 	            ++NooflocalNN;
@@ -720,6 +722,8 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         // interfullerene attraction and repulsion
         
         NooflocalNN = 0;
+        float range;
+        range = (attraction_range + 1) * (attraction_range + 1);
         
         int posX = 0;    
         int posY = 0;
@@ -774,7 +778,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
 	    }	
                
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
 
             ++NooflocalNN;
@@ -1069,6 +1073,8 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         // interfullerene attraction and repulsion
         
         NooflocalNN = 0;
+        float range;
+        range = (attraction_range + 1) * (attraction_range + 1);
         
         int posX = 0;    
         int posY = 0;
@@ -1153,7 +1159,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
 	    }	
                
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
 
             ++NooflocalNN;
@@ -1361,6 +1367,8 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	int NooflocalNN = 0;
         	int localNNs[10];
+        	float range;
+        	range = (attraction_range + 1) * (attraction_range + 1);
 
         
         	int posX = 0;    
@@ -1393,7 +1401,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    deltaY  = Y - d_CMy[nn_rank];            
         	    deltaZ  = Z - d_CMz[nn_rank];
 
-        	    if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
+        	    if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
         	        continue;
 
         	    ++NooflocalNN;
@@ -1521,6 +1529,8 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
         int NooflocalNN = 0;
         int localNNs[10];
+        float range;
+        range = (attraction_range + 1) * (attraction_range + 1);
 
         
         int posX = 0;    
@@ -1566,7 +1576,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             }
             
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
 
             ++NooflocalNN;
@@ -1700,6 +1710,8 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         
         int NooflocalNN = 0;
         int localNNs[10];
+        float range;
+        range = (attraction_range + 1) * (attraction_range + 1);
 
         
         int posX = 0;    
@@ -1775,7 +1787,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             }
             
-            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ - r_CM_o > attraction_range*attraction_range )
+            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
 
             ++NooflocalNN;
