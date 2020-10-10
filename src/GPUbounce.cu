@@ -1003,7 +1003,12 @@ int main(int argc, char *argv[])
       //if (boxLength < minBoxLength) boxLength = minBoxLength
       //if (Side_length < 5) boxLength = boxLength * 5; 
  
-      DL = 1.2;
+      if ((boxMax.z - BoxMin.z) < divVol){
+      	DL = divVol; 
+      } else {
+      	DL = 1.5;
+      }
+      
       Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
       printf (" %d \n",Xdiv);
       Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
