@@ -43,7 +43,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          char* cell_div, float divVol, bool checkSphericity,
                          float* areaList, int phase_count, int step,
                          float stiffness1, bool useDifferentStiffnesses, float* d_younds_mod,
-                         bool recalc_r0);
+                         bool recalc_r0,float ApoVol, char* cell_Apo);
 
 int printboundingbox(int rank, float *bounding_xyz);
 int initialize_C180s(int Orig_No_of_C180s);
@@ -150,7 +150,7 @@ int ReadRestartFile();
 
 // Function to get the indeces of dividing cells
 inline void count_and_get_div();
-
+inline void count_and_die();
 
 inline void calc_sys_CM();
 
@@ -159,7 +159,7 @@ inline float getRmax2();
 inline int num_cells_far();
 
 __global__ void PressureUpdate (float* d_pressList, float minPressure,
-                                float maxPressure, float inc, int No_of_C180s,
+                                float maxPressure, float* d_Growt_rate, int No_of_C180s,
                                 bool useDifferentStiffnesses, float stiffness1,
                                 float* d_younds_mod, int step, int phase_count, int impurityNum);
 
@@ -239,3 +239,9 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
                                float Pshift, float Vshift);
+                               
+__global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
+                              float* d_XM,float* d_YM,float* d_ZM,
+                              float* d_velListX,float* d_velListY,float* d_velListZ,
+                              float* d_pressList,float* d_Youngs_mod, float* d_Growth_rate,
+                              int No_of_C180s,int Aporank);

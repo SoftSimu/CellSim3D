@@ -8,7 +8,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          char* cell_div, float divVol, bool checkSphericity,
                          float* areaList, int phase_count, int step,
                          float stiffness1, bool useDifferentStiffnesses, float* d_younds_mod,
-                         bool recalc_r0){
+                         bool recalc_r0, float ApoVol, char* cell_Apo){
     __shared__ float locX[192];
     __shared__ float locY[192];
     __shared__ float locZ[192];
@@ -141,6 +141,13 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         if (volume > divVol){
             cell_div[fullerene] = 1;
         }
+
+	if (volume < ApoVol){    	
+	    cell_Apo[fullerene] = 1;	
+	} else {
+	    cell_Apo[fullerene] = 0;	
+	}
+
 
         if (checkSphericity){
             areaList[fullerene] = area;

@@ -2163,4 +2163,106 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
       }                         
  }
  
- 
+
+__global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
+                           float* d_XM,float* d_YM,float* d_ZM,
+                           float* d_velListX,float* d_velListY,float* d_velListZ,
+                           float* d_pressList,float* d_Youngs_mod, float* d_Growth_rate,
+                           int No_of_C180s, int Aporank){
+                                         
+       __shared__ float ReadData[1024];
+       
+       
+       int tid = threadIdx.x + 192*(Aporank + 1);
+       int Ind = threadIdx.x + (Aporank + 1);
+       int MaxAtom = (No_of_C180s + 1) * 192;
+       int MaxCell = (No_of_C180s + 1);
+       
+       
+       while (tid < MaxAtom) {
+       
+       	if (blockIdx.x == 0){ 	 
+      	
+       		ReadData[threadIdx.x] = d_X[tid];       		
+       		__syncthreads();       		
+       		d_X[tid - 192] = ReadData[threadIdx.x];
+
+       	}
+       
+       	if (blockIdx.x == 1){
+
+       		ReadData[threadIdx.x] = d_Y[tid];
+       		__syncthreads();
+       		d_Y[tid - 192] = ReadData[threadIdx.x];
+       		
+       	}
+       
+       	if (blockIdx.x == 2){
+       	
+       		ReadData[threadIdx.x] = d_Z[tid];
+       		__syncthreads();       		
+       		d_Z[tid - 192] = ReadData[threadIdx.x];
+       
+       	}                                  
+
+
+		if (blockIdx.x == 3){
+       	
+       		ReadData[threadIdx.x] = d_velListX[tid];	
+       		__syncthreads();	
+       		d_velListX[tid - 192] = ReadData[threadIdx.x];       
+       	}
+       
+       	if (blockIdx.x == 4){
+       	
+       		ReadData[threadIdx.x] = d_velListY[tid];      		
+       		__syncthreads();
+       		d_velListY[tid - 192] = ReadData[threadIdx.x];
+      
+       	}
+       
+       	if (blockIdx.x == 5){
+	
+       		ReadData[threadIdx.x] = d_velListZ[tid];	
+       		__syncthreads();
+			d_velListZ[tid - 192] = ReadData[threadIdx.x];
+    
+       	} 
+       	
+       	
+       	tid = tid + 1024;
+       	
+       }
+       
+       
+	while (Ind < MaxCell) {
+       	
+       	if (blockIdx.x == 6){
+	
+       		ReadData[threadIdx.x] = d_pressList[Ind];	
+       		__syncthreads();
+			d_pressList[Ind - 1] = ReadData[threadIdx.x];
+    
+       	}
+       	
+       	if (blockIdx.x == 7){
+	
+       		ReadData[threadIdx.x] = d_Youngs_mod[Ind];	
+       		__syncthreads();
+			d_Youngs_mod[Ind - 1] = ReadData[threadIdx.x];
+    
+       	}                                 
+
+       	if (blockIdx.x == 8){
+	
+       		ReadData[threadIdx.x] = d_Growth_rate[Ind];	
+       		__syncthreads();
+			d_Growth_rate[Ind - 1] = ReadData[threadIdx.x];
+    
+       	}
+
+ 		Ind = Ind + 1024;                                        
+	}
+	
+}
+  

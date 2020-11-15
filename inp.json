@@ -55,6 +55,13 @@
         "haylimit": 10,
         "cellLifeTime": 20000
     },
+    
+    "apoptosis": {
+	 "apoptosis": 1,
+         "Apo_ratio": 0.005,
+         "squeeze_rate": 0.005,
+         "apoptosis_Vol": 0.5
+    },
 
     "walls": { // deprecated, use box params
         "useWalls": 0,
@@ -106,7 +113,8 @@
         "rand_vel": 0,
 	"impurity": 0,
 	"impurityNum": 0,
-	 "line": 0
+	"line": 0,
+	"plane": 0
     },
 
     "rand_params":{
