@@ -565,7 +565,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           bool useRigidBoxZ)
+                           bool useRigidBoxZ, bool useRigidBoxY)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -734,8 +734,14 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         posX = posX - floor((float)posX/(float)Xdiv) * Xdiv;
         
 
-        posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DLp.y);
-        posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
+	if (useRigidBoxY){    
+		posY = (int)(Y/DLp.y);
+        	if ( posY < 0 ) posY = 0;
+        	if ( posY > Ydiv-1 ) posY = Ydiv-1;
+	}else{	
+        	posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DLp.y);
+        	posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
+        }
 	
 	
 	if (useRigidBoxZ){
@@ -768,15 +774,11 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
     
             deltaY  = Y - d_CMy[nn_rank];	            
-            deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+            if (!useRigidBoxY)deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 
-              
-            if (useRigidBoxZ){
-            	deltaZ  = Z - d_CMz[nn_rank];
-            }else{    
-            	deltaZ  = Z - d_CMz[nn_rank];
-            	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
-	    }	
+                             
+            deltaZ  = Z - d_CMz[nn_rank];
+            if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
                
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
@@ -806,17 +808,10 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                 deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
             
                 deltaY = Y - d_Y[nn_rank*192+nn_atom];
-                deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+                if (!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
               	   
-		     
-		 if (useRigidBoxZ){
-		 	deltaZ = Z - d_Z[nn_rank*192+nn_atom];	
-		 }else{
-		   
-                	deltaZ = Z - d_Z[nn_rank*192+nn_atom];
-                	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
-            	 
-            	 }
+                deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             	 
                 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
 
@@ -888,6 +883,24 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             }
 
         }
+        
+        if (useRigidBoxY){
+        
+            float gap1, gap2; 
+
+            gap1 = d_Y[atomInd];
+            gap2 = boxMax.y - d_Y[atomInd];
+
+            if (gap1 < threshDist){
+                FY += -100*Youngs_mod*(gap1 - threshDist);
+            }
+
+            if (gap2 < threshDist){
+                FY += 100*Youngs_mod*(gap2 - threshDist);
+            }
+
+        }
+
 
         d_forceList.x[atomInd] = FX;
         d_forceList.y[atomInd] = FY;
@@ -1470,7 +1483,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,bool useRigidBoxZ){
+                                   R3Nptrs d_fDisList,bool useRigidBoxZ, bool useRigidBoxY){
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
@@ -1541,9 +1554,15 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DLp.x);
         posX = posX - floor((float)posX/(float)Xdiv) * Xdiv;
         
-        posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DLp.y);
-        posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
-
+        
+        if (useRigidBoxY){
+        	posY = (int)(Y/DLp.y);
+            	if ( posY < 0 ) posY = 0;
+            	if ( posY > Ydiv-1 ) posY = Ydiv-1;
+	}else{	
+        	posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DLp.y);
+        	posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
+        }
 
         if (useRigidBoxZ){
         	posZ = (int)(Z/DLp.z);
@@ -1566,15 +1585,11 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
 
             deltaY  = Y - d_CMy[nn_rank];	
-            deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
-
+            if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y; 
             
-            if(useRigidBoxZ){
-            	deltaZ  = Z - d_CMz[nn_rank];
-            }else{
-            	deltaZ  = Z - d_CMz[nn_rank];
-            	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
-            }
+           
+            deltaZ  = Z - d_CMz[nn_rank];
+            if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
@@ -1598,17 +1613,11 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                 deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
                    
                 deltaY = Y - d_Y[nn_rank*192+nn_atom];
-                deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
-            	
-                if(useRigidBoxZ){
+                if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
                 
-                	deltaZ = Z - d_Z[nn_rank*192+nn_atom];
                 
-                }else{  
-                
-                	deltaZ = Z - d_Z[nn_rank*192+nn_atom];
-                	deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
-                }
+                deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z; 
 
                 R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
 
@@ -2027,7 +2036,8 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
                                float *d_XM, float *d_YM, float *d_ZM,
                                float *d_CMx, float *d_CMy, float *d_CMz,
-                               float3 boxMax, float divVol, int numCells){
+                               float3 boxMax, float divVol, int numCells,
+                               bool useRigidBoxZ, bool useRigidBoxY){
 
     
     int cellInd = blockIdx.x;
@@ -2039,53 +2049,43 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
 
         
         if(d_CMx[cellInd] > boxMax.x ){ 
-
             d_X[nodeInd] = d_X[nodeInd] - boxMax.x;
-            d_XM[nodeInd] = d_XM[nodeInd] - boxMax.x;
-     
-
+            d_XM[nodeInd] = d_XM[nodeInd] - boxMax.x;    
         } 
-
         if(d_CMx[cellInd] < 0){
-
             d_X[nodeInd] = d_X[nodeInd] + boxMax.x;
             d_XM[nodeInd] = d_XM[nodeInd] + boxMax.x;
-
         }
     
     
-        if(d_CMy[cellInd] > boxMax.y) {
+        if (!useRigidBoxY ) {
+        
+        	if(d_CMy[cellInd] > boxMax.y) {
+            		d_Y[nodeInd] = d_Y[nodeInd] - boxMax.y;
+            		d_YM[nodeInd] = d_YM[nodeInd] - boxMax.y;
+        	}
+        	if(d_CMy[cellInd] < 0){
+            		d_Y[nodeInd] = d_Y[nodeInd] + boxMax.y;
+            		d_YM[nodeInd] = d_YM[nodeInd] + boxMax.y;
+        	}
 
-            d_Y[nodeInd] = d_Y[nodeInd] - boxMax.y;
-            d_YM[nodeInd] = d_YM[nodeInd] - boxMax.y;
-
-        }
+    	}
+    	
+    	if (!useRigidBoxZ ) {
+    	
+        	if(d_CMz[cellInd] > boxMax.z ){
+            		d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
+            		d_ZM[nodeInd] = d_ZM[nodeInd] - boxMax.z;
+        	}
+        	if(d_CMz[cellInd] < 0){
+            		d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
+            		d_ZM[nodeInd] = d_ZM[nodeInd] + boxMax.z;
+        	}
     
-        if(d_CMy[cellInd] < 0){
+    	}
 
-            d_Y[nodeInd] = d_Y[nodeInd] + boxMax.y;
-            d_YM[nodeInd] = d_YM[nodeInd] + boxMax.y;
+    }	
 
-        }
-
-
-    
-        if(d_CMz[cellInd] > boxMax.z ){
-
-            d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
-            d_ZM[nodeInd] = d_ZM[nodeInd] - boxMax.z;
-
-        }
-    
-    
-        if(d_CMz[cellInd] < 0){
-
-            d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
-            d_ZM[nodeInd] = d_ZM[nodeInd] + boxMax.z;
-
-        }
-    
-    }
 
 }
 

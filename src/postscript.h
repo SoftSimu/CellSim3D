@@ -25,7 +25,7 @@ __global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
 
 __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ);
+                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
 
                            
 __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
@@ -92,7 +92,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           bool useRigidBoxZ);
+                           bool useRigidBoxZ,bool useRigidBoxY);
                            
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
@@ -211,7 +211,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ);
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ,bool useRigidBoxY);
                                    
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
@@ -231,7 +231,8 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
                                float *d_XM, float *d_YM, float *d_ZM, 
                                float *d_CMx, float *d_CMy, float *d_CMz,
-                               float3 boxMax, float divVol,int numCells);
+                               float3 boxMax, float divVol,int numCells,
+                               bool useRigidBoxZ,bool useRigidBoxY);
                                
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
                                float *d_XM, float *d_YM, float *d_ZM,

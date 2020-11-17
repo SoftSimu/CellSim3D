@@ -286,12 +286,11 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 
 __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp,bool useRigidBoxZ)
+                           int *d_NoofNNlist, int *d_NNlist, float3 DLp,bool useRigidBoxZ, bool useRigidBoxY)
 {
 
 
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
-//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
 
 	if ( fullerene < No_of_C180s )
@@ -300,7 +299,6 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 		int posx = 0;
 		int posy = 0;
 		int posz = 0;		
-
 	  	
 	  	posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DLp.x); 	
  	  	posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DLp.y); 	
@@ -318,7 +316,16 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 			for (  int j = -1; j < 2; ++j ){
 					
 				j2 = posy + j;
-				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
+					
+				if(useRigidBoxY){
+					
+					if(j2 < 0 || j2 > Ydiv-1) continue;
+					
+				}else{	
+					
+					j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
+					
+				}	 
 	
 				for (  int k = -1 ; k < 2; ++k ){
 			

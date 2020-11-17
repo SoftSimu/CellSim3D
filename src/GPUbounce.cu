@@ -197,7 +197,8 @@ bool LineCenter;
 bool useRigidSimulationBox;
 bool usePBCs; 
 bool useLEbc;
-bool useRigidBoxZ; 
+bool useRigidBoxZ;
+bool useRigidBoxY; 
 float* d_boxMin;
 bool rand_pos;
 bool rand_vel;
@@ -1109,7 +1110,8 @@ int main(int argc, char *argv[])
        CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
                                                           d_XM, d_YM, d_ZM,
                                                           d_CMx, d_CMy, d_CMz,
-                                                          boxMax, divVol, No_of_C180s);
+                                                          boxMax, divVol, No_of_C180s,
+                                                          useRigidBoxZ, useRigidBoxY);
   
 
 
@@ -1137,7 +1139,7 @@ int main(int argc, char *argv[])
        }
 	if(usePBCs){
        	makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ);
+        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ, useRigidBoxY);
         
         	CudaErrorCheck(); 
        }
@@ -1270,7 +1272,7 @@ int main(int argc, char *argv[])
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	useRigidBoxZ);
+                                                     	useRigidBoxZ, useRigidBoxY);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1284,7 +1286,7 @@ int main(int argc, char *argv[])
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, gamma_visc,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ);
+                                                        d_fDisList, useRigidBoxZ, useRigidBoxY);
     CudaErrorCheck();	
   
   }
@@ -1525,7 +1527,7 @@ int main(int argc, char *argv[])
        }
 	if(usePBCs){
        	makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ);
+        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ, useRigidBoxY);
         
         	CudaErrorCheck(); 
        }
@@ -1619,7 +1621,7 @@ int main(int argc, char *argv[])
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	useRigidBoxZ);
+                                                     	useRigidBoxZ, useRigidBoxY);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1633,7 +1635,7 @@ int main(int argc, char *argv[])
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, gamma_visc,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ);
+                                                        d_fDisList, useRigidBoxZ, useRigidBoxY);
     CudaErrorCheck();	
   
   }
@@ -1719,7 +1721,7 @@ int main(int argc, char *argv[])
                 	                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                 	                                        d_NoofNNlist, d_NNlist, DLp, gamma_visc,
                 	                                        d_velListX, d_velListY, d_velListZ,
-                	                                        d_fDisList,useRigidBoxZ);
+                	                                        d_fDisList,useRigidBoxZ, useRigidBoxY);
     		CudaErrorCheck();	
   
   	}
@@ -1927,7 +1929,8 @@ int main(int argc, char *argv[])
             CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
                                                           d_XM, d_YM, d_ZM,
                                                           d_CMx, d_CMy, d_CMz,
-                                                          boxMax, divVol, No_of_C180s);
+                                                          boxMax, divVol, No_of_C180s,
+                                                          useRigidBoxZ, useRigidBoxY);
   
 
 		
@@ -2898,6 +2901,7 @@ int read_json_params(const char* inpFile){
         usePBCs = boxParams["usePBCs"].asBool();
         useLEbc = boxParams["useLEbc"].asBool();
         useRigidBoxZ = boxParams["useRigidBoxZ"].asBool();
+        useRigidBoxY = boxParams["useRigidBoxY"].asBool();
         boxLength = boxParams["boxLength"].asFloat();
         boxMax.x = boxParams["box_len_x"].asFloat();
         boxMax.y = boxParams["box_len_y"].asFloat(); 
