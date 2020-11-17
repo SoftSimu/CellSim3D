@@ -98,6 +98,7 @@
         "usePBCs": 0,
         "useLEbc": 0,
         "useRigidBoxZ": 1,
+        "useRigidBoxY": 1,
         "pbcAx": "x", // unavailable
         "boxLength": 6.0, // deprecated
         "box_len_x": 500.0,
