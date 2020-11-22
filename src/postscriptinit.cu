@@ -188,7 +188,7 @@ __global__ void  cell_division(int rank,
                                float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym){
+                               int No_of_C180s, int* d_CellINdex, int NumApoCell, float *d_randNorm, float repulsion_range, float asym){
     int newrank = No_of_C180s;
     __shared__ float CMx, CMy, CMz;
   
@@ -199,6 +199,7 @@ __global__ void  cell_division(int rank,
         CMx = AllCMx[rank];
         CMy = AllCMy[rank];
         CMz = AllCMz[rank];
+        d_CellINdex[No_of_C180s]  = No_of_C180s + NumApoCell;
     }
 
     __syncthreads();

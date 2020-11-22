@@ -2168,7 +2168,7 @@ __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
                            float* d_XM,float* d_YM,float* d_ZM,
                            float* d_velListX,float* d_velListY,float* d_velListZ,
                            float* d_pressList,float* d_Youngs_mod, float* d_Growth_rate,
-                           int No_of_C180s, int Aporank){
+                           int* d_CellINdex, int No_of_C180s, int Aporank){
                                          
        __shared__ float ReadData[1024];
        
@@ -2260,7 +2260,15 @@ __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
 			d_Growth_rate[Ind - 1] = ReadData[threadIdx.x];
     
        	}
+       	
 
+       	if (blockIdx.x == 9){
+	
+       		ReadData[threadIdx.x] = d_CellINdex[Ind];	
+       		__syncthreads();
+			d_CellINdex[Ind - 1] = ReadData[threadIdx.x];
+    
+       	}
  		Ind = Ind + 1024;                                        
 	}
 	
