@@ -734,6 +734,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         posX = posX - floor((float)posX/(float)Xdiv) * Xdiv;
         
 
+
 	if (useRigidBoxY){    
 		posY = (int)(Y/DLp.y);
         	if ( posY < 0 ) posY = 0;
@@ -745,20 +746,15 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 	
 	
 	if (useRigidBoxZ){
-	    
-	    posZ = (int)(Z/DLp.z);
-            if ( posZ < 0 ) posZ = 0;
-            if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
-            
+		posZ = (int)(Z/DLp.z);
+        	if ( posZ < 0 ) posZ = 0;
+        	if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
 	}else{	
-	
-        posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DLp.z);
-        posZ = posZ - floor((float)posZ/(float)Zdiv) * Zdiv;
-        
+        	posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DLp.z);
+        	posZ = posZ - floor((float)posZ/(float)Zdiv) * Zdiv;
         }
 
         int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
-
 
 
         float3 contactForce = make_float3(0.f, 0.f, 0.f);
@@ -779,6 +775,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                              
             deltaZ  = Z - d_CMz[nn_rank];
             if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+	    	
                
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
@@ -810,8 +807,10 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                 deltaY = Y - d_Y[nn_rank*192+nn_atom];
                 if (!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
               	   
+              	     
                 deltaZ = Z - d_Z[nn_rank*192+nn_atom];
                 if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+            	 
             	 
                 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
 
@@ -900,7 +899,6 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             }
 
         }
-
 
         d_forceList.x[atomInd] = FX;
         d_forceList.y[atomInd] = FY;
@@ -1483,7 +1481,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,bool useRigidBoxZ, bool useRigidBoxY){
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY ){
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
@@ -1554,7 +1552,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         posX = (int) ((X - floor( X / boxMax.x) * boxMax.x )/DLp.x);
         posX = posX - floor((float)posX/(float)Xdiv) * Xdiv;
         
-        
+
         if (useRigidBoxY){
         	posY = (int)(Y/DLp.y);
             	if ( posY < 0 ) posY = 0;
@@ -1563,6 +1561,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         	posY = (int) ((Y - floor( Y / boxMax.y) * boxMax.y )/DLp.y);
         	posY = posY - floor((float)posY/(float)Ydiv) * Ydiv;
         }
+
 
         if (useRigidBoxZ){
         	posZ = (int)(Z/DLp.z);
@@ -1584,12 +1583,14 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             deltaX  = X - d_CMx[nn_rank];
             deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
 
+
             deltaY  = Y - d_CMy[nn_rank];	
             if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y; 
             
            
             deltaZ  = Z - d_CMz[nn_rank];
             if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+            
             
             if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
                 continue;
@@ -1611,13 +1612,15 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             {
                 deltaX = X - d_X[nn_rank*192+nn_atom];
                 deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
-                   
+
+
                 deltaY = Y - d_Y[nn_rank*192+nn_atom];
                 if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
                 
                 
                 deltaZ = Z - d_Z[nn_rank*192+nn_atom];
-                if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z; 
+                if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
+                
 
                 R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
 
@@ -2049,12 +2052,10 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
 
         
         if(d_CMx[cellInd] > boxMax.x ){ 
-            d_X[nodeInd] = d_X[nodeInd] - boxMax.x;
-            d_XM[nodeInd] = d_XM[nodeInd] - boxMax.x;    
+            d_X[nodeInd] = d_X[nodeInd] - boxMax.x;  
         } 
         if(d_CMx[cellInd] < 0){
             d_X[nodeInd] = d_X[nodeInd] + boxMax.x;
-            d_XM[nodeInd] = d_XM[nodeInd] + boxMax.x;
         }
     
     
@@ -2062,11 +2063,9 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
         
         	if(d_CMy[cellInd] > boxMax.y) {
             		d_Y[nodeInd] = d_Y[nodeInd] - boxMax.y;
-            		d_YM[nodeInd] = d_YM[nodeInd] - boxMax.y;
         	}
         	if(d_CMy[cellInd] < 0){
             		d_Y[nodeInd] = d_Y[nodeInd] + boxMax.y;
-            		d_YM[nodeInd] = d_YM[nodeInd] + boxMax.y;
         	}
 
     	}
@@ -2075,18 +2074,14 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
     	
         	if(d_CMz[cellInd] > boxMax.z ){
             		d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
-            		d_ZM[nodeInd] = d_ZM[nodeInd] - boxMax.z;
         	}
         	if(d_CMz[cellInd] < 0){
             		d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
-            		d_ZM[nodeInd] = d_ZM[nodeInd] + boxMax.z;
         	}
     
     	}
 
     }	
-
-
 }
 
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
@@ -2110,7 +2105,6 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
         if(d_CMx[cellInd] > boxMax.x ){ 
 
             d_X[nodeInd] = d_X[nodeInd] - boxMax.x;
-            d_XM[nodeInd] = d_XM[nodeInd] - boxMax.x;
             d_Y[nodeInd] = d_Y[nodeInd] - Pshift;
             d_VY[nodeInd] = d_VY[nodeInd] - Vshift;
      
@@ -2120,35 +2114,28 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
         if(d_CMx[cellInd] < 0 ){
 
             d_X[nodeInd] = d_X[nodeInd] + boxMax.x;
-            d_XM[nodeInd] = d_XM[nodeInd] + boxMax.x;
             d_Y[nodeInd] = d_Y[nodeInd] + Pshift;
             d_VY[nodeInd] = d_VY[nodeInd] + Vshift;
 
         }
 
-    
-    	
-    
+
         if(d_CMy[cellInd] > boxMax.y ) {
 
             d_Y[nodeInd] = d_Y[nodeInd] - boxMax.y;
-            d_YM[nodeInd] = d_YM[nodeInd] - boxMax.y;
 
         }
     
         if(d_CMy[cellInd] < 0.0){
 
             d_Y[nodeInd] = d_Y[nodeInd] + boxMax.y;
-            d_YM[nodeInd] = d_YM[nodeInd] + boxMax.y;
 
         }
-    
-    
+
             
         if(d_CMz[cellInd] > boxMax.z ){
 
             d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
-            d_ZM[nodeInd] = d_ZM[nodeInd] - boxMax.z;
 
         }
     
@@ -2156,121 +2143,8 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
         if(d_CMz[cellInd] < 0 ){
 
             d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
-            d_ZM[nodeInd] = d_ZM[nodeInd] + boxMax.z;
 
         }
                                
       }                         
  }
- 
-
-__global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
-                           float* d_XM,float* d_YM,float* d_ZM,
-                           float* d_velListX,float* d_velListY,float* d_velListZ,
-                           float* d_pressList,float* d_Youngs_mod, float* d_Growth_rate,
-                           int* d_CellINdex, int No_of_C180s, int Aporank){
-                                         
-       __shared__ float ReadData[1024];
-       
-       
-       int tid = threadIdx.x + 192*(Aporank + 1);
-       int Ind = threadIdx.x + (Aporank + 1);
-       int MaxAtom = (No_of_C180s + 1) * 192;
-       int MaxCell = (No_of_C180s + 1);
-       
-       
-       while (tid < MaxAtom) {
-       
-       	if (blockIdx.x == 0){ 	 
-      	
-       		ReadData[threadIdx.x] = d_X[tid];       		
-       		__syncthreads();       		
-       		d_X[tid - 192] = ReadData[threadIdx.x];
-
-       	}
-       
-       	if (blockIdx.x == 1){
-
-       		ReadData[threadIdx.x] = d_Y[tid];
-       		__syncthreads();
-       		d_Y[tid - 192] = ReadData[threadIdx.x];
-       		
-       	}
-       
-       	if (blockIdx.x == 2){
-       	
-       		ReadData[threadIdx.x] = d_Z[tid];
-       		__syncthreads();       		
-       		d_Z[tid - 192] = ReadData[threadIdx.x];
-       
-       	}                                  
-
-
-		if (blockIdx.x == 3){
-       	
-       		ReadData[threadIdx.x] = d_velListX[tid];	
-       		__syncthreads();	
-       		d_velListX[tid - 192] = ReadData[threadIdx.x];       
-       	}
-       
-       	if (blockIdx.x == 4){
-       	
-       		ReadData[threadIdx.x] = d_velListY[tid];      		
-       		__syncthreads();
-       		d_velListY[tid - 192] = ReadData[threadIdx.x];
-      
-       	}
-       
-       	if (blockIdx.x == 5){
-	
-       		ReadData[threadIdx.x] = d_velListZ[tid];	
-       		__syncthreads();
-			d_velListZ[tid - 192] = ReadData[threadIdx.x];
-    
-       	} 
-       	
-       	
-       	tid = tid + 1024;
-       	
-       }
-       
-       
-	while (Ind < MaxCell) {
-       	
-       	if (blockIdx.x == 6){
-	
-       		ReadData[threadIdx.x] = d_pressList[Ind];	
-       		__syncthreads();
-			d_pressList[Ind - 1] = ReadData[threadIdx.x];
-    
-       	}
-       	
-       	if (blockIdx.x == 7){
-	
-       		ReadData[threadIdx.x] = d_Youngs_mod[Ind];	
-       		__syncthreads();
-			d_Youngs_mod[Ind - 1] = ReadData[threadIdx.x];
-    
-       	}                                 
-
-       	if (blockIdx.x == 8){
-	
-       		ReadData[threadIdx.x] = d_Growth_rate[Ind];	
-       		__syncthreads();
-			d_Growth_rate[Ind - 1] = ReadData[threadIdx.x];
-    
-       	}
-       	
-
-       	if (blockIdx.x == 9){
-	
-       		ReadData[threadIdx.x] = d_CellINdex[Ind];	
-       		__syncthreads();
-			d_CellINdex[Ind - 1] = ReadData[threadIdx.x];
-    
-       	}
- 		Ind = Ind + 1024;                                        
-	}
-	
-}
-  

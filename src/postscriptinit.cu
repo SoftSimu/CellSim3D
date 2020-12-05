@@ -123,8 +123,8 @@ cudaDeviceProp getDevice(void)
   for (device = 0; device < deviceCount; ++device) {
        cudaGetDeviceProperties(&deviceProp, device);
        printf("   Device %s\n", deviceProp.name);
-       printf("      compute capability           =         %d.%d\n", deviceProp.major, deviceProp.minor);
-       printf("      totalGlobalMemory            =        %.2lf GB\n", deviceProp.totalGlobalMem/1000000000.0);
+       printf("      compute capability           =    %d.%d\n", deviceProp.major, deviceProp.minor);
+       printf("      totalGlobalMemory            =    %.2lf GB\n", deviceProp.totalGlobalMem/1000000000.0);
        printf("      l2CacheSize                  =    %8d\n", deviceProp.l2CacheSize);
        printf("      regsPerBlock                 =    %8d\n", deviceProp.regsPerBlock);
        printf("      multiProcessorCount          =    %8d\n", deviceProp.multiProcessorCount);
@@ -187,8 +187,8 @@ __global__ void  cell_division(int rank,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, int* d_CellINdex, int NumApoCell, float *d_randNorm, float repulsion_range, float asym){
+                               float* d_velListX, float* d_velListY, float* d_velListZ,float* d_Growth_rate, float rMax, 
+                               int* d_CellINdex, int NewCellInd, int No_of_C180s, float *d_randNorm, float repulsion_range, float asym){
     int newrank = No_of_C180s;
     __shared__ float CMx, CMy, CMz;
   
@@ -199,7 +199,8 @@ __global__ void  cell_division(int rank,
         CMx = AllCMx[rank];
         CMy = AllCMy[rank];
         CMz = AllCMz[rank];
-        d_CellINdex[No_of_C180s]  = No_of_C180s + NumApoCell;
+        d_CellINdex[No_of_C180s]  = NewCellInd;
+        d_Growth_rate[newrank] = rMax;
     }
 
     __syncthreads();
@@ -253,7 +254,7 @@ __global__ void  cell_division(int rank,
         d_velListX[newrank*192 + atom] = d_velListX[rank*192+atom];
         d_velListY[newrank*192 + atom] = d_velListY[rank*192+atom];
         d_velListZ[newrank*192 + atom] = d_velListZ[rank*192+atom];
+    
     }
 }
-
 

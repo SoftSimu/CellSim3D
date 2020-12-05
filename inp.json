@@ -58,6 +58,7 @@
     
     "apoptosis": {
 	 "apoptosis": 1,
+	 "popToStartApo": 2000,
          "Apo_ratio": 0.005,
          "squeeze_rate": 0.005,
          "apoptosis_Vol": 0.5

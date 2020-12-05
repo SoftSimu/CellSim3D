@@ -9,8 +9,8 @@ __global__ void  cell_division(int rank,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ,
-                               int No_of_C180s, int* d_CellINdex, int NumApoCell, float *d_randNorm, float repulsion_range, float asym);
+                               float* d_velListX, float* d_velListY, float* d_velListZ, float* d_Growth_rate,float rMax,
+                               int* d_CellINdex, int NewCellInd, int No_of_C180s, float *d_randNorm, float repulsion_range, float asym);
 
 __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
                            float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
@@ -43,7 +43,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          char* cell_div, float divVol, bool checkSphericity,
                          float* areaList, int phase_count, int step,
                          float stiffness1, bool useDifferentStiffnesses, float* d_younds_mod,
-                         bool recalc_r0,float ApoVol, char* cell_Apo);
+                         bool recalc_r0,float ApoVol ,char* d_cell_Apo);
 
 int printboundingbox(int rank, float *bounding_xyz);
 int initialize_C180s(int Orig_No_of_C180s);
@@ -92,7 +92,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           bool useRigidBoxZ,bool useRigidBoxY);
+                           bool useRigidBoxZ, bool useRigidBoxY);
                            
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
@@ -152,6 +152,7 @@ int ReadRestartFile();
 inline void count_and_get_div();
 inline void count_and_die();
 
+
 inline void calc_sys_CM();
 
 inline float getRmax2();
@@ -159,7 +160,7 @@ inline float getRmax2();
 inline int num_cells_far();
 
 __global__ void PressureUpdate (float* d_pressList, float minPressure,
-                                float maxPressure, float* d_Growt_rate, int No_of_C180s,
+                                float maxPressure, float* d_Growth_rate, int No_of_C180s,
                                 bool useDifferentStiffnesses, float stiffness1,
                                 float* d_younds_mod, int step, int phase_count, int impurityNum);
 
@@ -211,7 +212,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_o,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ,bool useRigidBoxY);
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY);
                                    
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
@@ -232,7 +233,7 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
                                float *d_XM, float *d_YM, float *d_ZM, 
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol,int numCells,
-                               bool useRigidBoxZ,bool useRigidBoxY);
+                               bool useRigidBoxZ, bool useRigidBoxY);
                                
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
                                float *d_XM, float *d_YM, float *d_ZM,

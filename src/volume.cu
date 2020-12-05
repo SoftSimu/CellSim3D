@@ -141,6 +141,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         if (volume > divVol){
             cell_div[fullerene] = 1;
         }
+	
 
 	if (volume < ApoVol){    	
 	    cell_Apo[fullerene] = 1;	
