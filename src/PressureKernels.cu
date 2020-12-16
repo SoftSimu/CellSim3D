@@ -3,7 +3,7 @@
 
 __global__ void PressureUpdate (float* d_pressList, float minPressure,
                                 float maxPressure, float* d_Growt_rate, int No_of_C180s,
-                                bool useDifferentStiffnesses,
+                                bool useDifferentCell,
                                 float stiffness1, float* d_youngs_mod, int step,
                                 int phase_count, int impurityNum){
 
@@ -13,7 +13,7 @@ __global__ void PressureUpdate (float* d_pressList, float minPressure,
 
     if (cellInd < No_of_C180s && cellInd >= impurityNum){
         
-        if (useDifferentStiffnesses == true){
+        if (useDifferentCell == true){
             if (step < phase_count){
                 if (d_pressList[cellInd] < maxPressure || inc < 0 ){
                     d_pressList[cellInd] += inc;

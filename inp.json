@@ -34,6 +34,8 @@
         "phase_count": 2000000000,
         "write_cont_force": 1,
         "forces_file": "inp.csv",
+        "dispersity": 1,
+	"colloidal_dynamics":1,
         "write_vel_file": 1,
         "correct_com" : 0
     },
@@ -81,17 +83,24 @@
 	 "asymDivision": 0
     },
 
-    "stiffnessParams":{
-        "useDifferentStiffnesses": 0,
-        "softStiffFactor": 0.8,
-        "numberOfSofterCells": 0,
-        "fractionOfSofterCells": 0.3,
-        "duringGrowth": 1,
-        "daughtSameStiffness": 1,
+    "NewCell":{
+        "useDifferentCell": 1,
+        "SizeFactor": 0.75,
+        "StiffFactor": 0.75,
+        "GrowthRate": 0.005,
+        "divisionV": 2.2,
+        "gammaV": 0.1,
+        "VisDamping" : 0.1,
+        "Apo_rate2": 0.001,
+        "squeeze_rate2": 0.005,
+        "numberOfCells": 10,
+        "fractionOfCells": 0.5,
         "closenessToCenter": 0,
-        "startAtPop": 2000,
         "chooseRandomCellIndices": 0,
+        "daughtSame": 1,
+        "duringGrowth": 1,
         "recalc_r0": 0
+        
     },
 
     "boxParams":{

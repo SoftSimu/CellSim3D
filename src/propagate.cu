@@ -183,13 +183,13 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, const float *d_time,
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
-                           float viscotic_damping,
+                           float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_visc,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -308,7 +308,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
             		R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
-            		R0 = d_R0[i*192 + atom];
+            		R0 = d_ScaleFactor[rank]*d_R0[i*192 + atom];
 
             		//spring forces
             		FX += +stiffness*(R-R0)/R0*deltaX/R;
@@ -553,13 +553,13 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, const float *d_time,
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
-                           float viscotic_damping,
+                           float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_visc,
+                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -671,7 +671,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
-            R0 = d_R0[i*192 + atom];
+            R0 = d_ScaleFactor[rank]*d_R0[i*192 + atom];
 
             //spring forces
             FX += +stiffness*(R-R0)/R0*deltaX/R;
@@ -912,16 +912,17 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
 
 
+
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
                            float internal_damping, const float *d_time,
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
-                           float viscotic_damping,
+                           float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_visc,
+                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                            float wall1, float wall2,
                            float threshDist, bool useWalls, 
                            float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -1033,7 +1034,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
-            R0 = d_R0[i*192 + atom];
+            R0 = d_ScaleFactor[rank]*d_R0[i*192 + atom];
 
             //spring forces
             FX += +stiffness*(R-R0)/R0*deltaX/R;
@@ -1312,9 +1313,9 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
                                    float gamma_int,
                                    float attraction_range,
-                                   float gamma_ext,
+                                   float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax, float3 BoxMin,
-                                   int *d_NoofNNlist, int *d_NNlist, float DL, float gamma_o,
+                                   int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, int impurityNum){
     size_t cellInd = blockIdx.x;
@@ -1453,13 +1454,13 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		
         	        // Tangential component of relative velocity
         	        float3 vTau = v_ij - dot(v_ij, normal)*normal;
-        	        force = force - gamma_ext*vTau;
+        	        force = force - d_viscotic_damp[cellInd]*vTau;
         	    }
 
         	}
 
         	// viscous drag  
-        	force = force - gamma_o*nodeVelocity;
+        	force = force - d_gamma_env[cellInd]*nodeVelocity;
         
         	// write force to global memory
         	d_fDisList.x[globalNodeInd] = force.x; 
@@ -1477,9 +1478,9 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
                                    float gamma_int,
                                    float attraction_range,
-                                   float gamma_ext,
+                                   float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
-                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_o,
+                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY ){
                                    
@@ -1636,14 +1637,14 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
                 // Tangential component of relative velocity
                 float3 vTau = v_ij - dot(v_ij, normal)*normal;
-                force = force - gamma_ext*vTau;
+                force = force - d_viscotic_damp[cellInd]*vTau;
               
 
            }
 	}
 	
         // viscous drag  ????
-        force = force - gamma_o*nodeVelocity;
+        force = force - d_gamma_env[cellInd]*nodeVelocity;
         
         // write force to global memory
         d_fDisList.x[globalNodeInd] = force.x; 
@@ -1658,9 +1659,9 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
                                    float gamma_int,
                                    float attraction_range,
-                                   float gamma_ext,
+                                   float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
-                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float gamma_o,
+                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ)
 {
@@ -1867,14 +1868,14 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
                 // Tangential component of relative velocity
                 float3 vTau = v_ij - dot(v_ij, normal)*normal;
-                force = force - gamma_ext*vTau;
+                force = force - d_viscotic_damp[cellInd]*vTau;
               
 
            }
 	}
 	
         // viscous drag  
-        force = force - gamma_o*nodeVelocity;
+        force = force - d_gamma_env[cellInd]*nodeVelocity;
         
         // write force to global memory
         d_fDisList.x[globalNodeInd] = force.x; 
