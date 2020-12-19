@@ -433,6 +433,7 @@ int main(int argc, char *argv[])
 
 
   h_R0 = (float *)calloc(192*3, sizeof(float));
+  for (int i =  0; i < MaxNoofC180s; ++i) ScaleFactor[i] = 1.0;
 
   //if ( read_global_params()               != 0 ) return(-1);
   if (Restart == 1 ) if( ReadRestartFile() != 0 ) return(-1); 
@@ -800,11 +801,7 @@ if (Restart == 0) {
   	}
   	
   
-  	if (!colloidal_dynamics){
-  	
-  		for (int i =  0; i < MaxNoofC180s; ++i) ScaleFactor[i] = 1.0;
-		if(useDifferentCell) SecondCell(Orig_No_of_C180s);
-	}
+	if(!colloidal_dynamics && useDifferentCell) SecondCell(Orig_No_of_C180s);
   
  } // end of restart if else
 
@@ -2008,7 +2005,7 @@ if (Restart == 0) {
 
 
 		
-	if (daughtSame){
+	if (useDifferentCell && daughtSame){
 	
 		ScaleFactor[No_of_C180s] = ScaleFactor[globalrank];
         	youngsModArray[No_of_C180s] = youngsModArray[globalrank];
