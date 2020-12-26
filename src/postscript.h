@@ -36,6 +36,11 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 __global__ void CenterOfMass( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
                float *CMx, float *CMy, float *CMz);
+               
+__global__ void VelocityCenterOfMass( int No_of_C180s, 
+               float *d_velListX, float *d_velListY, float *d_velListZ, 
+               float *d_VCMx, float *d_VCMy,float *d_VCMz);
+               
 
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
@@ -155,6 +160,8 @@ inline void count_and_die();
 int DispersityFunc(int Orig_No_of_C180s);
 int SecondCell (int Orig_No_of_C180s);
 inline void calc_sys_CM();
+inline void calc_sys_VCM();
+
 
 inline float getRmax2();
 
@@ -184,6 +191,10 @@ void writeForces(FILE* forceFile, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
                                  float sysCMx, float sysCMy, float sysCMz, long int numParts);
+
+__global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
+                                 float sysVCMx, float sysVCMy, float sysVCMz, long int numParts);
+
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fConList, R3Nptrs fRanList,

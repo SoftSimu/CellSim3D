@@ -268,6 +268,13 @@ float *CMx, *CMy, *CMz;
 float sysCMx = 1.0, sysCMy = 1.0, sysCMz = 1.0;
 float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0;
 
+
+
+float *d_VCMx, *d_VCMy, *d_VCMz;
+float *VCMx, *VCMy, *VCMz;
+float sysVCMx = 0.0, sysVCMy = 0.0, sysVCMz = 0.0;
+
+
 //float Pressure;          // pressure
 //float Temperature;       // equation of state relates Pressure and Temperature
 
@@ -291,6 +298,7 @@ long int CPUMemory;
 int frameCount = 1;
 
 bool correct_com = false;
+bool correct_Vcom = false;
 bool asymDivision;
 int Orig_No_of_C180s;
  
@@ -499,6 +507,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_VCMx ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_VCMy ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_VCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
 //  if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
@@ -567,6 +578,9 @@ int main(int argc, char *argv[])
   cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_CMy, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_VCMx, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_VCMy, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_VCMz, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
   cudaMemset(d_R0, 0, 3*192*sizeof(float));
@@ -694,6 +708,9 @@ int main(int argc, char *argv[])
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
+  VCMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
+  VCMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
+  VCMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
   //volume= (float *)calloc(MaxNoofC180s, sizeof(float));
   area= (float *)calloc(MaxNoofC180s, sizeof(float));
   cell_div = (char *)calloc(MaxNoofC180s, sizeof(char));
@@ -971,6 +988,24 @@ if (Restart == 0) {
                                                              No_of_C180s*192);
       CudaErrorCheck(); 
   }
+  
+
+  if ( correct_Vcom == true){
+     
+      VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                        d_velListX, d_velListY, d_velListZ,
+                                        d_VCMx, d_VCMy, d_VCMz);
+      cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+      cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+      cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+      calc_sys_VCM();
+      CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
+                                                             sysVCMx, sysVCMy, sysVCMz,
+                                                             No_of_C180s*192);
+          
+      CudaErrorCheck(); 
+      //printf("sysVCMx = %f, sysVCMy = %f, sysVCmz = %f\n", sysVCMx, sysVCMy, sysVCMz);
+  }  
   
   
 
@@ -2067,7 +2102,7 @@ if (Restart == 0) {
             cudaMemcpy(d_ScaleFactor, ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
             CudaErrorCheck();
             
-            cudaMemcpy(Growth_rate, d_Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+            cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
             CudaErrorCheck();
             
             cudaMemcpy(d_DivisionVolume, DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
@@ -2265,6 +2300,28 @@ if (Restart == 0) {
                                                                  No_of_C180s*192);
           CudaErrorCheck(); 
       }
+
+    if ( correct_Vcom == true){
+     
+     
+        VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                          d_velListX, d_velListY, d_velListZ,
+                                          d_VCMx, d_VCMy, d_VCMz);
+        cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+        cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+        cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+        calc_sys_VCM();
+        //calc_Multiplier();
+        CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
+                                                             sysVCMx, sysVCMy, sysVCMz,
+                                                             No_of_C180s*192);
+          
+        CudaErrorCheck(); 
+        
+        
+      //printf("sysVCMx = %f, sysVCMy = %f, sysVCmz = %f\n", sysVCMx, sysVCMy, sysVCMz);
+    }
+
 
       if ( step%trajWriteInt == 0 )
       {
@@ -3249,6 +3306,7 @@ int read_json_params(const char* inpFile){
         dispersity = coreParams["dispersity"].asBool();
         colloidal_dynamics = coreParams["colloidal_dynamics"].asBool();
         correct_com = coreParams["correct_com"].asBool();
+        correct_Vcom = coreParams["correct_Vcom"].asBool();
                                  
     }
 
@@ -3481,6 +3539,7 @@ int read_json_params(const char* inpFile){
     printf("      rand_scale_factor   = %f\n", rand_scale_factor);
     printf("      phase_count         = %d\n", phase_count);
     printf("      correct_com         = %d\n", correct_com);
+    printf("      correct_Vcom         = %d\n", correct_Vcom);    
     printf("      impurityNum         = %d\n", impurityNum);
     printf("      apoptosis           = %d\n",apoptosis);
     printf("      Apoptosis ratio     = %f\n",Apo_rate);
@@ -3905,6 +3964,26 @@ inline void calc_sys_CM(){ // Put this into a kernel at some point
   sysCMz = sysCMz/No_of_C180s;
 
 }
+
+
+inline void calc_sys_VCM(){ // Put this into a kernel at some point
+
+  sysVCMx = 0;
+  sysVCMy = 0;
+  sysVCMz = 0;
+
+  for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
+    sysVCMx += VCMx[cellInd];
+    sysVCMy += VCMy[cellInd];
+    sysVCMz += VCMz[cellInd];
+  }
+
+  sysVCMx = sysVCMx/No_of_C180s;
+  sysVCMy = sysVCMy/No_of_C180s;
+  sysVCMz = sysVCMz/No_of_C180s;
+
+}
+
 
 
 inline float getRmax2(){

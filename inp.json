@@ -35,9 +35,10 @@
         "write_cont_force": 1,
         "forces_file": "inp.csv",
         "dispersity": 1,
-	"colloidal_dynamics":1,
+	"colloidal_dynamics":0,
         "write_vel_file": 1,
-        "correct_com" : 0
+        "correct_com" : 0,
+        "correct_Vcom" : 0
     },
     "counting": {
         "countCells": 0,
@@ -84,7 +85,7 @@
     },
 
     "NewCell":{
-        "useDifferentCell": 1,
+        "useDifferentCell": 0,
         "SizeFactor": 0.75,
         "StiffFactor": 0.75,
         "GrowthRate": 0.005,

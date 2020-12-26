@@ -2023,6 +2023,20 @@ __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
 }
 
 
+__global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
+                                 float sysVCMx, float sysVCMy, float sysVCMz, long int numParts){
+    
+    long int partInd = blockIdx.x*blockDim.x + threadIdx.x;
+
+    if (partInd < numParts){
+        d_velListX[partInd] = d_velListX[partInd] - sysVCMx;
+        d_velListY[partInd] = d_velListY[partInd] - sysVCMy;
+        d_velListZ[partInd] = d_velListZ[partInd] - sysVCMz;
+    }
+}
+
+
+
 __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
                           R3Nptrs fList, 
                           long int numNodes){
