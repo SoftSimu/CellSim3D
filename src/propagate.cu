@@ -26,15 +26,20 @@ __global__ void DeviceRandInit(curandState *rngStates, uint *d_seeds, unsigned l
 __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
                                       const float theta_o, const float k){
     float i_dot_k = dot(iPos, kPos);
-    float ri_2 = mag2(iPos);
-    float rk_2 = mag2(kPos);
+    float ri_2    = mag2(iPos);
+    float rk_2    = mag2(kPos);
     //if (ri_2*rk_2 - i_dot_k*i_dot_k < 0) asm("trap;");
-    float c1 = -1/( sqrtf( ri_2*rk_2 - i_dot_k*i_dot_k + 1e-3));
-    
+    float c1 = -1.0f/( sqrtf( ri_2*rk_2 - i_dot_k*i_dot_k + 1.0e-3f));
+
     float c2 = i_dot_k/ri_2;
-    
-    float theta = acos(i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2) + 1e-3));
-    
+
+    float angle = i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2));
+    if ( angle < -0.995f ) angle = -0.995f;                   //JW
+    if ( angle > +0.995f ) angle = +0.995f;                   //JW
+
+    float theta = acos(angle);
+//    float theta = acos(i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2) + 1e-3));
+
     float3 F_i = -k * c1 * (theta - theta_o)*(kPos - c2*iPos);
 
     // float imag = mag(iPos);

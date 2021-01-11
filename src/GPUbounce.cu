@@ -2494,7 +2494,7 @@ if (Restart == 0) {
   free(CMx); free(CMy); free(CMz);
   free(dividingCells); free(totalCells);
   free(NDIV);
-  free(volume);
+  //free(volume);
   free(Minx); free(Miny); free(Minz);
   free(Maxx); free(Maxy); free(Maxz);
   free(NoofNNlist);
