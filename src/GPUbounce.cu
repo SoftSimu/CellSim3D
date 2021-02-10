@@ -521,7 +521,7 @@ int main(int argc, char *argv[])
   //if ( cudaSuccess != cudaMalloc( (void **)&d_Minz ,         1024*sizeof(float))) return(-1);
   //if ( cudaSuccess != cudaMalloc( (void **)&d_Maxz ,         1024*sizeof(float))) return(-1);
   //  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    MAX_NN*MaxNoofC180s*sizeof(int))) return(-1); 
+  //if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    MAX_NN*MaxNoofC180s*sizeof(int))) return(-1); 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
@@ -656,9 +656,9 @@ int main(int argc, char *argv[])
   thrust::fill(d_ZMMV.begin(), d_ZMMV.end(), 0.f);
   float *d_ZMM = thrust::raw_pointer_cast(&d_ZMMV[0]);
 
-  thrust::device_vector<int> d_NoofNNlistV(1024*1024);
-  thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
-  int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
+  //thrust::device_vector<int> d_NoofNNlistV(1024*1024);
+  //thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
+  //int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
 
   thrust::device_vector<float> d_timeV(192*MaxNoofC180s);
   thrust::fill(d_timeV.begin(), d_timeV.end(), delta_t); 
@@ -741,7 +741,7 @@ int main(int argc, char *argv[])
   
 
 
-  if (colloidal_dynamics && rand_vel & !Restart ){
+  if (colloidal_dynamics && rand_vel && !Restart ){
   	 
   	if ( initialize_Vel(Orig_No_of_C180s) != 0 ) return(-1);
   	cudaMemcpy(d_velListX, velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
@@ -1083,7 +1083,7 @@ if (Restart == 0) {
       	//DL = divVol; 
       	DL = divisionV;
       } else {
-      	DL = 1.5;
+      	DL = 1.4;
       }
       
       
@@ -1126,7 +1126,7 @@ if (Restart == 0) {
       	//DL = divVol;
       	DL = divisionV; 
     } else {
-      	DL = 1.5;
+      	DL = 1.4;
     }
     
     Xdiv = ceil((boxMax.x - boxMin[0])/DL);
@@ -1158,6 +1158,12 @@ if (Restart == 0) {
   //DL = divVol; 
   CudaErrorCheck(); 
 
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*64*sizeof(int))) return(-1); 
+
+  thrust::device_vector<int> d_NoofNNlistV(Xdiv*Ydiv*Zdiv);
+  thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
+  int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
+
 
    if(usePBCs ){
         
@@ -1175,7 +1181,7 @@ if (Restart == 0) {
         
        UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z, d_XM, d_YM, d_ZM,
                         d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        boxMax, divVol, No_of_C180s, Pshift, Vshift);
+                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
                         
         CudaErrorCheck();	
 	
@@ -1699,7 +1705,7 @@ if (Restart == 0) {
       //DL = divVol; 
       CudaErrorCheck(); 
 
-      cudaMemset(d_NoofNNlist, 0, 1024*1024);
+      cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
 
       if (useRigidSimulationBox){	
       		makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
@@ -2177,11 +2183,11 @@ if (Restart == 0) {
             CudaErrorCheck();
         }
         
-        if(useLEbc){
+        if(useLEbc && step%1000 == 0){
        
             UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z, d_XM, d_YM, d_ZM,
                         d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        boxMax, divVol, No_of_C180s, Pshift, Vshift);
+                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
 	
 	
 	}
@@ -2301,7 +2307,7 @@ if (Restart == 0) {
           CudaErrorCheck(); 
       }
 
-    if ( correct_Vcom == true){
+    if ( correct_Vcom == true && step%1000 == 0){
      
      
         VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
@@ -3066,7 +3072,7 @@ int SecondCell (int Orig_No_of_C180s){
 int DispersityFunc(int Orig_No_of_C180s){
 
 	
-	if(dispersity && colloidal_dynamics){
+	if(dispersity && colloidal_dynamics && !Restart){
 	
 		float rands[1];
 		

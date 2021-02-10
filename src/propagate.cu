@@ -396,7 +396,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
 	        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
 	        {
-	            nn_rank = d_NNlist[32*index+nn_rank1-1];
+	            nn_rank = d_NNlist[64*index+nn_rank1-1];
 	            
 	            if ( nn_rank == rank )
 	                continue;
@@ -766,7 +766,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
-            nn_rank = d_NNlist[32*index+nn_rank1-1];
+            nn_rank = d_NNlist[64*index+nn_rank1-1];
             
             if ( nn_rank == rank )
                 continue;
@@ -1128,8 +1128,8 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             
 	}else{	
 	
-        posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DLp.z);
-        posZ = posZ - floor((float)posZ/(float)Zdiv) * Zdiv;
+            posZ = (int) ((Z - floor( Z / boxMax.z) * boxMax.z )/DLp.z);
+            posZ = posZ - floor((float)posZ/(float)Zdiv) * Zdiv;
         
         }
 
@@ -1141,7 +1141,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
-            nn_rank = d_NNlist[32*index+nn_rank1-1];
+            nn_rank = d_NNlist[64*index+nn_rank1-1];
             
             if ( nn_rank == rank )
                 continue;
@@ -1410,7 +1410,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         	{
-        	    nn_rank = d_NNlist[32*index+nn_rank1-1]; // MAGIC NUMBER!!
+        	    nn_rank = d_NNlist[64*index+nn_rank1-1]; // MAGIC NUMBER!!
         	    if ( nn_rank == cellInd ) continue;
 
 
@@ -1583,7 +1583,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
-            nn_rank = d_NNlist[32*index+nn_rank1-1]; // MAGIC NUMBER!!
+            nn_rank = d_NNlist[64*index+nn_rank1-1]; // MAGIC NUMBER!!
             if ( nn_rank == cellInd ) continue;
 
             deltaX  = X - d_CMx[nn_rank];
@@ -1772,7 +1772,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         
         for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         {
-            nn_rank = d_NNlist[32*index+nn_rank1-1]; // MAGIC NUMBER!!
+            nn_rank = d_NNlist[64*index+nn_rank1-1]; // MAGIC NUMBER!!
             if ( nn_rank == cellInd ) continue;
 
             deltaX  = X - d_CMx[nn_rank];
@@ -2109,7 +2109,7 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               float Pshift, float Vshift){
+                               float Pshift, float Vshift, bool useRigidBoxZ){
                                
                                    
     int cellInd = blockIdx.x;
@@ -2151,20 +2151,26 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
             d_Y[nodeInd] = d_Y[nodeInd] + boxMax.y;
 
         }
-
+        
+        
+        if (!useRigidBoxZ ){ 
             
-        if(d_CMz[cellInd] > boxMax.z ){
+        	
+        	if(d_CMz[cellInd] > boxMax.z ){
 
-            d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
+            		d_Z[nodeInd] = d_Z[nodeInd] - boxMax.z;
 
-        }
+        	}
     
     
-        if(d_CMz[cellInd] < 0 ){
+        	if(d_CMz[cellInd] < 0 ){
 
-            d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
+            		d_Z[nodeInd] = d_Z[nodeInd] + boxMax.z;
 
-        }
+        	}
                                
-      }                         
+	}   
+                          
+     }                         
+ 
  }

@@ -261,7 +261,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 32 )
+			  		if ( index > 64 )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -270,7 +270,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -347,7 +347,7 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 32 )
+			  		if ( index > 64 )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   		// for ( int k = 0; k < 32; ++k )
@@ -356,7 +356,7 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 						continue;
 					}
 #endif
-			  		d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -401,7 +401,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 	  	for (  int i = -1; i < 2 ; ++i ){
 				
 			j1 = posx + i;
-			if (j1 == Xdiv || j1 == -1) continue; 
+			if (j1 >= Xdiv || j1 <= -1) continue; 
 				 
 
 			for (  int j = -1; j < 2; ++j ){
@@ -426,7 +426,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 32 )
+			  		if ( index > 64 )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   		// for ( int k = 0; k < 32; ++k )
@@ -435,7 +435,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 						continue;
 					}
 #endif
-			  		d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -462,7 +462,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;
 		
 				int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1);
-				d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+				d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 		
 			}
 		}
@@ -489,7 +489,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;
 		
 				int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1);
-				d_NNlist[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+				d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 		
 			}	
 			

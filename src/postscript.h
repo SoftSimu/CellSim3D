@@ -252,7 +252,7 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               float Pshift, float Vshift);
+                               float Pshift, float Vshift,bool useRigidBoxZ);
                                
 __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
                               float* d_XM,float* d_YM,float* d_ZM,
