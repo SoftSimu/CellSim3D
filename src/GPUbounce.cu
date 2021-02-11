@@ -341,6 +341,14 @@ bool daughtSame;
 bool duringGrowth;
 bool recalc_r0; 
 
+
+float Xratio;
+float Yratio;
+float Zratio;
+float shapeLim;
+bool RandInitDir;
+
+
 int main(int argc, char *argv[])
 {
   int i;
@@ -388,8 +396,27 @@ int main(int argc, char *argv[])
   
   Vshift = shear_rate*boxMax.x;
   Pshift = 0;
+  
+  float Vscale;
+  float scale;
+	
+  Vscale = 1.0/(Xratio*Yratio*Zratio);
+  scale = pow(Vscale, 1.0/3.0);
+	
+  Xratio *= scale;
+  Yratio *= scale;
+  Zratio *= scale;
 
+  
+  if((Xratio >= Yratio) && (Xratio >= Zratio)){
+        shapeLim = Xratio;
+  }else if ((Yratio >= Xratio) && (Yratio >= Zratio)){
+        shapeLim = Yratio;
+  }else{
+        shapeLim = Zratio;
+  }
 
+  if(!colloidal_dynamics) shapeLim = 1.0f;
   	
   if ( line ) {
   
@@ -1298,7 +1325,7 @@ if (Restart == 0) {
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_ExtForces, d_volume, divVol,
-                                                     	impurityNum); 
+                                                     	impurityNum,shapeLim); 
                                                      	
        CudaErrorCheck();
                                                      	
@@ -1311,7 +1338,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,BoxMin,
                                                         d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList,impurityNum);
+                                                        d_fDisList,impurityNum,shapeLim);
                                                         
                                                         
        CudaErrorCheck();                                                  
@@ -1333,7 +1360,7 @@ if (Restart == 0) {
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	useRigidBoxZ,useRigidBoxY);
+                                                     	useRigidBoxZ,useRigidBoxY,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1347,7 +1374,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ,useRigidBoxY);
+                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,shapeLim);
     CudaErrorCheck();	
   
   }
@@ -1367,7 +1394,7 @@ if (Restart == 0) {
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	Pshift,useRigidBoxZ);
+                                                     	Pshift,useRigidBoxZ,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1381,7 +1408,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ);
+                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,shapeLim);
     CudaErrorCheck();	
   
   
@@ -1780,7 +1807,7 @@ if (Restart == 0) {
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_ExtForces, d_volume, divVol,
-                                                     	impurityNum); 
+                                                     	impurityNum,shapeLim); 
                                                      	
                                                      	
        CudaErrorCheck();
@@ -1794,7 +1821,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,BoxMin,
                                                         d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, impurityNum);
+                                                        d_fDisList, impurityNum,shapeLim);
                                                         
        CudaErrorCheck();                                                  
   }
@@ -1815,7 +1842,7 @@ if (Restart == 0) {
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	useRigidBoxZ,useRigidBoxY);
+                                                     	useRigidBoxZ,useRigidBoxY,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1829,7 +1856,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ,useRigidBoxY);
+                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,shapeLim);
     CudaErrorCheck();	
   
   }
@@ -1849,7 +1876,7 @@ if (Restart == 0) {
                                                      	d_velListX, d_velListY, d_velListZ,
                                                      	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	Pshift,useRigidBoxZ);
+                                                     	Pshift,useRigidBoxZ,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1863,7 +1890,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ);
+                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,shapeLim);
     CudaErrorCheck();	
   
   
@@ -1901,7 +1928,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,BoxMin,
                                                         d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, impurityNum);
+                                                        d_fDisList, impurityNum,shapeLim);
                                                         
        	CudaErrorCheck();                                                  
   	}
@@ -1915,7 +1942,7 @@ if (Restart == 0) {
                 	                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                 	                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                 	                                        d_velListX, d_velListY, d_velListZ,
-                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY);
+                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY,shapeLim);
     		CudaErrorCheck();	
   
   	}
@@ -1931,7 +1958,7 @@ if (Restart == 0) {
                	                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
                	                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                	                                         d_velListX, d_velListY, d_velListZ,
-               	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ);
+               	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ,shapeLim);
     CudaErrorCheck();
   	
   	}
@@ -2610,6 +2637,9 @@ int initialize_C180s(int Orig_No_of_C180s)
 
   if (colloidal_dynamics){
   
+  	
+  	ShapeScaler (initx,inity,initz);
+  
   	while (true){
   	
               ranmar(rands, 3);
@@ -2626,13 +2656,14 @@ int initialize_C180s(int Orig_No_of_C180s)
               bool farEnough = true;
               
               
-              farEnough = !(CM.x + ScaleFactor[c]*rCheck > boxMax.x || CM.x-ScaleFactor[c]*rCheck < BoxMin.x ||
-                            CM.y+ScaleFactor[c]*rCheck > boxMax.y || CM.y-ScaleFactor[c]*rCheck < BoxMin.y ||
-                            CM.z+ScaleFactor[c]*rCheck > boxMax.z || CM.z-ScaleFactor[c]*rCheck < BoxMin.z);
+              farEnough = !(CM.x + ScaleFactor[c]*rCheck*shapeLim > boxMax.x || CM.x-ScaleFactor[c]*rCheck*shapeLim < BoxMin.x ||
+                            CM.y+ScaleFactor[c]*rCheck*shapeLim > boxMax.y || CM.y-ScaleFactor[c]*rCheck*shapeLim < BoxMin.y ||
+                            CM.z+ScaleFactor[c]*rCheck*shapeLim > boxMax.z || CM.z-ScaleFactor[c]*rCheck*shapeLim < BoxMin.z);
               
               
               for (int nInd = 0; nInd < c; ++nInd){
-                  if (mag(allCMs[nInd] - CM) < 1.2*rCheck*(ScaleFactor[nInd]+ScaleFactor[c])){
+                  if (mag(allCMs[nInd] - CM) < 1.8*rCheck*shapeLim){
+                      //(ScaleFactor[nInd]+ScaleFactor[c])
                       farEnough = false;
                       break;
                   }
@@ -2650,16 +2681,61 @@ int initialize_C180s(int Orig_No_of_C180s)
               }
           }
   
+  	  if(RandInitDir){	
+  	  
+  	  	float axis[3];
+	  	float RMat[9];
+	  	float theta[1];
+	  	float tempS[3];
+	  	float tempR[3];
+	  	
+  	  	for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
+  	  
+  	  		axis[0] = 0; 
+          		axis[1] = 1; 
+          		axis[2] = 0;	 	  
+  	  		GetRandomVector(axis);	  
+  	  
+  	  		ranmar(theta,1);
+  	  		theta[0] = theta[0]*2*3.14159265;
+  	  
+  	  		RotationMatrix(RMat,axis,theta);
+  	     
+  	        	for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+                  		
+                  		tempS[0] = ScaleFactor[cellInd]*initx[nodeInd];
+                  		tempS[1] = ScaleFactor[cellInd]*inity[nodeInd];
+                  		tempS[2] = ScaleFactor[cellInd]*initz[nodeInd];
+                  		
+                  		tempR[0] = RMat[0]*tempS[0] + RMat[1]*tempS[1] + RMat[2]*tempS[2];
+                  		tempR[1] = RMat[3]*tempS[0] + RMat[4]*tempS[1] + RMat[5]*tempS[2];
+                  		tempR[2] = RMat[6]*tempS[0] + RMat[7]*tempS[1] + RMat[8]*tempS[2];
+                  		                  		
+                		X[cellInd*192 + nodeInd] = tempR[0] + allCMs[cellInd].x;
+                  		Y[cellInd*192 + nodeInd] = tempR[1] + allCMs[cellInd].y;
+                  		Z[cellInd*192 + nodeInd] = tempR[2] + allCMs[cellInd].z;
+  	     		}
+  	   
+  	   
+  	   	}
+  	  
   
+  	 } else{
+  	 
+  	 	for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
+  	     
+  	     		for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+                  
+                  		X[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*initx[nodeInd] + allCMs[cellInd].x;
+                  		Y[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*inity[nodeInd] + allCMs[cellInd].y;
+                  		Z[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*initz[nodeInd] + allCMs[cellInd].z;
+  	     
+  	     		}
+  	   
+  	   	}
   
-  	   for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
-  	     for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-                  X[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*initx[nodeInd] + allCMs[cellInd].x;
-                  Y[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*inity[nodeInd] + allCMs[cellInd].y;
-                  Z[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*initz[nodeInd] + allCMs[cellInd].z;
-  	     }
-  	   }
-  
+  	}
+
 
   } else {
 
@@ -2877,6 +2953,27 @@ int initialize_C180s(int Orig_No_of_C180s)
 }
 
 
+void RotationMatrix(float* RMat,float* axis,float* theta){
+
+	float C,S;
+  	C = cos(theta[0]);
+  	S = sin(theta[0]);
+  	  
+  	RMat[0] = 1.0f + (1.0f - C)*(-axis[2]*axis[2] - axis[1]*axis[1]);
+  	RMat[1] = -S*axis[2] + (1.0f - C)*axis[0]*axis[1];
+  	RMat[2] =  S*axis[1] + (1.0f - C)*axis[0]*axis[2];
+  	  
+  	RMat[3] =  S*axis[2] + (1.0f - C)*axis[0]*axis[1];
+  	RMat[4] =  1.0f + (1.0f - C)*(-axis[2]*axis[2] - axis[0]*axis[0]);
+  	RMat[5] = -S*axis[0] + (1.0f - C)*axis[1]*axis[2];
+  	  
+  	RMat[6] = -S*axis[1] + (1.0f - C)*axis[0]*axis[2];
+  	RMat[7] =  S*axis[0] + (1.0f - C)*axis[1]*axis[2];
+  	RMat[8] =  1.0f + (1.0f - C)*(-axis[0]*axis[0] - axis[1]*axis[1]);
+
+}
+
+
 int initialize_Vel(int Orig_No_of_C180s)
 {
 
@@ -3089,6 +3186,44 @@ int DispersityFunc(int Orig_No_of_C180s){
 }
 
 
+void ShapeScaler (float* initX,float* initY,float* initZ){
+
+
+	
+	float sumx = 0; 
+  	float sumy = 0; 
+  	float sumz = 0;
+
+  	
+  	for (int i =0; i < 180; ++i){
+      		sumx += initX[i]; 
+      		sumy += initY[i]; 
+      		sumz += initZ[i]; 
+  	}
+
+  	sumx /= 180.0; 
+  	sumy /= 180.0; 
+  	sumz /= 180.0;  
+      
+  	for (int i =0; i < 180; ++i){
+      		initX[i] -= sumx; 
+      		initY[i] -= sumy; 
+      		initZ[i] -= sumz; 
+  	}
+  	
+  	
+  	for (int i =0; i < 180; ++i){
+  	
+  		initX[i] *= Xratio;
+  		initY[i] *= Yratio;
+  		initZ[i] *= Zratio;
+  			
+  	}
+	
+
+}
+
+
 int generate_random(int no_of_ran1_vectors)
 {
   // This function uses marsaglia random number generator
@@ -3218,7 +3353,8 @@ int read_fullerene_nn(void)
           }
   }
   fclose(infil);
-		
+
+  if (colloidal_dynamics) ShapeScaler (initX,initY,initZ);			
 
   for (int i = 0; i < 180; ++i){
       int N1 = C180_nn[0 + i];
@@ -3309,8 +3445,6 @@ int read_json_params(const char* inpFile){
         write_cont_force = coreParams["write_cont_force"].asBool();
         write_vel_file = coreParams["write_vel_file"].asBool();
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
-        dispersity = coreParams["dispersity"].asBool();
-        colloidal_dynamics = coreParams["colloidal_dynamics"].asBool();
         correct_com = coreParams["correct_com"].asBool();
         correct_Vcom = coreParams["correct_Vcom"].asBool();
                                  
@@ -3415,6 +3549,23 @@ int read_json_params(const char* inpFile){
         recalc_r0 = NewCell["recalc_r0"].asBool(); 
     }
     
+    Json::Value ColloidParams = inpRoot.get("ColloidParams", Json::nullValue);
+
+    if (ColloidParams == Json::nullValue){
+        printf("ERROR: Cannot load Colloidal parameters\n");
+        return -1;
+    } else {
+    
+        colloidal_dynamics = ColloidParams["colloidal_dynamics"].asBool();
+    	dispersity = ColloidParams["dispersity"].asBool();
+    	rand_vel = ColloidParams["rand_vel"].asBool();
+        Xratio = ColloidParams["Xratio"].asFloat();
+        Yratio = ColloidParams["Yratio"].asFloat();
+        Zratio = ColloidParams["Zratio"].asFloat();
+        RandInitDir = ColloidParams["RandInitDir"].asBool();
+    
+    }
+  
 
     Json::Value boxParams = inpRoot.get("boxParams", Json::nullValue);
 
@@ -3436,7 +3587,6 @@ int read_json_params(const char* inpFile){
         BoxMin.z = boxParams["BoxMin_z"].asFloat();
         flatbox = boxParams["flatbox"].asBool();
         LineCenter = boxParams["LineCenter"].asBool();
-        rand_vel = boxParams["rand_vel"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
 	impurity = boxParams["impurity"].asBool();
 	impurityNum = boxParams["impurityNum"].asInt();

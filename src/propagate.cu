@@ -200,7 +200,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, R3Nptrs d_ExtForces, const float* volList, const float div_vol,
-                           int impurityNum )
+                           int impurityNum, float shapeLim)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -365,7 +365,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	NooflocalNN = 0;
         	float range;
-        	range = (attraction_range + 1) * (attraction_range + 1);
+        	range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
         
         	int posX = 0;    
         	int posY = 0;
@@ -570,7 +570,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           bool useRigidBoxZ, bool useRigidBoxY)
+                           bool useRigidBoxZ, bool useRigidBoxY, float shapeLim)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -728,7 +728,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
         NooflocalNN = 0;
         float range;
-        range = (attraction_range + 1) * (attraction_range + 1);
+        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
         
         int posX = 0;    
         int posY = 0;
@@ -933,7 +933,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float* d_velListX, float* d_velListY, float* d_velListZ,
                            bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           float Pshift , bool useRigidBoxZ)
+                           float Pshift , bool useRigidBoxZ, float shapeLim)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -1091,7 +1091,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         
         NooflocalNN = 0;
         float range;
-        range = (attraction_range + 1) * (attraction_range + 1);
+        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
         
         int posX = 0;    
         int posY = 0;
@@ -1322,7 +1322,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax, float3 BoxMin,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, int impurityNum){
+                                   R3Nptrs d_fDisList, int impurityNum, float shapeLim){
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
 
@@ -1385,7 +1385,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	int NooflocalNN = 0;
         	int localNNs[10];
         	float range;
-        	range = (attraction_range + 1) * (attraction_range + 1);
+        	range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
 
         
         	int posX = 0;    
@@ -1487,7 +1487,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY ){
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, float shapeLim){
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
@@ -1547,7 +1547,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         int NooflocalNN = 0;
         int localNNs[10];
         float range;
-        range = (attraction_range + 1) * (attraction_range + 1);
+        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
 
         
         int posX = 0;    
@@ -1668,7 +1668,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ)
+                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, float shapeLim)
 {
                                    
     size_t cellInd = blockIdx.x;
@@ -1729,7 +1729,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         int NooflocalNN = 0;
         int localNNs[10];
         float range;
-        range = (attraction_range + 1) * (attraction_range + 1);
+        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
 
         
         int posX = 0;    

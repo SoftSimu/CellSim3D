@@ -34,8 +34,6 @@
         "phase_count": 2000000000,
         "write_cont_force": 1,
         "forces_file": "inp.csv",
-        "dispersity": 1,
-	"colloidal_dynamics":0,
         "write_vel_file": 1,
         "correct_com" : 0,
         "correct_Vcom" : 0
@@ -103,6 +101,18 @@
         "recalc_r0": 0
         
     },
+    
+    "ColloidParams":{
+    
+	"colloidal_dynamics": 1,
+	"dispersity": 1,
+	"rand_vel": 1,    	
+    	"Xratio": 1.0,
+    	"Yratio": 1.0,
+    	"Zratio": 1.0,
+    	"RandInitDir": 0
+       
+    },
 
     "boxParams":{
         "useRigidSimulationBox": 1,
@@ -122,7 +132,6 @@
 	"LineCenter": 1,
         "dom_len": 1.5,
         "rand_pos": 0,
-        "rand_vel": 0,
 	"impurity": 0,
 	"impurityNum": 0,
 	"line": 0,
