@@ -349,6 +349,8 @@ float shapeLim;
 bool RandInitDir;
 
 
+thrust::host_vector<angles3> theta0(192);
+
 int main(int argc, char *argv[])
 {
   int i;
@@ -461,6 +463,9 @@ int main(int argc, char *argv[])
   DivisionVolume = (float *)calloc(MaxNoofC180s, sizeof(float));
   gamma_env = (float *)calloc(MaxNoofC180s, sizeof(float));
   viscotic_damp = (float *)calloc(MaxNoofC180s, sizeof(float));
+  
+  thrust::device_vector<angles3> d_theta0V(192);
+  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
 
   CPUMemory += 6L*192L*MaxNoofC180s*sizeof(float);
   CPUMemory += MaxNoofC180s*10L*sizeof(float);
@@ -657,9 +662,6 @@ int main(int argc, char *argv[])
   cudaMemset(d_contactForces.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   
-  thrust::host_vector<angles3> theta0(192);
-  thrust::device_vector<angles3> d_theta0V(192);
-  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
 
   h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -1243,30 +1245,6 @@ if (Restart == 0) {
 
   if (constrainAngles){
       // Code to initialize equillibrium angles
-      float3 p, ni, nj, nk;
-      for (int n = 0; n<180; n++){
-          p = make_float3(X[n], Y[n], Z[n]); 
-
-          ni = make_float3(X[C180_nn[0*192 + n]], Y[C180_nn[0*192 + n]], 
-                           Z[C180_nn[0*192 + n]]); 
-          
-          nj = make_float3(X[C180_nn[1*192 + n]], Y[C180_nn[1*192 + n]], 
-                           Z[C180_nn[1*192 + n]]);
-          
-          nk = make_float3(X[C180_nn[2*192 + n]], Y[C180_nn[2*192 + n]],
-                           Z[C180_nn[2*192 + n]]);
-
-          ni = ni-p;
-          nj = nj-p;
-          nk = nk-p; 
-
-          theta0[n].aij = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
-          
-          theta0[n].ajk = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
-          
-          theta0[n].aik = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
-
-        }
 
       d_theta0V = theta0; 
       CudaErrorCheck(); 
@@ -3373,6 +3351,33 @@ int read_fullerene_nn(void)
       b = make_float3(initX[N3], initY[N3], initZ[N3]);
       h_R0[384 + i] = mag(a-b);
   }
+  
+  float3 p, ni, nj, nk;
+  for (int n = 0; n<180; n++){
+  
+          p = make_float3(initX[n], initY[n], initZ[n]); 
+
+          ni = make_float3(initX[C180_nn[0*192 + n]], initY[C180_nn[0*192 + n]], 
+                           initZ[C180_nn[0*192 + n]]); 
+          
+          nj = make_float3(initX[C180_nn[1*192 + n]], initY[C180_nn[1*192 + n]], 
+                           initZ[C180_nn[1*192 + n]]);
+          
+          nk = make_float3(initX[C180_nn[2*192 + n]], initY[C180_nn[2*192 + n]],
+                           initZ[C180_nn[2*192 + n]]);
+
+          ni = ni-p;
+          nj = nj-p;
+          nk = nk-p; 
+
+          theta0[n].aij = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
+          
+          theta0[n].ajk = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
+          
+          theta0[n].aik = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
+
+  } 
+  
   return(0);
 }
 
