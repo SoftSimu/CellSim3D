@@ -105,7 +105,7 @@ float* h_R0;
 
 
 float L1  = 3.0f;       // the initial fullerenes are placed in
-// an X x Y grid of sizne L1 x L1
+// an X x Y grid of size L1 x L1
 
 
 // the three nearest neighbours of C180 atoms
@@ -163,6 +163,7 @@ int cellLifeTime;
 float cellFoodCons; // baseline food consumption
 float cellFoodConsDiv; // Extra good consumption when cell divides
 float cellFoodRel; // Food released when cell dies (should < total consumed food)
+
 float maxPressure;
 float minPressure;
 float rMax;
@@ -314,6 +315,8 @@ int NumApoCell;
 
 bool colloidal_dynamics;
 bool dispersity;
+
+bool useDifferentCell;
 float* ScaleFactor;
 float* d_ScaleFactor;
 float* DivisionVolume;
@@ -324,7 +327,7 @@ float* viscotic_damp;
 float* d_viscotic_damp;
 
 
-bool useDifferentCell;
+
 float SizeFactor;
 float Stiffness2;
 float gRate;
@@ -333,10 +336,10 @@ float gEnv;
 float gVis;
 float Apo_rate2;
 float squeeze_rate2;
-int numberOfCells;
+int   numberOfCells;
 float fractionOfCells;
 float closenessToCenter;
-bool chooseRandomCellIndices;
+bool  chooseRandomCellIndices;
 bool daughtSame;
 bool duringGrowth;
 bool recalc_r0; 
@@ -350,6 +353,8 @@ bool RandInitDir;
 
 
 thrust::host_vector<angles3> theta0(192);
+
+
 
 int main(int argc, char *argv[])
 {
@@ -451,7 +456,6 @@ int main(int argc, char *argv[])
   X = (float *)calloc(192*MaxNoofC180s,sizeof(float));
   Y = (float *)calloc(192*MaxNoofC180s,sizeof(float));
   Z = (float *)calloc(192*MaxNoofC180s,sizeof(float));
-  //bounding_xyz = (float *)calloc(MaxNoofC180s*6, sizeof(float));
   velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -535,7 +539,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_XM , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_YM , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ZM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_bounding_xyz , MaxNoofC180s*6*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
@@ -545,21 +548,10 @@ int main(int argc, char *argv[])
 //  if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_Minx ,         1024*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_Maxx ,         1024*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_Miny ,         1024*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_Maxy ,         1024*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_Minz ,         1024*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_Maxz ,         1024*sizeof(float))) return(-1);
-  //  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,   1024*1024*sizeof(int))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    MAX_NN*MaxNoofC180s*sizeof(int))) return(-1); 
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1); 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
-  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  // if ( cudaSuccess != cudaMalloc( (void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fx, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -671,48 +663,7 @@ int main(int argc, char *argv[])
   h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-
-
-  thrust::device_vector<float> d_XMMV(MaxNoofC180s*192);
-  thrust::fill(d_XMMV.begin(), d_XMMV.end(), 0.f);
-  float *d_XMM = thrust::raw_pointer_cast(&d_XMMV[0]);
-  
-  thrust::device_vector<float> d_YMMV(MaxNoofC180s*192);
-  thrust::fill(d_YMMV.begin(), d_YMMV.end(), 0.f);
-  float *d_YMM = thrust::raw_pointer_cast(&d_YMMV[0]); 
-  
-  thrust::device_vector<float> d_ZMMV(MaxNoofC180s*192);
-  thrust::fill(d_ZMMV.begin(), d_ZMMV.end(), 0.f);
-  float *d_ZMM = thrust::raw_pointer_cast(&d_ZMMV[0]);
-
-  //thrust::device_vector<int> d_NoofNNlistV(1024*1024);
-  //thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
-  //int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
-
-  thrust::device_vector<float> d_timeV(192*MaxNoofC180s);
-  thrust::fill(d_timeV.begin(), d_timeV.end(), delta_t); 
-  float *d_time = thrust::raw_pointer_cast(&d_timeV[0]);
-  thrust::host_vector<float> h_timeV(192*MaxNoofC180s);
-
-  thrust::host_vector<float> dt_listV(Time_steps + equiStepCount);
-  thrust::fill(dt_listV.begin(), dt_listV.end(), delta_t);  
-  thrust::device_vector<float> d_XtV(192*MaxNoofC180s);
-  thrust::fill(d_XtV.begin(), d_XtV.end(), 0.f);
-  float *d_Xt = thrust::raw_pointer_cast(&d_XtV[0]);
-
-  thrust::device_vector<float> d_YtV(192*MaxNoofC180s);
-  thrust::fill(d_YtV.begin(), d_YtV.end(), 0.f);
-  float *d_Yt = thrust::raw_pointer_cast(&d_YtV[0]);
-
-  thrust::device_vector<float> d_ZtV(192*MaxNoofC180s);
-  thrust::fill(d_ZtV.begin(), d_ZtV.end(), 0.f);
-  float *d_Zt = thrust::raw_pointer_cast(&d_ZtV[0]);
-
-  thrust::device_vector<float> d_AdpErrorsV(192*MaxNoofC180s); 
-  thrust::fill(d_AdpErrorsV.begin(), d_AdpErrorsV.end(), 0); 
-  float *d_AdpErrors = thrust::raw_pointer_cast(&d_AdpErrorsV[0]); 
-
-  thrust::host_vector<float> h_AdpErrors(192*MaxNoofC180s);
+ 
 
   thrust::device_vector<float> d_volumeV(MaxNoofC180s);
   thrust::host_vector<float> h_volume(MaxNoofC180s);
@@ -721,17 +672,13 @@ int main(int argc, char *argv[])
   volume = thrust::raw_pointer_cast(&h_volume[0]);
 
 
-  // thrust::device_vector<float> d_R0V(MaxNoofC180s);
-  // thrust::host_vector<float> h_R0V(MaxNoofC180s);
-  // d_R0 = thrust::raw_pointer_cast(&d_R0V[0]);
-  // thrust::fill(h_R0V.begin(), h_R0V.end(), R0);
-  // d_R0V = h_R0V;
+  thrust::device_vector<float> d_timeV(192*MaxNoofC180s);
+  thrust::fill(d_timeV.begin(), d_timeV.end(), delta_t); 
+  float *d_time = thrust::raw_pointer_cast(&d_timeV[0]);
+  thrust::host_vector<float> h_timeV(192*MaxNoofC180s);
 
   if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
 
-  // velocities
-
-  
 
   
   CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -913,7 +860,6 @@ if (Restart == 0) {
       curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
       CudaErrorCheck();
 
-      //curandSetPseudoRandomGeneratorSeed(gen, time(NULL));
       curandSetPseudoRandomGeneratorSeed(gen, time(&secs_since_1970));
       CudaErrorCheck();
 
@@ -938,23 +884,11 @@ if (Restart == 0) {
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-//  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-//                                    d_X, d_Y, d_Z,
-//                                    d_CMx, d_CMy, d_CMz);
-  
-  //bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,d_X,d_Y,d_Z,
-  //                                   d_bounding_xyz, d_CMx, d_CMy, d_CMz);
 
-  //CudaErrorCheck(); 
+
 
   reductionblocks = (No_of_C180s-1)/1024+1;
-  //minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-  //                                     d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
- // CudaErrorCheck(); 
-  //minmaxpost<<<1,1024>>>(reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
- // CudaErrorCheck(); 
- // cudaMemcpy(Minx, d_Minx, 6*sizeof(float),cudaMemcpyDeviceToHost);
-  //  DL = 3.8f;
+
   
   globalrank = 0;
 
@@ -1022,75 +956,21 @@ if (Restart == 0) {
   if ( correct_Vcom == true){
      
       VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_velListX, d_velListY, d_velListZ,
-                                        d_VCMx, d_VCMy, d_VCMz);
+                                        	  d_velListX, d_velListY, d_velListZ,
+                                        	  d_VCMx, d_VCMy, d_VCMz);
       cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
       cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
       cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
       calc_sys_VCM();
       CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
-                                                             sysVCMx, sysVCMy, sysVCMz,
-                                                             No_of_C180s*192);
+                                                               sysVCMx, sysVCMy, sysVCMz,
+                                                               No_of_C180s*192);
           
       CudaErrorCheck(); 
       //printf("sysVCMx = %f, sysVCMy = %f, sysVCmz = %f\n", sysVCMx, sysVCMy, sysVCMz);
   }  
   
   
-
-  // Set up walls if needed
-  if (useWalls == 1){
-      // First we must make sure that the walls surround the
-      // starting system.
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_X, d_Y, d_Z,
-                                        d_CMx, d_CMy, d_CMz);
-      cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      float COMx = 0, COMy = 0, COMz = 0;
-
-      for(int cell = 0; cell < No_of_C180s; cell++){
-          COMx += CMx[cell];
-          COMy += CMy[cell];
-          COMz += CMz[cell];
-      }
-
-      COMx = COMx/No_of_C180s;
-      COMy = COMy/No_of_C180s;
-      COMz = COMz/No_of_C180s;
-
-
-      if (perpAxis[0] == 'Z' || perpAxis[0] == 'z' ){
-          // Check that the walls are far enough from the beginning cells
-          float tempZ[192*No_of_C180s];
-          cudaMemcpy(tempZ, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-          std::sort(tempZ, tempZ+No_of_C180s);
-          float radius = 3.0 * divVol / 4.0;
-          radius = radius/3.14159;
-          radius = std::pow(radius, 0.33333333333);
-          dAxis = dAxis * 2 * radius;
-
-          if (dAxis < (tempZ[No_of_C180s] - tempZ[0])){
-                  printf("Distance between walls is too small\nExiting...");
-                  printf("Starting system size= %f\nWall gap = %f",
-                         tempZ[No_of_C180s] - tempZ[0], dAxis);
-                  return(-1);
-              }
-
-          wall1 = COMz - (dAxis/2.0);
-          wall2 = COMz + (dAxis/2.0);
-          wallLStart = COMx - (wallLen/2.0);
-          wallLEnd = COMx + (wallLen/2.0);
-          wallWStart = COMy - (wallWidth/2.0);
-          wallWEnd = COMy + (wallWidth/2.0);
-      }
-      else {
-          printf(" Invalid wall axis selection %s\nExiting...", perpAxis);
-          return(-1);
-      }
-
-  }
 
 
   float rGrowth = 0;
@@ -1129,15 +1009,6 @@ if (Restart == 0) {
      // printf("   Simulation box length = %f\n", boxLength);
   }
 
-  /*
-  cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  CudaErrorCheck();
-  for(int i=0;i<No_of_C180s;i++){
-  printf (" %f \n",CMx[i]);
-  }
-  */
-
- 
 
   // Code to set up pbc things
   if (usePBCs || useLEbc){
@@ -1200,7 +1071,7 @@ if (Restart == 0) {
                                                           d_XM, d_YM, d_ZM,
                                                           d_CMx, d_CMy, d_CMz,
                                                           boxMax, divVol, No_of_C180s,
-                                                          useRigidBoxZ, useRigidBoxY);
+                                                          useRigidBoxZ, useRigidBoxY, impurityNum);
   
 
 
@@ -1210,7 +1081,7 @@ if (Restart == 0) {
         
        UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z, d_XM, d_YM, d_ZM,
                         d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
+                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ, impurityNum);
                         
         CudaErrorCheck();	
 	
@@ -1244,34 +1115,12 @@ if (Restart == 0) {
 
 
   if (constrainAngles){
-      // Code to initialize equillibrium angles
+
 
       d_theta0V = theta0; 
       CudaErrorCheck(); 
   }
 
-  // if (useDifferentStiffnesses && recalc_r0){
-
-//       CalculateR0<<<No_of_C180s/1024 + 1, 1024>>>(d_R0,
-//                                                   d_X, d_Y, d_Z,
-//                                                   d_C180_nn,
-//                                                   d_Youngs_mod,
-//                                                   stiffness2,
-//                                                   No_of_C180s);
-// #ifdef RO_DEBUG
-//       h_R0V = d_R0V;
-
-//       cudaMemcpy(youngsModArray, d_Youngs_mod, sizeof(float)*MaxNoofC180s, cudaMemcpyDeviceToHost);
-      
-//       for (int i =0; i < No_of_C180s; ++i){
-//           std::cout << "Cell " << i << " R0 = "
-//                     << h_R0V[i] << " E = " << youngsModArray[i] << std::endl;
-//       }
-// #endif
-  
-//   }
-
-  // Different kind of pressure stuff
 
   float r_CM_o = pow((3.0/4.0) * (1/3.14159) * divVol*2.0, 1.0/3);
 
@@ -1292,31 +1141,29 @@ if (Restart == 0) {
   	CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
-                                                     	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     	internal_damping, d_time,
+                                                     	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
                                                      	attraction_strength, attraction_range,
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DL, d_gamma_env,
-                                                     	wall1, wall2,
-                                                     	threshDist, useWalls,
-                                                     	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_ExtForces, d_volume, divVol,
+                                                     	Xdiv, Ydiv, Zdiv, boxMax,
+                                                     	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                     	threshDist,
+								BoxMin, Youngs_mod,
+                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces, d_ExtForces,
                                                      	impurityNum,shapeLim); 
                                                      	
        CudaErrorCheck();
                                                      	
       CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
-                                                        internal_damping,
-                                                        attraction_range,
-                                                        d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,BoxMin,
-                                                        d_NoofNNlist, d_NNlist, DL, d_gamma_env,
-                                                        d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList,impurityNum,shapeLim);
+                                                        	d_X, d_Y, d_Z,
+                                                        	d_CMx, d_CMy, d_CMz,
+                                                        	internal_damping,
+                                                        	attraction_range,
+                                                        	d_viscotic_damp,
+                                                        	Xdiv, Ydiv, Zdiv,BoxMin,
+                                                        	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                        	d_velListX, d_velListY, d_velListZ,
+                                                        	d_fDisList,impurityNum,shapeLim);
                                                         
                                                         
        CudaErrorCheck();                                                  
@@ -1327,32 +1174,30 @@ if (Restart == 0) {
     	CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     	internal_damping, d_time,
+                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
                                                      	attraction_strength, attraction_range,
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
-                                                     	wall1, wall2,
-                                                     	threshDist, useWalls,
-                                                     	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	useRigidBoxZ,useRigidBoxY,shapeLim);
+                                                     	Xdiv, Ydiv, Zdiv, boxMax,
+                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	threshDist,
+                                                     	BoxMin, Youngs_mod,
+                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
+                                                     	useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
   	                                                     	
       CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                                                         d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                        d_CMx, d_CMy, d_CMz,
                                                         internal_damping,
                                                         attraction_range,
                                                         d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
+                                                        Xdiv, Ydiv, Zdiv, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,shapeLim);
+                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
     CudaErrorCheck();	
   
   }
@@ -1361,32 +1206,30 @@ if (Restart == 0) {
   CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     	internal_damping, d_time,
+                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
                                                      	attraction_strength, attraction_range,
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
-                                                     	wall1, wall2,
-                                                     	threshDist, useWalls,
-                                                     	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	Pshift,useRigidBoxZ,shapeLim);
+                                                     	Xdiv, Ydiv, Zdiv, boxMax,
+                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	threshDist,
+                                                     	BoxMin, Youngs_mod,
+                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
+                                                     	Pshift,useRigidBoxZ,impurityNum,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
   	                                                     	
       CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                                                         d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                        d_CMx, d_CMy, d_CMz,
                                                         internal_damping,
                                                         attraction_range,
                                                         d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
+                                                        Xdiv, Ydiv, Zdiv, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,shapeLim);
+                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,shapeLim);
     CudaErrorCheck();	
   
   
@@ -1397,7 +1240,7 @@ if (Restart == 0) {
                                      d_X, d_Y, d_Z,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, d_DivisionVolume,
-                                     checkSphericity, d_area, phase_count, step,
+                                     checkSphericity, d_area, 
                                      stiffness1, useDifferentCell, d_Youngs_mod,
                                      recalc_r0, ApoVol ,d_cell_Apo, d_ScaleFactor);
   
@@ -1494,12 +1337,11 @@ if (Restart == 0) {
     //printf("step %d\n", step);
       numNodes = No_of_C180s*192;
       Integrate<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP,
-                                                 d_X, d_Y, d_Z,
-                                                 d_XM, d_YM, d_ZM, 
+                                                 d_X, d_Y, d_Z, 
                                                  d_velListX, d_velListY, d_velListZ, 
                                                  d_time,  mass,
                                                  d_fConList, d_fDisList, d_fRanList,
-                                                 No_of_C180s, add_rands, d_rngStates, rand_scale_factor, impurityNum);
+                                                 No_of_C180s, impurityNum);
       CudaErrorCheck();
 
 
@@ -1754,7 +1596,7 @@ if (Restart == 0) {
       }
 
       if (!colloidal_dynamics){      
-      	PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, minPressure, maxPressure, d_Growth_rate, No_of_C180s,
+      	PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
         	                                               useDifferentCell, stiffness1, d_Youngs_mod, step,
         	                                               phase_count, impurityNum);
       		CudaErrorCheck(); 
@@ -1770,36 +1612,34 @@ if (Restart == 0) {
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif
 
-    if (useRigidSimulationBox){	
-  	CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+ if (useRigidSimulationBox){	
+  	CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
-                                                     	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     	internal_damping, d_time,
+                                                     	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
                                                      	attraction_strength, attraction_range,
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DL, d_gamma_env,
-                                                     	wall1, wall2,
-                                                     	threshDist, useWalls,
-                                                     	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_ExtForces, d_volume, divVol,
+                                                     	Xdiv, Ydiv, Zdiv, boxMax,
+                                                     	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                     	threshDist,
+								BoxMin, Youngs_mod,
+                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces, d_ExtForces,
                                                      	impurityNum,shapeLim); 
-                                                     	
                                                      	
        CudaErrorCheck();
                                                      	
       CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
-                                                        internal_damping,
-                                                        attraction_range,
-                                                        d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,BoxMin,
-                                                        d_NoofNNlist, d_NNlist, DL, d_gamma_env,
-                                                        d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, impurityNum,shapeLim);
+                                                        	d_X, d_Y, d_Z,
+                                                        	d_CMx, d_CMy, d_CMz,
+                                                        	internal_damping,
+                                                        	attraction_range,
+                                                        	d_viscotic_damp,
+                                                        	Xdiv, Ydiv, Zdiv,BoxMin,
+                                                        	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                        	d_velListX, d_velListY, d_velListZ,
+                                                        	d_fDisList,impurityNum,shapeLim);
+                                                        
                                                         
        CudaErrorCheck();                                                  
   }
@@ -1809,32 +1649,30 @@ if (Restart == 0) {
     	CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     	internal_damping, d_time,
+                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
                                                      	attraction_strength, attraction_range,
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
-                                                     	wall1, wall2,
-                                                     	threshDist, useWalls,
-                                                     	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	useRigidBoxZ,useRigidBoxY,shapeLim);
+                                                     	Xdiv, Ydiv, Zdiv, boxMax,
+                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	threshDist,
+                                                     	BoxMin, Youngs_mod,
+                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
+                                                     	useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
   	                                                     	
       CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                                                         d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                        d_CMx, d_CMy, d_CMz,
                                                         internal_damping,
                                                         attraction_range,
                                                         d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
+                                                        Xdiv, Ydiv, Zdiv,boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,shapeLim);
+                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
     CudaErrorCheck();	
   
   }
@@ -1843,38 +1681,36 @@ if (Restart == 0) {
   CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , stiffness1, 
-                                                     	internal_damping, d_time,
+                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
                                                      	attraction_strength, attraction_range,
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, usePBCs, boxMax, d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
-                                                     	wall1, wall2,
-                                                     	threshDist, useWalls,
-                                                     	d_velListX, d_velListY, d_velListZ,
-                                                     	useRigidSimulationBox, boxLength, BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, r_CM_o, d_contactForces, d_volume, divVol,
-                                                     	Pshift,useRigidBoxZ,shapeLim);
+                                                     	Xdiv, Ydiv, Zdiv, boxMax,
+                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	threshDist,
+                                                     	BoxMin, Youngs_mod,
+                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
+                                                     	Pshift,useRigidBoxZ,impurityNum,shapeLim);
                                                      	
        CudaErrorCheck();                                             	
   	
   	                                                     	
       CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                                                         d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                        d_CMx, d_CMy, d_CMz,
                                                         internal_damping,
                                                         attraction_range,
                                                         d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
+                                                        Xdiv, Ydiv, Zdiv,boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,shapeLim);
+                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,shapeLim);
     CudaErrorCheck();	
   
   
   
   }
-      
+       
 
       // Calculate random Force here...
       if (add_rands){
@@ -1899,11 +1735,11 @@ if (Restart == 0) {
                                                      	
      		CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                                                         d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                                                        d_CMx, d_CMy, d_CMz,
                                                         internal_damping,
                                                         attraction_range,
                                                         d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,BoxMin,
+                                                        Xdiv, Ydiv, Zdiv, BoxMin,
                                                         d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList, impurityNum,shapeLim);
@@ -1913,14 +1749,14 @@ if (Restart == 0) {
   	if(usePBCs){              	
       		CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                 	                                        d_X, d_Y, d_Z,
-                	                                        d_CMx, d_CMy, d_CMz,r_CM_o,
+                	                                        d_CMx, d_CMy, d_CMz,
                 	                                        internal_damping,
                 	                                        attraction_range,
                 	                                        d_viscotic_damp,
-                	                                        Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
+                	                                        Xdiv, Ydiv, Zdiv,boxMax,
                 	                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                 	                                        d_velListX, d_velListY, d_velListZ,
-                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY,shapeLim);
+                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY, impurityNum,shapeLim);
     		CudaErrorCheck();	
   
   	}
@@ -1929,14 +1765,14 @@ if (Restart == 0) {
   	  	                                                     	
       		CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                	                                         d_X, d_Y, d_Z,
-               	                                         d_CMx, d_CMy, d_CMz,r_CM_o,
+               	                                         d_CMx, d_CMy, d_CMz,
                	                                         internal_damping,
                	                                         attraction_range,
                	                                         d_viscotic_damp,
-               	                                         Xdiv, Ydiv, Zdiv, usePBCs, boxMax,
+               	                                         Xdiv, Ydiv, Zdiv,boxMax,
                	                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                	                                         d_velListX, d_velListY, d_velListZ,
-               	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ,shapeLim);
+               	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ, impurityNum,shapeLim);
     CudaErrorCheck();
   	
   	}
@@ -1960,7 +1796,7 @@ if (Restart == 0) {
                                      d_X, d_Y, d_Z,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, d_DivisionVolume,
-                                     checkSphericity, d_area, phase_count, step,
+                                     checkSphericity, d_area,
                                      stiffness1, useDifferentCell, d_Youngs_mod,
                                      recalc_r0,ApoVol,d_cell_Apo, d_ScaleFactor);
         CudaErrorCheck();
@@ -2040,8 +1876,8 @@ if (Restart == 0) {
                                    d_X, d_Y, d_Z,
                                    d_XM, d_YM, d_ZM, 
                                    d_CMx, d_CMy, d_CMz,
-                                   d_velListX, d_velListY, d_velListZ, d_Growth_rate, rMax,
-                                   d_CellINdex, NewCellInd, No_of_C180s, d_ran2, repulsion_range,asym[0]);
+                                   d_velListX, d_velListY, d_velListZ,
+                                   No_of_C180s, d_ran2, repulsion_range,asym[0]);
                                    
           CudaErrorCheck()
           resetIndices[divCell] = globalrank;
@@ -2155,25 +1991,6 @@ if (Restart == 0) {
       CudaErrorCheck(); 
 
 
-     // bounding_boxes<<<No_of_C180s,32>>>(No_of_C180s,
-     //                                    d_X,d_Y,d_Z,
-     //                                    d_bounding_xyz, d_CMx, d_CMy, d_CMz);
-     // CudaErrorCheck();
-      
-      
-
-          
-      //reductionblocks = (No_of_C180s-1)/1024+1;
-     // minmaxpre<<<reductionblocks,1024>>>( No_of_C180s, d_bounding_xyz,
-     //                                      d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-    //  CudaErrorCheck(); 
-
-    //  minmaxpost<<<1,1024>>>( reductionblocks, d_Minx, d_Maxx, d_Miny, d_Maxy, d_Minz, d_Maxz);
-      
-    //  CudaErrorCheck(); 
-
-
-
 
    if(usePBCs && (step)%1000 == 0){
         
@@ -2181,7 +1998,7 @@ if (Restart == 0) {
                                                               d_XM, d_YM, d_ZM,
                                                               d_CMx, d_CMy, d_CMz,
                                                               boxMax, divVol, No_of_C180s,
-                                                              useRigidBoxZ, useRigidBoxY);
+                                                              useRigidBoxZ, useRigidBoxY, impurityNum);
   
 
 		
@@ -2192,21 +2009,11 @@ if (Restart == 0) {
        
             UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z, d_XM, d_YM, d_ZM,
                         d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
+                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ, impurityNum);
 	
 	
 	}
 
-
-    //  cudaMemcpy(Minx, d_Minx, 6*sizeof(float), cudaMemcpyDeviceToHost);
-    //  Xdiv = (int)((Minx[1]-Minx[0])/DL+1);
-   //   Ydiv = (int)((Minx[3]-Minx[2])/DL+1);
-   //   Zdiv = (int)((Minx[5]-Minx[4])/DL+1);
-
-
-    //  makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_bounding_xyz, Minx[0], Minx[2], Minx[4],
-    //                                         attraction_range, Xdiv, Ydiv, Zdiv, d_NoofNNlist, d_NNlist, DL);
-    //  CudaErrorCheck();
 
 
       if (!growthDone && step > Time_steps+1){

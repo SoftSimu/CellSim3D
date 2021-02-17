@@ -187,8 +187,8 @@ __global__ void  cell_division(int rank,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ,float* d_Growth_rate, float rMax,
-                               int* d_CellINdex, int NewCellInd, int No_of_C180s, float *d_randNorm, float repulsion_range, float asym){
+                               float* d_velListX, float* d_velListY, float* d_velListZ, 
+                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym){
     int newrank = No_of_C180s;
     __shared__ float CMx, CMy, CMz;
   

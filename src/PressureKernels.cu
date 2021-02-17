@@ -1,7 +1,7 @@
 #include<cuda.h>
 #include "postscript.h"
 
-__global__ void PressureUpdate (float* d_pressList, float minPressure,
+__global__ void PressureUpdate (float* d_pressList,
                                 float maxPressure, float* d_Growt_rate, int No_of_C180s,
                                 bool useDifferentCell,
                                 float stiffness1, float* d_youngs_mod, int step,

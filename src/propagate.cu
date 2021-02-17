@@ -188,18 +188,15 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
-                           float internal_damping, const float *d_time,
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
-                           float wall1, float wall2,
-                           float threshDist, bool useWalls, 
-                           float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, R3Nptrs d_ExtForces, const float* volList, const float div_vol,
+                           float threshDist, 
+                           float3 BoxMin, float Youngs_mod, 
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces, R3Nptrs d_ExtForces,
                            int impurityNum, float shapeLim)
 {
     // __shared__ curandState rngState;
@@ -330,8 +327,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	gForce = 3*Pressure*calcUnitVec(r_CM);
 
-        	//gForce = -10*(volList[rank] - div_vol)*calcUnitVec(r_CM);
-        	//gForce = -10*(mag(r_CM) - r_CM_o)*calcUnitVec(r_CM);
         
         	FX += gForce.x; 
         	FY += gForce.y; 
@@ -558,19 +553,16 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
-                           float internal_damping, const float *d_time,
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
-                           float wall1, float wall2,
-                           float threshDist, bool useWalls, 
-                           float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           bool useRigidBoxZ, bool useRigidBoxY, float shapeLim)
+                           float threshDist, 
+                           float3 BoxMin, float Youngs_mod, 
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces,
+                           bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float shapeLim)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -590,8 +582,14 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         __syncthreads();
 
 #endif
-        
+
     int rank, atom, nn_rank, nn_atom;
+    rank = blockIdx.x;
+    atom = threadIdx.x;
+    
+    if ( rank >= impurityNum ){
+        
+   
     int N1, N2, N3;
     int NooflocalNN;
     int localNNs[10];
@@ -605,8 +603,6 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
     float3 disForce = make_float3(0, 0, 0);
 
-    rank = blockIdx.x;
-    atom = threadIdx.x;
     float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
@@ -693,8 +689,6 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
         gForce = 3*Pressure*calcUnitVec(r_CM);
 
-        //gForce = -10*(volList[rank] - div_vol)*calcUnitVec(r_CM);
-        //gForce = -10*(mag(r_CM) - r_CM_o)*calcUnitVec(r_CM);
         
         FX += gForce.x; 
         FY += gForce.y; 
@@ -913,6 +907,9 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         d_contactForces.y[atomInd] = FY;
         d_contactForces.z[atomInd] = FZ;
     }
+
+ }
+
 }
 
 
@@ -921,19 +918,16 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
-                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness , float bondingYoungsMod, 
-                           float internal_damping, const float *d_time,
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, bool usePBCs,float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
-                           float wall1, float wall2,
-                           float threshDist, bool useWalls, 
-                           float* d_velListX, float* d_velListY, float* d_velListZ,
-                           bool useRigidSimulationBox, float boxLength, float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, float r_CM_o, R3Nptrs d_contactForces, const float* volList, const float div_vol,
-                           float Pshift , bool useRigidBoxZ, float shapeLim)
+                           float threshDist, 
+                           float3 BoxMin, float Youngs_mod, 
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces,
+                           float Pshift , bool useRigidBoxZ,int impurityNum, float shapeLim)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -955,6 +949,12 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 #endif
         
     int rank, atom, nn_rank, nn_atom;
+    rank = blockIdx.x;
+    atom = threadIdx.x;
+    
+    if ( rank >= impurityNum ) {    
+    
+    
     int N1, N2, N3;
     int NooflocalNN;
     int localNNs[10];
@@ -968,8 +968,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
     float3 disForce = make_float3(0, 0, 0);
 
-    rank = blockIdx.x;
-    atom = threadIdx.x;
+
     float Pressure = d_pressList[rank]; 
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
@@ -1056,8 +1055,6 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
         gForce = 3*Pressure*calcUnitVec(r_CM);
 
-        //gForce = -10*(volList[rank] - div_vol)*calcUnitVec(r_CM);
-        //gForce = -10*(mag(r_CM) - r_CM_o)*calcUnitVec(r_CM);
         
         FX += gForce.x; 
         FY += gForce.y; 
@@ -1309,17 +1306,18 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         d_contactForces.y[atomInd] = FY;
         d_contactForces.z[atomInd] = FZ;
     }
-}
+ }
 
+}
 
 
 __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
-                                   float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
+                                   float *d_CMx, float *d_CMy, float *d_CMz,
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax, float3 BoxMin,
+                                   int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, int impurityNum, float shapeLim){
@@ -1480,17 +1478,19 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
-                                   float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
+                                   float *d_CMx, float *d_CMy, float *d_CMz,
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
+                                   int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, float shapeLim){
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float shapeLim){
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
+    
+    if ( cellInd >= impurityNum ){
 
     if (cellInd < No_of_C180s && nodeInd < 180){
         size_t globalNodeInd = cellInd*192 + nodeInd;
@@ -1656,23 +1656,25 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         d_fDisList.y[globalNodeInd] = force.y; 
         d_fDisList.z[globalNodeInd] = force.z; 
     }
+  }
 }
-
 
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
-                                   float *d_CMx, float *d_CMy, float *d_CMz,float r_CM_o,
+                                   float *d_CMx, float *d_CMy, float *d_CMz,
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv, bool usePBCs, float3 boxMax,
+                                   int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, float shapeLim)
+                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float shapeLim)
 {
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
+    
+    if ( cellInd >= impurityNum ){
 
     if (  cellInd < No_of_C180s && nodeInd < 180){
         size_t globalNodeInd = cellInd*192 + nodeInd;
@@ -1887,6 +1889,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         d_fDisList.y[globalNodeInd] = force.y; 
         d_fDisList.z[globalNodeInd] = force.z; 
     }
+  }
 }
 
 
@@ -1912,12 +1915,11 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z, 
-                          float *d_XM, float *d_YM, float *d_ZM,
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float *d_time, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
-                          int numCells, bool add_rands,
-                          curandState *rngStates, float rand_scale_factor, int impurityNum){
+                          int numCells,
+                          int impurityNum){
     
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
@@ -2060,13 +2062,14 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
                                float *d_XM, float *d_YM, float *d_ZM,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               bool useRigidBoxZ, bool useRigidBoxY){
+                               bool useRigidBoxZ, bool useRigidBoxY,int impurityNum){
 
     
     int cellInd = blockIdx.x;
     int node = threadIdx.x;
     int nodeInd = cellInd*192 + node;
 
+    if ( cellInd >= impurityNum ){
     
     if (cellInd < numCells && node < 180){
 
@@ -2102,6 +2105,9 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
     	}
 
     }	
+
+  }
+
 }
 
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
@@ -2109,7 +2115,7 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               float Pshift, float Vshift, bool useRigidBoxZ){
+                               float Pshift, float Vshift, bool useRigidBoxZ,int impurityNum){
                                
                                    
     int cellInd = blockIdx.x;
@@ -2117,7 +2123,7 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
     int nodeInd = cellInd*192 + node;
     
     
-    
+    if ( cellInd >= impurityNum ){
     	    
     if (cellInd < numCells && node < 180){
 
@@ -2172,5 +2178,5 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
 	}   
                           
      }                         
- 
+   } 
  }

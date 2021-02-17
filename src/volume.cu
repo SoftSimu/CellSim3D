@@ -6,7 +6,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
                          char* cell_div, float* d_DivisionVolume, bool checkSphericity,
-                         float* areaList, int phase_count, int step,
+                         float* areaList,
                          float stiffness1, bool useDifferentCell, float* d_younds_mod,
                          bool recalc_r0, float ApoVol, char* cell_Apo, float* d_ScaleFactor){
                          
