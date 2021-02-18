@@ -13,8 +13,6 @@
         "gamma_visc": 1.0,
         "shear_rate": 0.1,
         "division_Vol": 2.9,
-        "random_z_offset?": 0,
-        "z_offset": 0,
         "div_time_steps": 50000,
         "time_interval": 0.0001,
         "Restart": 0,

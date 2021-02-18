@@ -44,61 +44,6 @@ void CudaFailure();
         }\
     }
 
-float asym[1];
-float mass;                                           //  M
-float repulsion_range,    attraction_range;        //  LL1, LL2
-float repulsion_strength, attraction_strength;     //  ST1, ST2
-
-// variables to allow for different stiffnesses 
-int* d_indSoftCells;
-float softYoungsMod;
-bool checkSphericity; 
-
-
-bool write_cont_force=false;
-bool write_vel_file = false;
-char forces_file[256];
-
-float shear_rate;
-float Pshift;
-float Vshift;
-float viscotic_damping, internal_damping;          //  C, DMP
-float gamma_visc;
-float zOffset; // Offset from Z = 0 for starting positions.
-int ranZOffset;
-int   Time_steps;
-float divVol;
-float ApoVol;
-float delta_t;
-float dt_max;
-float dt_tol;
-bool doAdaptive_dt;
-float c1 = 0; float c2 = 0; 
-int Restart;
-int Laststep = 0;
-int Lastframe = 0;
-int   trajWriteInt; // trajectory write interval
-int   countOnlyInternal; // 0 - Count all new cells
-                         // 1 - Count only the cells born within 0.6Rmax from
-                         //     the center of mass of the system
-float radFrac; // The factor to count cells within a raduys (<Rmax)
-
-int   overWriteMitInd; // 0 No, 1 yes
-
-int newCellCountInt; // Interval at which to count the divided cells
-int equiStepCount;
-const char* ptrajFileName;
-char trajFileName[256];
-bool binaryOutput; 
-
-// equilibrium length of springs between fullerene atoms
-float R0  = 0.13517879937327418f; // why is this hard-coded?
-float* d_R0;
-float* h_R0;
-
-
-float L1  = 3.0f;       // the initial fullerenes are placed in
-// an X x Y grid of size L1 x L1
 
 
 // the three nearest neighbours of C180 atoms
@@ -107,18 +52,83 @@ int   C180_sign[180];
 // device: the three nearest neighbours of C180 atoms
 int   *d_C180_nn;
 int   *d_C180_sign;
-
 int   CCI[2][271];       // list of nearest neighbor carbon pairs in the fullerne
 // number of pairs = 270
-
 int   C180_56[92*7];     // 12 lists of atoms forming pentagons 1 2 3 4 5 1 1 and
 // 80 lists of atoms forming hexagons  1 2 3 4 5 6 1
 int   *d_C180_56;
+
+
+float mass;                                           //  M
+float repulsion_range,    attraction_range;        //  LL1, LL2
+float repulsion_strength, attraction_strength;     //  ST1, ST2
+float viscotic_damping, internal_damping;          //  C, DMP    
+float divVol;
+float ApoVol;
+float gamma_visc;
+float shear_rate;
+float Pshift;
+float Vshift;
+float maxPressure;
+float minPressure;
+float rMax;
+float squeeze_rate;
+int Restart;
+int Laststep = 0;
+int Lastframe = 0;
+int   Time_steps;
+int   trajWriteInt; // trajectory write interval
+
+float delta_t;
+float dt_max;
+float dt_tol;
+bool doAdaptive_dt;
+float c1 = 0; float c2 = 0; 
+
+bool write_cont_force=false;
+bool write_vel_file = false;
+char forces_file[256];
+int   overWriteMitInd; // 0 No, 1 yes
+const char* ptrajFileName;
+char trajFileName[256];
+bool binaryOutput; 
+char mitIndFileName[256]; 
+
+
+bool asymDivision;
+float asym[1];
+bool checkSphericity; 
+bool useDivPlaneBasis;
+float divPlaneBasis[3]; 
+
+
+
+int   countOnlyInternal; // 0 - Count all new cells
+                         // 1 - Count only the cells born within 0.6Rmax from
+                         //     the center of mass of the system
+float radFrac; 	// The factor to count cells within a raduys (<Rmax)
+int newCellCountInt; // Interval at which to count the divided cells
+int equiStepCount;
+
+
+// equilibrium length of springs between fullerene atoms
+float* d_R0;
+float* h_R0;
+
+bool constrainAngles;
+angles3* theta0;
+
+
+float L1  = 3.0f;       // the initial fullerenes are placed in
+			// an X x Y grid of size L1 x L1
+
 
 float *d_volume;
 float *volume;
 float *d_area; 
 float *area; 
+
+
 char* cell_div;
 char* d_cell_div;
 int num_cell_div;
@@ -130,21 +140,6 @@ int num_cell_Apo;
 int* cell_Apo_inds;
 
 
-char mitIndFileName[256]; 
-
-float *d_pressList;
-float *pressList;
-int* d_resetIndices;
-int* resetIndices; 
-
-
-float* d_velListX; 
-float* d_velListY; 
-float* d_velListZ;
-
-float* velListX; 
-float* velListY; 
-float* velListZ; 
 
 // Params related to population modelling
 int doPopModel;
@@ -156,18 +151,9 @@ int cellLifeTime;
 float cellFoodCons; // baseline food consumption
 float cellFoodConsDiv; // Extra good consumption when cell divides
 float cellFoodRel; // Food released when cell dies (should < total consumed food)
+float maxPop;
+ 
 
-float maxPressure;
-float minPressure;
-float rMax;
-float squeeze_rate;
-float maxPop; 
-
-
-
-
-
-float boxMin[3];
 float3 boxMax;
 float3 BoxMin;
 bool flatbox; 
@@ -178,14 +164,18 @@ bool usePBCs;
 bool useLEbc;
 bool useRigidBoxZ; 
 bool useRigidBoxY; 
-float* d_boxMin;
 bool rand_pos;
-bool rand_vel;
 bool impurity;
 int impurityNum;
 bool line;
 bool plane;
 float L  = 2.5f;  
+
+int No_of_threads; // ie number of staring cells
+int Side_length;
+int ex, ey;
+
+
 
 // randomness parameters
 
@@ -196,36 +186,23 @@ float rand_scale_factor;
 curandState *d_rngStates;
 unsigned int *d_seeds; 
 
-int No_of_threads; // ie number of staring cells
-int Side_length;
-int ex, ey;
 
 
 float  *X,  *Y,  *Z;     // host: atom positions
-
 float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
 float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
+float* d_velListX, *d_velListY, *d_velListZ; 
+float* velListX, *velListY, *velListZ; 
+
 
 R3Nptrs d_fConList;
 R3Nptrs d_fDisList;
 R3Nptrs d_fRanList; 
-
 R3Nptrs d_contactForces;
 R3Nptrs h_contactForces;
-
 R3Nptrs d_ExtForces;
 R3Nptrs h_ExtForces;
 
-
-float* d_Fx;
-float* d_Fy;
-float* d_Fz;
-
-
-bool constrainAngles;
-
-
-float *Minx, *Maxx, *Miny, *Maxy, *Minz, *Maxz;
 
 float DL;
 float3 DLp;
@@ -241,13 +218,12 @@ int  No_of_Cell2;
 int CellInApo1;
 int CellInApo2;
 
+bool correct_com = false;
 float *d_CMx, *d_CMy, *d_CMz;
 float *CMx, *CMy, *CMz;
-float sysCMx = 1.0, sysCMy = 1.0, sysCMz = 1.0;
-float sysCMx_old = 0.0, sysCMy_old = 0.0, sysCMz_old = 0.0;
+float sysCMx = 0.0, sysCMy = 0.0, sysCMz = 0.0;
 
-
-
+bool correct_Vcom = false;
 float *d_VCMx, *d_VCMy, *d_VCMz;
 float *VCMx, *VCMy, *VCMz;
 float sysVCMx = 0.0, sysVCMy = 0.0, sysVCMz = 0.0;
@@ -266,8 +242,6 @@ float *d_ran2;           // device: ran2[], used in celldivision
 int *NDIV;               // # of divisions
 
 // Parameters related to division
-bool useDivPlaneBasis;
-float divPlaneBasis[3]; 
 
 long int GPUMemory;
 long int CPUMemory;
@@ -275,9 +249,7 @@ long int CPUMemory;
 
 int frameCount = 1;
 
-bool correct_com = false;
-bool correct_Vcom = false;
-bool asymDivision;
+
 int Orig_No_of_C180s;
  
 
@@ -285,13 +257,20 @@ bool apoptosis;
 float Apo_rate;
 int popToStartApo;
 bool WithoutApo;
-
-int* CellINdex;
-int* d_CellINdex;
 int NumApoCell;
+
+
 
 bool colloidal_dynamics;
 bool dispersity;
+bool rand_vel;
+float Xratio;
+float Yratio;
+float Zratio;
+float shapeLim;
+bool RandInitDir;
+
+
 
 bool useDifferentCell;
 float* ScaleFactor;
@@ -306,6 +285,12 @@ float* d_Growth_rate;
 float* Growth_rate;
 float* d_Youngs_mod;
 float* youngsModArray;
+float *d_pressList;
+float *pressList;
+int* d_resetIndices;
+int* resetIndices; 
+int* CellINdex;
+int* d_CellINdex;
 
 
 float SizeFactor;
@@ -327,23 +312,13 @@ bool duringGrowth;
 bool recalc_r0; 
 
 
-float Xratio;
-float Yratio;
-float Zratio;
-float shapeLim;
-bool RandInitDir;
-
-
-angles3* theta0;
-
 int main(int argc, char *argv[])
 {
   int i;
   int globalrank;
   int step = 0;
-  int noofblocks, threadsperblock, prevnoofblocks;
+  int noofblocks, threadsperblock;
   int newcells;
-  int reductionblocks;
   
   No_of_Cell1 =0;
   No_of_Cell2 =0;
@@ -532,9 +507,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Fx, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Fy, 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_Fz, 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Growth_rate, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CellINdex, MaxNoofC180s*sizeof(int))) return(-1);
@@ -542,7 +514,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_DivisionVolume, MaxNoofC180s*sizeof(float))) return(-1); 
   if ( cudaSuccess != cudaMalloc( (void **)&d_gamma_env, MaxNoofC180s*sizeof(float))) return(-1); 
   if ( cudaSuccess != cudaMalloc( (void **)&d_viscotic_damp, MaxNoofC180s*sizeof(float))) return(-1); 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_boxMin, 3*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_R0, 192*3*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return -1; 
   if ( cudaSuccess != cudaMalloc((void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return -1; 
@@ -592,49 +563,40 @@ int main(int argc, char *argv[])
   cudaMemset(d_DivisionVolume, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_gamma_env, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_viscotic_damp, 0, MaxNoofC180s*sizeof(float));
-  //cudaMemset(d_bounding_xyz, 0, MaxNoofC180s*6*sizeof(float));
-  //cudaMemset(d_Minx, 0, 1024*sizeof(float));
-  //cudaMemset(d_Maxx, 0, 1024*sizeof(float));
-  //cudaMemset(d_Miny, 0, 1024*sizeof(float));
-  //cudaMemset(d_Maxy, 0, 1024*sizeof(float));
-  //cudaMemset(d_Minz, 0, 1024*sizeof(float));
-  //cudaMemset(d_Maxz, 0, 1024*sizeof(float)); 
+  cudaMemset(d_area, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
   cudaMemset(d_velListX, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_velListY, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_velListZ, 0, 192*MaxNoofC180s*sizeof(float));
-
+  CudaErrorCheck();
 
   cudaMemset(d_fConList.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fConList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fConList.z, 0, 192*MaxNoofC180s*sizeof(float));
-
+  CudaErrorCheck();
+  
   cudaMemset(d_fDisList.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fDisList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fDisList.z, 0, 192*MaxNoofC180s*sizeof(float));
-
+  CudaErrorCheck();
   cudaMemset(d_fRanList.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.z, 0, 192*MaxNoofC180s*sizeof(float));
-  
+  CudaErrorCheck();
   cudaMemset(d_ExtForces.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_ExtForces.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_ExtForces.z, 0, 192*MaxNoofC180s*sizeof(float));
-
-  cudaMemset(d_area, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
-  cudaMemset(d_boxMin, 0, 3*sizeof(float));
   cudaMemset(d_contactForces.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_contactForces.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
-  
+  CudaErrorCheck();
 
   h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-
 
   h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -665,12 +627,6 @@ int main(int argc, char *argv[])
   cell_div_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
   cell_Apo = (char *)calloc(MaxNoofC180s, sizeof(char));
   cell_Apo_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
-  Minx  = (float *)calloc(1024, sizeof(float));
-  Maxx  = (float *)calloc(1024, sizeof(float));
-  Miny  = (float *)calloc(1024, sizeof(float));
-  Maxy  = (float *)calloc(1024, sizeof(float));
-  Minz  = (float *)calloc(1024, sizeof(float));
-  Maxz  = (float *)calloc(1024, sizeof(float));
   NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
   resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
@@ -717,10 +673,7 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_C180_nn,   C180_nn,   3*192*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_sign, C180_sign, 180*sizeof(int),cudaMemcpyHostToDevice);
   cudaMemcpy(d_C180_56,   C180_56,   7*92*sizeof(int),cudaMemcpyHostToDevice);
-
-
-  float tempX[192*No_of_C180s];
-
+  CudaErrorCheck();
 
   cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
   CudaErrorCheck();
@@ -846,16 +799,11 @@ if (Restart == 0) {
   }
 
 
-  prevnoofblocks  = No_of_C180s;
   noofblocks      = No_of_C180s;
   threadsperblock = 192;
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
 
-
-
-
-  reductionblocks = (No_of_C180s-1)/1024+1;
 
   
   globalrank = 0;
@@ -943,9 +891,6 @@ if (Restart == 0) {
   float rGrowth = 0;
   bool growthDone = false;
   
-  boxMin[0] = BoxMin.x;
-  boxMin[1] = BoxMin.y;
-  boxMin[2] = BoxMin.z;
   
   // Setup simulation box, if needed (non-pbc)
   if (useRigidSimulationBox){
@@ -977,9 +922,6 @@ if (Restart == 0) {
   if (usePBCs || useLEbc){
     printf("   Setup PBC box...\n"); 
     
-    boxMin[0] = 0;
-    boxMin[1] = 0;
-    boxMin[2] = 0;
     BoxMin.x = 0.0;
     BoxMin.y = 0.0;
     BoxMin.z = 0.0;
@@ -992,14 +934,14 @@ if (Restart == 0) {
       	DL = 1.4;
     }
     
-    Xdiv = ceil((boxMax.x - boxMin[0])/DL);
-    DLp.x = (boxMax.x - boxMin[0])/Xdiv;
+    Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
+    DLp.x = (boxMax.x - BoxMin.x)/Xdiv;
     printf (" %d \n",Xdiv);
-    Ydiv = ceil((boxMax.y - boxMin[1])/DL);
-    DLp.y = (boxMax.y - boxMin[1])/Ydiv;
+    Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
+    DLp.y = (boxMax.y - BoxMin.y)/Ydiv;
     printf (" %d \n",Ydiv);
-    Zdiv = ceil((boxMax.z - boxMin[2])/DL);
-    DLp.z = (boxMax.z - boxMin[2])/Zdiv;
+    Zdiv = ceil((boxMax.z - BoxMin.y)/DL);
+    DLp.z = (boxMax.z - BoxMin.y)/Zdiv;
     printf (" %d \n",Zdiv);  
     
     printf (" %f \n",DLp.x);
@@ -1013,8 +955,6 @@ if (Restart == 0) {
 
 
 
-  cudaMemcpy(d_boxMin, boxMin, 3*sizeof(float), cudaMemcpyHostToDevice);
-  CudaErrorCheck(); 
 
   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
   //DL = divVol; 
@@ -1089,8 +1029,6 @@ if (Restart == 0) {
 
   printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/(1024*1024.0));
   printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/(1024*1024.0));
-
-  bool phase = false;
 
   // initial conditions
 
@@ -2242,9 +2180,6 @@ if (Restart == 0) {
   free(CMx); free(CMy); free(CMz);
   free(dividingCells); free(totalCells);
   free(NDIV);
-  //free(volume);
-  free(Minx); free(Miny); free(Minz);
-  free(Maxx); free(Maxy); free(Maxz);
   free(NoofNNlist);
   free(NNlist);
   free(ran2);
@@ -3162,8 +3097,6 @@ int read_json_params(const char* inpFile){
         viscotic_damping = coreParams["viscotic_damping"].asFloat();
         internal_damping = coreParams["internal_damping"].asFloat();
         divVol = coreParams["division_Vol"].asFloat();
-        ranZOffset = coreParams["random_z_offset?"].asInt();
-        zOffset = coreParams["z_offset"].asFloat();
         Time_steps = coreParams["div_time_steps"].asFloat();
         delta_t = coreParams["time_interval"].asFloat();
         Restart = coreParams["Restart"].asInt();
@@ -3319,10 +3252,6 @@ int read_json_params(const char* inpFile){
 	plane = boxParams["plane"].asBool();
 	
     }
-    
-    
-    if (ranZOffset == 0)
-        zOffset = 0.0;
 
     if (dt_tol > dt_max || dt_max <= 0 || dt_tol < 0){
         printf("ERROR: Invalid time step parameters\n");
@@ -3346,7 +3275,6 @@ int read_json_params(const char* inpFile){
 
 
     printf("      mass                = %f\n",mass);
-    printf("      spring equilibrium  = %f\n",R0);
     printf("      repulsion range     = %f\n",repulsion_range);
     printf("      attraction range    = %f\n",attraction_range);
     printf("      repulsion strength  = %f\n",repulsion_strength);
@@ -3355,8 +3283,6 @@ int read_json_params(const char* inpFile){
     printf("      viscotic damping    = %f\n",viscotic_damping);
     printf("      internal damping    = %f\n",internal_damping);
     printf("      division volume     = %f\n",divVol);
-    printf("      ran_z_offset?       = %d\n", ranZOffset);
-    printf("      z_offset            = %f\n", zOffset);
     printf("      Time steps          = %d\n",Time_steps);
     printf("      delta t             = %f\n",delta_t);
     printf("      Restart             = %d\n",Restart);
@@ -3389,7 +3315,6 @@ int read_json_params(const char* inpFile){
     printf("      division volume2  	=%f\n", divisionV);
     printf("      gamma_visc2  	=%f\n", gEnv); 
     printf("      viscotic damping2  	=%f\n", gVis);            
-    printf("      softYoungsMod       = %f\n", softYoungsMod);
     printf("      numberOfCells       = %d\n", numberOfCells);
     printf("      duringGrowth        = %d\n", duringGrowth);
     printf("      closenesstoCenter   = %f\n", closenessToCenter);
@@ -3635,7 +3560,6 @@ int read_global_params(void)
 
 
   printf("      mass                = %f\n",mass);
-  printf("      spring equilibrium  = %f\n",R0);
   printf("      repulsion range     = %f\n",repulsion_range);
   printf("      attraction range    = %f\n",attraction_range);
   printf("      repulsion strength  = %f\n",repulsion_strength);
@@ -3945,7 +3869,6 @@ int writeRestartFile(int t_step, int frameCount){
       	    return -1;
   	}
 
-	int cellType = 0;
 	float p = 0;
 	float y = 0;
 	float g = 0;
@@ -4006,8 +3929,7 @@ int ReadRestartFile( ){
   int s;
   int f;
   int nCell;
-  int nImp;
-  int CellType;  
+  int nImp;  
   int CellInd;
   int shift;
   int CA1;
@@ -4115,5 +4037,4 @@ int ReadRestartFile( ){
    return 0;
 
 }
-	
 
