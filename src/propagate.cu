@@ -225,15 +225,18 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     if ( rank >= impurityNum ){
   
     	
-    	int N1, N2, N3;
+    	
     	int NooflocalNN;
     	int localNNs[10];
     	float deltaX, deltaY, deltaZ;
-    	float A1, A2, A3;
-    	float B1, B2, B3;
-    	float TX, TY, TZ;
-    	float NORM, R;
-    	float NX, NY, NZ;
+    	float R;
+    	int N1;
+    	//int N1, N2, N3;
+    	//float A1, A2, A3;
+    	//float B1, B2, B3;
+    	//float TX, TY, TZ;
+    	//float NORM;     	
+    	//float NX, NY, NZ;
     	//float setPress;
 
     	float3 disForce = make_float3(0, 0, 0);
@@ -261,27 +264,27 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	// printf("stiffness: %f\n", stiffness);
         	// asm("trap;"); 
         
-       	N1 = d_C180_nn[  0+atom];
-       	N2 = d_C180_nn[192+atom];
-        	N3 = d_C180_nn[384+atom];
+       	//N1 = d_C180_nn[  0+atom];
+       	//N2 = d_C180_nn[192+atom];
+        	//N3 = d_C180_nn[384+atom];
 
-        	A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
-        	A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
-        	A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
+        	//A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
+        	//A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
+        	//A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
 
-        	B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
-        	B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
-        	B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
+        	//B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
+        	//B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
+        	//B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
 
-        	TX = A2*B3-A3*B2;
-        	TY = A3*B1-A1*B3;
-        	TZ = A1*B2-A2*B1;
+        	//TX = A2*B3-A3*B2;
+        	//TY = A3*B1-A1*B3;
+        	//TZ = A1*B2-A2*B1;
 
-        	NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
+        	//NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
 
-        	NX = d_C180_sign[atom]*TX/NORM;
-        	NY = d_C180_sign[atom]*TY/NORM;
-        	NZ = d_C180_sign[atom]*TZ/NORM;
+        	//NX = d_C180_sign[atom]*TX/NORM;
+        	//NY = d_C180_sign[atom]*TY/NORM;
+        	//NZ = d_C180_sign[atom]*TZ/NORM;
 
         	float X = d_X[rank*192+atom];
         	float Y = d_Y[rank*192+atom];
@@ -590,15 +593,18 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
     if ( rank >= impurityNum ){
         
    
-    int N1, N2, N3;
+    
     int NooflocalNN;
     int localNNs[10];
     float deltaX, deltaY, deltaZ;
-    float A1, A2, A3;
-    float B1, B2, B3;
-    float TX, TY, TZ;
-    float NORM, R;
-    float NX, NY, NZ;
+    float R;
+    int N1;
+    //int N1, N2, N3;
+    //float A1, A2, A3;
+    //float B1, B2, B3;
+    //float TX, TY, TZ;
+    //float NORM;
+    //float NX, NY, NZ;
     //float setPress;
 
     float3 disForce = make_float3(0, 0, 0);
@@ -625,27 +631,27 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         // printf("stiffness: %f\n", stiffness);
         // asm("trap;"); 
         
-        N1 = d_C180_nn[  0+atom];
-        N2 = d_C180_nn[192+atom];
-        N3 = d_C180_nn[384+atom];
+        //N1 = d_C180_nn[  0+atom];
+        //N2 = d_C180_nn[192+atom];
+        //N3 = d_C180_nn[384+atom];
 
-        A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
-        A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
-        A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
+        //A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
+        //A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
+        //A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
 
-        B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
-        B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
-        B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
+        //B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
+        //B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
+        //B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
 
-        TX = A2*B3-A3*B2;
-        TY = A3*B1-A1*B3;
-        TZ = A1*B2-A2*B1;
+        //TX = A2*B3-A3*B2;
+        //TY = A3*B1-A1*B3;
+        //TZ = A1*B2-A2*B1;
 
-        NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
+        //NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
 
-        NX = d_C180_sign[atom]*TX/NORM;
-        NY = d_C180_sign[atom]*TY/NORM;
-        NZ = d_C180_sign[atom]*TZ/NORM;
+        //NX = d_C180_sign[atom]*TX/NORM;
+        //NY = d_C180_sign[atom]*TY/NORM;
+        //NZ = d_C180_sign[atom]*TZ/NORM;
 
         float X = d_X[rank*192+atom];
         float Y = d_Y[rank*192+atom];
@@ -955,15 +961,18 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
     if ( rank >= impurityNum ) {    
     
     
-    int N1, N2, N3;
+    
     int NooflocalNN;
     int localNNs[10];
     float deltaX, deltaY, deltaZ;
-    float A1, A2, A3;
-    float B1, B2, B3;
-    float TX, TY, TZ;
-    float NORM, R;
-    float NX, NY, NZ;
+    float R;
+    int N1;
+    //int N1, N2, N3;
+    //float A1, A2, A3;
+    //float B1, B2, B3;
+    //float TX, TY, TZ;
+    //float NORM;
+    //float NX, NY, NZ;
     //float setPress;
 
     float3 disForce = make_float3(0, 0, 0);
@@ -991,27 +1000,27 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         // printf("stiffness: %f\n", stiffness);
         // asm("trap;"); 
         
-        N1 = d_C180_nn[  0+atom];
-        N2 = d_C180_nn[192+atom];
-        N3 = d_C180_nn[384+atom];
+        //N1 = d_C180_nn[  0+atom];
+        //N2 = d_C180_nn[192+atom];
+        //N3 = d_C180_nn[384+atom];
 
-        A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
-        A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
-        A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
+        //A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
+        //A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
+        //A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
 
-        B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
-        B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
-        B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
+        //B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
+        //B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
+        //B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
 
-        TX = A2*B3-A3*B2;
-        TY = A3*B1-A1*B3;
-        TZ = A1*B2-A2*B1;
+        //TX = A2*B3-A3*B2;
+        //TY = A3*B1-A1*B3;
+        //TZ = A1*B2-A2*B1;
 
-        NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
+        //NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
 
-        NX = d_C180_sign[atom]*TX/NORM;
-        NY = d_C180_sign[atom]*TY/NORM;
-        NZ = d_C180_sign[atom]*TZ/NORM;
+        //NX = d_C180_sign[atom]*TX/NORM;
+        //NY = d_C180_sign[atom]*TY/NORM;
+        //NZ = d_C180_sign[atom]*TZ/NORM;
 
         float X = d_X[rank*192+atom];
         float Y = d_Y[rank*192+atom];
@@ -1378,7 +1387,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	float R = 0;
 
         	int nn_rank = 0;
-        	int nnAtomInd = 0;
+        	//int nnAtomInd = 0;
         
         	int NooflocalNN = 0;
         	int localNNs[10];
@@ -1542,7 +1551,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         float R = 0;
 
         int nn_rank = 0;
-        int nnAtomInd = 0;
+        //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
         int localNNs[10];
@@ -1726,7 +1735,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         float R = 0;
 
         int nn_rank = 0;
-        int nnAtomInd = 0;
+        //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
         int localNNs[10];
@@ -1916,7 +1925,7 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z, 
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
-                          float *d_time, float m,
+                          float dt, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
                           int numCells,
                           int impurityNum){
@@ -1929,7 +1938,6 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
     
     if ( cellInd >= impurityNum && cellInd < numCells && node < 180){
         int nodeInd = cellInd*192 + node;
-        const float dt = d_time[0];
         const float root_dt = sqrtf(dt);
         
         d_velListX[nodeInd] = d_velListX[nodeInd] + 0.5*(dt*d_fConList.x[nodeInd] + dt*d_fDisList.x[nodeInd] + \
@@ -1990,12 +1998,15 @@ __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
 
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
-                            float *d_X, float *d_Y, float *d_Z,
-                            float *d_XM, float *d_YM, float *d_ZM, 
-                            int numCells){
+                            float *d_X, float *d_Y, float *d_Z, 
+                            int numCells, int impurityNum){
     
+    const int cellInd = blockIdx.x;
     const int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
-    if (nodeInd < 192*numCells){
+    
+    if ( cellInd >= impurityNum ){
+    	if (nodeInd < 192*numCells){
+        
         // if (d_XP[nodeInd] != d_XM[nodeInd] ||
         //     d_YP[nodeInd] != d_YM[nodeInd] || 
         //     d_ZP[nodeInd] != d_ZM[nodeInd] ){
@@ -2005,17 +2016,13 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
         //            d_ZP[nodeInd], d_ZM[nodeInd], nodeInd);
         //     asm("trap;");
         // }
-
-        d_XM[nodeInd] = d_X[nodeInd]; 
-        d_YM[nodeInd] = d_Y[nodeInd]; 
-        d_ZM[nodeInd] = d_Z[nodeInd];
     
-        d_X[nodeInd] = d_XP[nodeInd];
-        d_Y[nodeInd] = d_YP[nodeInd];
-        d_Z[nodeInd] = d_ZP[nodeInd];
+        	d_X[nodeInd] = d_XP[nodeInd];
+        	d_Y[nodeInd] = d_YP[nodeInd];
+        	d_Z[nodeInd] = d_ZP[nodeInd];
+    	}
     }
 }
-
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
                                  float sysCMx, float sysCMy, float sysCMz, long int numParts){
@@ -2059,7 +2066,6 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
 
 
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
-                               float *d_XM, float *d_YM, float *d_ZM,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
                                bool useRigidBoxZ, bool useRigidBoxY,int impurityNum){
@@ -2111,7 +2117,6 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
 }
 
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
-                               float *d_XM, float *d_YM, float *d_ZM,
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,

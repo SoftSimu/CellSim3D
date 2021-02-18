@@ -49,19 +49,12 @@ float mass;                                           //  M
 float repulsion_range,    attraction_range;        //  LL1, LL2
 float repulsion_strength, attraction_strength;     //  ST1, ST2
 
-// variables to allow for different stiffnesses
-float stiffness1;
-float Youngs_mod; 
-float* d_Youngs_mod;
-float* youngsModArray;
-float* d_Growth_rate;
-float* Growth_rate; 
+// variables to allow for different stiffnesses 
 int* d_indSoftCells;
 float softYoungsMod;
 bool checkSphericity; 
 
 
-int phase_count = INT_MAX;
 bool write_cont_force=false;
 bool write_vel_file = false;
 char forces_file[256];
@@ -170,23 +163,17 @@ float rMax;
 float squeeze_rate;
 float maxPop; 
 
-// Params related to having walls in the simulation
-int useWalls;
-char perpAxis[2];
-float threshDist;
-float dAxis;
-float wallLen;
-float wallWidth;
-float wall1, wall2;
-float wallWStart, wallWEnd;
-float wallLStart, wallLEnd;
 
-float boxLength, boxMin[3];
+
+
+
+float boxMin[3];
 float3 boxMax;
 float3 BoxMin;
 bool flatbox; 
 bool LineCenter; 
 bool useRigidSimulationBox;
+float threshDist;
 bool usePBCs; 
 bool useLEbc;
 bool useRigidBoxZ; 
@@ -218,8 +205,6 @@ float  *X,  *Y,  *Z;     // host: atom positions
 
 float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
 float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
-float *d_XM, *d_YM, *d_ZM;     // device: previous atom positions
-float *d_XMM, *d_YMM, *d_ZMM; 
 
 R3Nptrs d_fConList;
 R3Nptrs d_fDisList;
@@ -236,18 +221,10 @@ float* d_Fx;
 float* d_Fy;
 float* d_Fz;
 
-// float* theta0;
-// float* d_theta0;
 
 bool constrainAngles;
 
-// host: minimal bounding box for fullerene
-//float *bounding_xyz;
-//float *d_bounding_xyz;   // device:  bounding_xyz
 
-// global minimum and maximum of x and y, preprocessfirst
-// global minimum and maximum of x and y, postprocesssecond
-//float *d_Minx, *d_Maxx, *d_Miny, *d_Maxy, *d_Minz, *d_Maxz;
 float *Minx, *Maxx, *Miny, *Maxy, *Minz, *Maxz;
 
 float DL;
@@ -325,11 +302,16 @@ float* gamma_env;
 float* d_gamma_env;
 float* viscotic_damp;
 float* d_viscotic_damp;
-
+float* d_Growth_rate;
+float* Growth_rate;
+float* d_Youngs_mod;
+float* youngsModArray;
 
 
 float SizeFactor;
 float Stiffness2;
+float stiffness1;
+float Youngs_mod; 
 float gRate;
 float divisionV;
 float gEnv;
@@ -352,9 +334,7 @@ float shapeLim;
 bool RandInitDir;
 
 
-thrust::host_vector<angles3> theta0(192);
-
-
+angles3* theta0;
 
 int main(int argc, char *argv[])
 {
@@ -468,8 +448,10 @@ int main(int argc, char *argv[])
   gamma_env = (float *)calloc(MaxNoofC180s, sizeof(float));
   viscotic_damp = (float *)calloc(MaxNoofC180s, sizeof(float));
   
+  thrust::host_vector<angles3> h_theta0(192);
   thrust::device_vector<angles3> d_theta0V(192);
   angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
+  theta0 = thrust::raw_pointer_cast(&h_theta0[0]);
 
   CPUMemory += 6L*192L*MaxNoofC180s*sizeof(float);
   CPUMemory += MaxNoofC180s*10L*sizeof(float);
@@ -536,9 +518,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Y  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Z  , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_XM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_YM , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_ZM , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
@@ -594,9 +573,6 @@ int main(int argc, char *argv[])
   cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_XM, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_YM, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_ZM, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
   cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
@@ -672,10 +648,6 @@ int main(int argc, char *argv[])
   volume = thrust::raw_pointer_cast(&h_volume[0]);
 
 
-  thrust::device_vector<float> d_timeV(192*MaxNoofC180s);
-  thrust::fill(d_timeV.begin(), d_timeV.end(), delta_t); 
-  float *d_time = thrust::raw_pointer_cast(&d_timeV[0]);
-  thrust::host_vector<float> h_timeV(192*MaxNoofC180s);
 
   if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
 
@@ -808,10 +780,6 @@ if (Restart == 0) {
   cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   CudaErrorCheck();
-  cudaMemcpy(d_XM, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YM, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZM, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  CudaErrorCheck();
   cudaMemcpy(d_velListX, velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velListY, velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velListZ, velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
@@ -942,13 +910,12 @@ if (Restart == 0) {
                                                              sysCMx, sysCMy, sysCMz,
                                                              No_of_C180s*192);
           
+      CudaErrorCheck();
+      
       CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP,
                                                              sysCMx, sysCMy, sysCMz,
                                                              No_of_C180s*192);
 
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XM, d_YM, d_ZM,
-                                                             sysCMx, sysCMy, sysCMz,
-                                                             No_of_C180s*192);
       CudaErrorCheck(); 
   }
   
@@ -983,9 +950,6 @@ if (Restart == 0) {
   // Setup simulation box, if needed (non-pbc)
   if (useRigidSimulationBox){
       printf("   Setup rigid (non-PBC) box...\n"); 
-     // boxLength = boxLength*ceil(max( (Minx[5]-Minx[4]), max( (Minx[1]-Minx[0]), (Minx[3]-Minx[2]) ) ));
-      //if (boxLength < minBoxLength) boxLength = minBoxLength
-      //if (Side_length < 5) boxLength = boxLength * 5; 
  
       
       if ((boxMax.z - BoxMin.z) < divVol){
@@ -1006,7 +970,6 @@ if (Restart == 0) {
       printf("   Done!\n");
       printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", BoxMin.x, BoxMin.y, BoxMin.z);
       printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
-     // printf("   Simulation box length = %f\n", boxLength);
   }
 
 
@@ -1046,7 +1009,6 @@ if (Restart == 0) {
     printf("   Done!\n");
     printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", BoxMin.x, BoxMin.y, BoxMin.z);
     printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
-   // printf("   Simulation box length = %f\n", boxLength);
   }
 
 
@@ -1068,7 +1030,6 @@ if (Restart == 0) {
    if(usePBCs ){
         
        CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-                                                          d_XM, d_YM, d_ZM,
                                                           d_CMx, d_CMy, d_CMz,
                                                           boxMax, divVol, No_of_C180s,
                                                           useRigidBoxZ, useRigidBoxY, impurityNum);
@@ -1079,9 +1040,9 @@ if (Restart == 0) {
    }
    if(useLEbc){
         
-       UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z, d_XM, d_YM, d_ZM,
-                        d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ, impurityNum);
+       UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+                       				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
+                       				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ, impurityNum);
                         
         CudaErrorCheck();	
 	
@@ -1117,7 +1078,7 @@ if (Restart == 0) {
   if (constrainAngles){
 
 
-      d_theta0V = theta0; 
+      d_theta0V = h_theta0; 
       CudaErrorCheck(); 
   }
 
@@ -1339,7 +1300,7 @@ if (Restart == 0) {
       Integrate<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP,
                                                  d_X, d_Y, d_Z, 
                                                  d_velListX, d_velListY, d_velListZ, 
-                                                 d_time,  mass,
+                                                 delta_t,  mass,
                                                  d_fConList, d_fDisList, d_fRanList,
                                                  No_of_C180s, impurityNum);
       CudaErrorCheck();
@@ -1347,8 +1308,7 @@ if (Restart == 0) {
 
       ForwardTime<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP, 
                                                    d_X , d_Y , d_Z ,
-                                                   d_XM, d_YM, d_ZM,
-                                                   No_of_C180s);
+                                                   No_of_C180s, impurityNum);
       CudaErrorCheck();
 
 
@@ -1597,8 +1557,7 @@ if (Restart == 0) {
 
       if (!colloidal_dynamics){      
       	PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
-        	                                               useDifferentCell, stiffness1, d_Youngs_mod, step,
-        	                                               phase_count, impurityNum);
+        	                                           d_Youngs_mod, impurityNum);
       		CudaErrorCheck(); 
       }
       
@@ -1873,8 +1832,7 @@ if (Restart == 0) {
 
           cell_division<<<1,256>>>(globalrank,
                                    d_XP, d_YP, d_ZP, 
-                                   d_X, d_Y, d_Z,
-                                   d_XM, d_YM, d_ZM, 
+                                   d_X, d_Y, d_Z, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ,
                                    No_of_C180s, d_ran2, repulsion_range,asym[0]);
@@ -1995,7 +1953,6 @@ if (Restart == 0) {
    if(usePBCs && (step)%1000 == 0){
         
             CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-                                                              d_XM, d_YM, d_ZM,
                                                               d_CMx, d_CMy, d_CMz,
                                                               boxMax, divVol, No_of_C180s,
                                                               useRigidBoxZ, useRigidBoxY, impurityNum);
@@ -2007,9 +1964,9 @@ if (Restart == 0) {
         
         if(useLEbc && step%1000 == 0){
        
-            UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z, d_XM, d_YM, d_ZM,
-                        d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ, impurityNum);
+            UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+                        					d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
+                        					boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ, impurityNum);
 	
 	
 	}
@@ -2192,30 +2149,6 @@ if (Restart == 0) {
       {
           printf( "Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
       }
-
-      if (step > phase_count && phase){
-          printf("In phase 2\n");
-          phase = false;
-          if (useDifferentCell && recalc_r0){
-              CalculateR0<<<No_of_C180s/1024 + 1, 1024>>>(d_R0,
-                                                          d_X, d_Y, d_Z,
-                                                          d_C180_nn,
-                                                          d_Youngs_mod,
-                                                          Stiffness2,
-                                                          No_of_C180s);
-#ifdef RO_DEBUG
-              thrust::fill(h_R0V.begin(), h_R0V.end(), 0.f);
-              h_R0V = d_R0V;
-          
-              cudaMemcpy(youngsModArray, d_Youngs_mod, sizeof(float)*MaxNoofC180s, cudaMemcpyDeviceToHost);
-      
-              for (int i =0; i < No_of_C180s; ++i){
-                  std::cout << "Cell " << i << " R0 = "
-                            << h_R0V[i] << " E = " << youngsModArray[i] << std::endl;
-              }
-#endif
-          }
-      }
   }
 
 
@@ -2295,9 +2228,6 @@ if (Restart == 0) {
   cudaFree( (void *)d_X  );
   cudaFree( (void *)d_Y  );
   cudaFree( (void *)d_Z  );
-  cudaFree( (void *)d_XM );
-  cudaFree( (void *)d_YM );
-  cudaFree( (void *)d_ZM );
   cudaFree( (void *)d_CMx );
   cudaFree( (void *)d_CMy );
   cudaFree( (void *)d_CMz );
@@ -3253,7 +3183,6 @@ int read_json_params(const char* inpFile){
         dt_max = coreParams["dt_max"].asFloat();
         dt_tol = coreParams["dt_tol"].asFloat();
         doAdaptive_dt = coreParams["doAdaptive_dt"].asBool();
-        phase_count = coreParams["phase_count"].asInt();
         write_cont_force = coreParams["write_cont_force"].asBool();
         write_vel_file = coreParams["write_vel_file"].asBool();
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
@@ -3307,22 +3236,6 @@ int read_json_params(const char* inpFile){
     	ApoVol = apoParams["apoptosis_Vol"].asFloat();
     	
     }	
-
-
-    Json::Value wallParams = inpRoot.get("walls", Json::nullValue);
-
-    if (wallParams == Json::nullValue){
-        printf("ERROR: Cannot load wall parameters\nExiting");
-        return -1;
-    }
-    else{
-        useWalls = wallParams["useWalls"].asInt();
-        std::strcpy(perpAxis, wallParams["perpAxis"].asString().c_str());
-        dAxis = wallParams["dAxis"].asFloat();
-        wallLen = wallParams["wallLen"].asFloat();
-        wallWidth = wallParams["wallWidth"].asFloat();
-        threshDist = wallParams["threshDist"].asFloat();
-    }
 
     Json::Value divParams = inpRoot.get("divParams", Json::nullValue);
     
@@ -3390,7 +3303,7 @@ int read_json_params(const char* inpFile){
         useLEbc = boxParams["useLEbc"].asBool();
         useRigidBoxZ = boxParams["useRigidBoxZ"].asBool();
         useRigidBoxY = boxParams["useRigidBoxY"].asBool();
-        boxLength = boxParams["boxLength"].asFloat();
+        threshDist = boxParams["threshDist"].asFloat();
         boxMax.x = boxParams["box_len_x"].asFloat();
         boxMax.y = boxParams["box_len_y"].asFloat(); 
         boxMax.z = boxParams["box_len_z"].asFloat();
@@ -3453,16 +3366,11 @@ int read_json_params(const char* inpFile){
     printf("      newCellCountInt     = %d\n", newCellCountInt);
     printf("      equiStepCount       = %d\n", equiStepCount);
     printf("      trajFileName        = %s\n", trajFileName);
-    printf("      doPopModel          = %d\n", doPopModel);
-    printf("      totalFood           = %f\n", totalFood);
-    printf("      cellFoodCons        = %f\n", cellFoodCons);
-    printf("      cellFoodConsDiv     = %f\n", cellFoodConsDiv);
-    printf("      cellFoodRel         = %f\n", cellFoodRel);
-    printf("      useWalls            = %d\n", useWalls);
-    printf("      perpAxis            = %s\n", perpAxis);
-    printf("      dAxis               = %f\n", dAxis);
-    printf("      wallLen             = %f\n", wallLen);
-    printf("      wallWidth           = %f\n", wallWidth);
+//    printf("      doPopModel          = %d\n", doPopModel);
+//    printf("      totalFood           = %f\n", totalFood);
+//    printf("      cellFoodCons        = %f\n", cellFoodCons);
+//    printf("      cellFoodConsDiv     = %f\n", cellFoodConsDiv);
+//    printf("      cellFoodRel         = %f\n", cellFoodRel);
     printf("      thresDist           = %f\n", threshDist);
     printf("      maxPressure         = %f\n", maxPressure);
     printf("      minPressure         = %f\n", minPressure);
@@ -3491,7 +3399,6 @@ int read_json_params(const char* inpFile){
     printf("      recalc_r0           = %d\n", recalc_r0);
     printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
     printf("      usePBCs             = %d\n", usePBCs);
-    printf("      boxLength           = %f\n", boxLength);
     printf("      box_len_x           = %f\n", boxMax.x);
     printf("      box_len_y           = %f\n", boxMax.y);
     printf("      box_len_z           = %f\n", boxMax.z);
@@ -3505,7 +3412,6 @@ int read_json_params(const char* inpFile){
     printf("      add_rands           = %d\n", add_rands);
     printf("      rand_seed           = %d\n", rand_seed);
     printf("      rand_scale_factor   = %f\n", rand_scale_factor);
-    printf("      phase_count         = %d\n", phase_count);
     printf("      correct_com         = %d\n", correct_com);
     printf("      correct_Vcom         = %d\n", correct_Vcom);    
     printf("      impurityNum         = %d\n", impurityNum);
@@ -3602,11 +3508,6 @@ int read_json_params(const char* inpFile){
         return -1;
     }
 
-    if (useWalls && useRigidSimulationBox){
-        printf("ERROR: Cannot use infinite XY walls and rigid simulation box simultaneously.\n");
-        printf("ERROR: Only use on or the other.\n");
-        return -1;
-    }
 
     if (fractionOfCells > 1.0){
         printf("ERROR: Softer cell fraction is > 1\n");
@@ -3658,11 +3559,6 @@ int read_global_params(void)
   if ( fscanf(infil,"%d",&haylimit)            != 1 ) {error = 25 ;}
   if ( fscanf(infil,"%d",&cellLifeTime)        != 1 ) {error = 26 ;}
   if ( fscanf(infil,"%f",&maxPressure)         != 1 ) {error = 27 ;}
-  if ( fscanf(infil,"%d",&useWalls)            != 1 ) {error = 28 ;}
-  if ( fscanf(infil,"%s",perpAxis)             != 1 ) {error = 29 ;}
-  if ( fscanf(infil,"%f",&dAxis)               != 1 ) {error = 30 ;}
-  if ( fscanf(infil,"%f",&wallLen)             != 1 ) {error = 31 ;}
-  if ( fscanf(infil,"%f",&wallWidth)           != 1 ) {error = 32 ;}
   if ( fscanf(infil,"%f",&threshDist)          != 1 ) {error = 33 ;}
 
 
@@ -3757,16 +3653,11 @@ int read_global_params(void)
   printf("      newCellCountInt     = %d\n", newCellCountInt);
   printf("      equiStepCount       = %d\n", equiStepCount);
   printf("      trajFileName        = %s\n", trajFileName);
-  printf("      doPopModel          = %d\n", doPopModel);
-  printf("      totalFood           = %f\n", totalFood);
-  printf("      cellFoodCons        = %f\n", cellFoodCons);
-  printf("      cellFoodConsDiv     = %f\n", cellFoodConsDiv);
-  printf("      cellFoodRel         = %f\n", cellFoodRel);
-  printf("      useWalls            = %d\n", useWalls);
-  printf("      perpAxis            = %s\n", perpAxis);
-  printf("      dAxis               = %f\n", dAxis);
-  printf("      wallLen             = %f\n", wallLen);
-  printf("      wallWidth           = %f\n", wallWidth);
+//  printf("      doPopModel          = %d\n", doPopModel);
+//  printf("      totalFood           = %f\n", totalFood);
+//  printf("      cellFoodCons        = %f\n", cellFoodCons);
+//  printf("      cellFoodConsDiv     = %f\n", cellFoodConsDiv);
+//  printf("      cellFoodRel         = %f\n", cellFoodRel);
   printf("      thresDist           = %f\n", threshDist);
 
 

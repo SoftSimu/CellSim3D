@@ -3,41 +3,19 @@
 
 __global__ void PressureUpdate (float* d_pressList,
                                 float maxPressure, float* d_Growt_rate, int No_of_C180s,
-                                bool useDifferentCell,
-                                float stiffness1, float* d_youngs_mod, int step,
-                                int phase_count, int impurityNum){
+                                float* d_youngs_mod,
+                                int impurityNum){
 
 	
     int cellInd = blockIdx.x*blockDim.x + threadIdx.x;
     float inc = d_Growt_rate[cellInd];
 
     if (cellInd < No_of_C180s && cellInd >= impurityNum){
-        
-        if (useDifferentCell == true){
-            if (step < phase_count){
-                if (d_pressList[cellInd] < maxPressure || inc < 0 ){
+         
+           if (d_pressList[cellInd] < maxPressure || inc < 0 ){
                     d_pressList[cellInd] += inc;
-                }
-            }
-            else{
-                if (d_youngs_mod[cellInd] == stiffness1){
-                    if (d_pressList[cellInd] < maxPressure || inc < 0){
-                        d_pressList[cellInd] += inc;
-                    }
-                }
-                else {
-                    if (d_pressList[cellInd] != 0.f){
-                        d_pressList[cellInd] = 0.f; 
-                    }
-                }
-                
-            }
-        }
-        else {
-            if (d_pressList[cellInd] < maxPressure || inc < 0 ){
-                d_pressList[cellInd] += inc;
-            }
-        }
+           }
+         
     }
 }
 

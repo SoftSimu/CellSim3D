@@ -7,16 +7,9 @@ cudaDeviceProp getDevice(void);
 __global__ void  cell_division(int rank,
                                float* d_XP, float* d_YP, float* d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
-                               float* d_XM, float* d_YM, float* d_ZM,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ,
                                int No_of_C180s, float *d_randNorm, float repulsion_range, float asym);
-
-__global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
-                           float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
-
-__global__ void minmaxpost( int No_of_C180s,
-                    float *Minx, float *Maxx, float *Miny, float *Maxy, float *Minz, float *Maxz);
 
 
 __global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
@@ -112,22 +105,15 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
                           float *d_X, float *d_Y, float *d_Z,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
-                          float *d_time, float m,
+                          float dt, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
                           int numCells,
                           int impurityNum);
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
-                            float *d_XM, float *d_YM, float *d_ZM,
-                            int numCells);
+                            int numCells, int impurityNum);
 
-__global__ void bounding_boxes( int No_of_C180s,
-               float *d_XP, float *d_YP, float *d_ZP,
-//               float *d_X,  float *d_Y,  float *d_Z,
-//               float *d_XM, float *d_YM, float *d_ZM,
-               float *bounding_xyz,
-               float *avex, float *avey, float *avez);
 
 void rmarin(int ij, int kl);
 void ranmar(float rvec[], int len);
@@ -163,8 +149,7 @@ inline int num_cells_far();
 
 __global__ void PressureUpdate (float* d_pressList,
                                 float maxPressure, float* d_Growth_rate, int No_of_C180s,
-                                bool useDifferentCell, float stiffness1,
-                                float* d_younds_mod, int step, int phase_count, int impurityNum);
+                                float* d_younds_mod, int impurityNum);
 
 __global__ void PressureReset (int* d_resetIndices, float* d_pressList,
                                float minPressure, int numResetCells);
@@ -235,14 +220,12 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
                                   R3Nptrs d_fRanList, int impurityNum);
 
 
-__global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
-                               float *d_XM, float *d_YM, float *d_ZM, 
+__global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol,int numCells,
                                bool useRigidBoxZ, bool useRigidBoxY,int impurityNum);
                                
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
-                               float *d_XM, float *d_YM, float *d_ZM,
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,

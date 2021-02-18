@@ -13,7 +13,6 @@
         "gamma_visc": 1.0,
         "shear_rate": 0.1,
         "division_Vol": 2.9,
-        //"division_Vol": 2.0,
         "random_z_offset?": 0,
         "z_offset": 0,
         "div_time_steps": 50000,
@@ -65,14 +64,6 @@
          "apoptosis_Vol": 0.5
     },
 
-    "walls": { // deprecated, use box params
-        "useWalls": 0,
-        "perpAxis": "z",
-        "dAxis": 1.1,
-        "wallLen": 10.0,
-        "wallWidth": 10.0,
-        "threshDist": 0.01
-    },
 
     "divParams":{
         "useDivPlaneBasis": 0,
@@ -120,8 +111,7 @@
         "useLEbc": 0,
         "useRigidBoxZ": 1,
         "useRigidBoxY": 1,
-        "pbcAx": "x", // unavailable
-        "boxLength": 6.0, // deprecated
+        "threshDist": 0.01,
         "box_len_x": 500.0,
         "box_len_y": 500.0,
         "box_len_z": 2.0,
