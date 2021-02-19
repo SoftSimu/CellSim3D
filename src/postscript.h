@@ -5,7 +5,6 @@
 cudaDeviceProp getDevice(void);
 
 __global__ void  cell_division(int rank,
-                               float* d_XP, float* d_YP, float* d_ZP,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -102,8 +101,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces,
                            float Pshift , bool useRigidBoxZ,int impurityNum, float shapeLim);
 
-__global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
-                          float *d_X, float *d_Y, float *d_Z,
+__global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
                           float dt, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,

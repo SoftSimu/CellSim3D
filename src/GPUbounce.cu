@@ -189,7 +189,7 @@ unsigned int *d_seeds;
 
 
 float  *X,  *Y,  *Z;     // host: atom positions
-float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
+//float *d_XP, *d_YP, *d_ZP;     // device: time propagated atom positions
 float  *d_X,  *d_Y,  *d_Z;     // device: present atom positions
 float* d_velListX, *d_velListY, *d_velListZ; 
 float* velListX, *velListY, *velListZ; 
@@ -487,9 +487,9 @@ int main(int argc, char *argv[])
   //     if ( cudaSuccess != myError )
   //         { printf( "1: Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_XP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_YP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_ZP , 192*MaxNoofC180s*sizeof(float))) return(-1);
+  //if ( cudaSuccess != cudaMalloc( (void **)&d_XP , 192*MaxNoofC180s*sizeof(float))) return(-1);
+  //if ( cudaSuccess != cudaMalloc( (void **)&d_YP , 192*MaxNoofC180s*sizeof(float))) return(-1);
+  //if ( cudaSuccess != cudaMalloc( (void **)&d_ZP , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Y  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Z  , 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -538,9 +538,9 @@ int main(int argc, char *argv[])
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
   cudaMemset(d_C180_sign, 0, 180*sizeof(int));
 
-  cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
+  //cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
+  //cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
+  //cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
@@ -725,10 +725,10 @@ if (Restart == 0) {
 
  
  // copy to device after reading restart file or initial values
-  cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  CudaErrorCheck();
+  //cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+ // cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+ // cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  //CudaErrorCheck();
   cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
@@ -860,11 +860,11 @@ if (Restart == 0) {
           
       CudaErrorCheck();
       
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP,
-                                                             sysCMx, sysCMy, sysCMz,
-                                                             No_of_C180s*192);
+      //CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP,
+      //                                                       sysCMx, sysCMy, sysCMz,
+      //                                                       No_of_C180s*192);
 
-      CudaErrorCheck(); 
+      //CudaErrorCheck(); 
   }
   
 
@@ -1235,8 +1235,7 @@ if (Restart == 0) {
     
     //printf("step %d\n", step);
       numNodes = No_of_C180s*192;
-      Integrate<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP,
-                                                 d_X, d_Y, d_Z, 
+      Integrate<<<No_of_C180s, threadsperblock>>>(d_X, d_Y, d_Z, 
                                                  d_velListX, d_velListY, d_velListZ, 
                                                  delta_t,  mass,
                                                  d_fConList, d_fDisList, d_fRanList,
@@ -1244,10 +1243,10 @@ if (Restart == 0) {
       CudaErrorCheck();
 
 
-      ForwardTime<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP, 
-                                                   d_X , d_Y , d_Z ,
-                                                   No_of_C180s, impurityNum);
-      CudaErrorCheck();
+      //ForwardTime<<<No_of_C180s, threadsperblock>>>(d_XP, d_YP, d_ZP, 
+      //                                             d_X , d_Y , d_Z ,
+      //                                             No_of_C180s, impurityNum);
+      //CudaErrorCheck();
 
 
 
@@ -1768,8 +1767,7 @@ if (Restart == 0) {
 	      ranmar(asym, 1);	
 	  } 
 
-          cell_division<<<1,256>>>(globalrank,
-                                   d_XP, d_YP, d_ZP, 
+          cell_division<<<1,256>>>(globalrank, 
                                    d_X, d_Y, d_Z, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ,
@@ -2160,9 +2158,9 @@ if (Restart == 0) {
    
 
   //cudaFree( (void *)d_bounding_xyz );
-  cudaFree( (void *)d_XP );
-  cudaFree( (void *)d_YP );
-  cudaFree( (void *)d_ZP );
+  //cudaFree( (void *)d_XP );
+  //cudaFree( (void *)d_YP );
+  //cudaFree( (void *)d_ZP );
   cudaFree( (void *)d_X  );
   cudaFree( (void *)d_Y  );
   cudaFree( (void *)d_Z  );
@@ -2665,7 +2663,7 @@ int SecondCell (int Orig_No_of_C180s){
 	 if (closenessToCenter > 0.f && closenessToCenter < 1.f){
           printf("Only making cells within %f of max radius different\n", closenessToCenter);
           	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                              	              d_XP, d_YP, d_ZP,
+                              	              d_X, d_Y, d_Z,
                                       	      d_CMx, d_CMy, d_CMz);
           
          	 cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);

@@ -363,7 +363,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	NooflocalNN = 0;
         	float range;
-        	range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
+        	range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
         
         	int posX = 0;    
         	int posY = 0;
@@ -728,7 +728,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
         NooflocalNN = 0;
         float range;
-        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
+        range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
         
         int posX = 0;    
         int posY = 0;
@@ -1097,7 +1097,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         
         NooflocalNN = 0;
         float range;
-        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
+        range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
         
         int posX = 0;    
         int posY = 0;
@@ -1392,7 +1392,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	int NooflocalNN = 0;
         	int localNNs[10];
         	float range;
-        	range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
+        	range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
 
         
         	int posX = 0;    
@@ -1556,7 +1556,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         int NooflocalNN = 0;
         int localNNs[10];
         float range;
-        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
+        range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
 
         
         int posX = 0;    
@@ -1740,7 +1740,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         int NooflocalNN = 0;
         int localNNs[10];
         float range;
-        range = (attraction_range + 1.0*shapeLim) * (attraction_range + 1.0*shapeLim);
+        range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
 
         
         int posX = 0;    
@@ -1922,8 +1922,7 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 }
 
 
-__global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
-                          float *d_X, float *d_Y, float *d_Z, 
+__global__ void Integrate(float *d_X, float *d_Y, float *d_Z, 
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float dt, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
@@ -1949,9 +1948,14 @@ __global__ void Integrate(float *d_XP, float *d_YP, float *d_ZP,
         d_velListZ[nodeInd] = d_velListZ[nodeInd] + 0.5*(dt*d_fConList.z[nodeInd] + dt*d_fDisList.z[nodeInd] + \
                                                          root_dt*d_fRanList.z[nodeInd])/m;
 
-        d_XP[nodeInd] = d_X[nodeInd] + d_velListX[nodeInd]*dt; 
-        d_YP[nodeInd] = d_Y[nodeInd] + d_velListY[nodeInd]*dt; 
-        d_ZP[nodeInd] = d_Z[nodeInd] + d_velListZ[nodeInd]*dt; 
+
+	 d_X[nodeInd] += d_velListX[nodeInd]*dt; 
+         d_Y[nodeInd] += d_velListY[nodeInd]*dt; 
+         d_Z[nodeInd] += d_velListZ[nodeInd]*dt; 
+
+        //d_XP[nodeInd] = d_X[nodeInd] + d_velListX[nodeInd]*dt; 
+        //d_YP[nodeInd] = d_Y[nodeInd] + d_velListY[nodeInd]*dt; 
+        //d_ZP[nodeInd] = d_Z[nodeInd] + d_velListZ[nodeInd]*dt; 
 
     }
 }
@@ -2043,9 +2047,9 @@ __global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* 
     long int partInd = blockIdx.x*blockDim.x + threadIdx.x;
 
     if (partInd < numParts){
-        d_velListX[partInd] = d_velListX[partInd] - sysVCMx;
-        d_velListY[partInd] = d_velListY[partInd] - sysVCMy;
-        d_velListZ[partInd] = d_velListZ[partInd] - sysVCMz;
+        d_velListX[partInd] -= sysVCMx;
+        d_velListY[partInd] -= sysVCMy;
+        d_velListZ[partInd] -= sysVCMz;
     }
 }
 

@@ -148,7 +148,6 @@ cudaDeviceProp getDevice(void)
 __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap,
                                        float CMx, float CMy, float CMz,
                                        float X, float Y, float Z,
-                                       float* d_XP,  float* d_YP,  float* d_ZP,
                                        float* d_X,  float* d_Y,  float* d_Z,
                                        float planeNx, float planeNy, float planeNz){
              
@@ -166,10 +165,6 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
         Y = Y - posDotN*planeNy;
         Z = Z - posDotN*planeNz;
     }
-             
-    d_XP[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
-    d_YP[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
-    d_ZP[daughtInd*192+partInd] = Z + (CMz + halfGap*planeNz);
     
     d_X[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
     d_Y[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
@@ -178,8 +173,7 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
 }
 
 
-__global__ void  cell_division(int rank,
-                               float* d_XP, float* d_YP, float* d_ZP, 
+__global__ void  cell_division(int rank, 
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
@@ -222,8 +216,7 @@ __global__ void  cell_division(int rank,
          
         CalcAndUpdateDaughtPos(rank, atom, (1-asym)*repulsion_range,
                                CMx, CMy, CMz,
-                               X, Y, Z,
-                               d_XP, d_YP, d_ZP, 
+                               X, Y, Z, 
                                d_X, d_Y, d_Z, 
                                planeNx, planeNy, planeNz);
 
@@ -236,8 +229,7 @@ __global__ void  cell_division(int rank,
         // Now repeat for the second daughter
         CalcAndUpdateDaughtPos(newrank, atom, asym*repulsion_range,
                                CMx, CMy, CMz,
-                               X, Y, Z,
-                               d_XP, d_YP, d_ZP, 
+                               X, Y, Z, 
                                d_X, d_Y, d_Z,
                                planeNx, planeNy, planeNz);
 
