@@ -921,7 +921,7 @@ if (Restart == 0) {
     printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
   }
 
-  if (correct_com == true){
+  if (correct_com == true && !Restart){
   
       CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                                         d_X, d_Y, d_Z,
@@ -953,7 +953,7 @@ if (Restart == 0) {
   }
   
 
-  if ( correct_Vcom == true){
+  if ( correct_Vcom == true && !Restart){
   
      
       VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
