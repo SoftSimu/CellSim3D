@@ -177,7 +177,12 @@ __global__ void  cell_division(int rank,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym){
+                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym,
+                               bool useDifferentCell, bool daughtSame,
+                               int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex ){
+   
     int newrank = No_of_C180s;
     __shared__ float CMx, CMy, CMz;
   
@@ -239,5 +244,39 @@ __global__ void  cell_division(int rank,
         d_velListZ[newrank*192 + atom] = d_velListZ[rank*192+atom];
     
     }
+    
+    
+    if (tid == 0){
+    
+    	if (useDifferentCell && daughtSame){
+	
+		d_ScaleFactor[newrank] = d_ScaleFactor[rank];
+        	d_Youngs_mod[newrank] = d_Youngs_mod[rank];
+        	d_Growth_rate[newrank] = d_Growth_rate[rank];
+        	d_DivisionVolume[newrank] = d_DivisionVolume[rank];      
+       	d_gamma_env[newrank] = d_gamma_env[rank];
+       	d_viscotic_damp[newrank] = d_viscotic_damp[rank];
+       	
+       	if( d_CellINdex[rank] < 0 ){
+       		d_CellINdex[newrank] = - NewCellInd;
+       	} else {
+       		d_CellINdex[newrank] = NewCellInd;
+       	}
+        
+        } else {
+        
+              	d_Youngs_mod[newrank] = stiffness1; 
+          	d_ScaleFactor[newrank] = 1;
+          	d_Growth_rate[newrank] = rMax;
+          	d_DivisionVolume[newrank] = divVol;
+          	d_gamma_env[newrank] = gamma_visc;
+          	d_viscotic_damp[newrank] = viscotic_damping;
+          	d_CellINdex[newrank] = NewCellInd;
+          	  	
+        }
+    
+    }
+    
+    
 }
 

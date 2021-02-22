@@ -156,6 +156,7 @@ float maxPop;
 
 float3 boxMax;
 float3 BoxMin;
+float3 BoxCen;
 bool flatbox; 
 bool LineCenter; 
 bool useRigidSimulationBox;
@@ -219,14 +220,18 @@ int CellInApo1;
 int CellInApo2;
 
 bool correct_com = false;
+bool correct_Vcom = false;
+int reductionblocks;
+
 float *d_CMx, *d_CMy, *d_CMz;
 float *CMx, *CMy, *CMz;
-float sysCMx = 0.0, sysCMy = 0.0, sysCMz = 0.0;
-
-bool correct_Vcom = false;
 float *d_VCMx, *d_VCMy, *d_VCMz;
 float *VCMx, *VCMy, *VCMz;
-float sysVCMx = 0.0, sysVCMy = 0.0, sysVCMz = 0.0;
+float *d_SysCx, *d_SysCy, *d_SysCz; 
+
+float4* h_sysCM;
+float4* d_sysCM;
+float4* d_sysVCM;
 
 
 //float Pressure;          // pressure
@@ -234,7 +239,8 @@ float sysVCMx = 0.0, sysVCMy = 0.0, sysVCMz = 0.0;
 
 int  No_of_C180s;        // the global number of C180 fullerenes
 int  No_of_C180s_in;     // the number of C180s near the center of mass of the system
-int MaxNoofC180s; 
+int MaxNoofC180s;
+int NewCellInd; 
 
 float *ran2;             // host: ran2[]
 float *d_ran2;           // device: ran2[], used in celldivision
@@ -422,15 +428,66 @@ int main(int argc, char *argv[])
   DivisionVolume = (float *)calloc(MaxNoofC180s, sizeof(float));
   gamma_env = (float *)calloc(MaxNoofC180s, sizeof(float));
   viscotic_damp = (float *)calloc(MaxNoofC180s, sizeof(float));
+  h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_contactForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ExtForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  CMx = (float *)calloc(MaxNoofC180s, sizeof(float));
+  CMy = (float *)calloc(MaxNoofC180s, sizeof(float));
+  CMz = (float *)calloc(MaxNoofC180s, sizeof(float));
+  VCMx = (float *)calloc(MaxNoofC180s, sizeof(float));
+  VCMy = (float *)calloc(MaxNoofC180s, sizeof(float));
+  VCMz = (float *)calloc(MaxNoofC180s, sizeof(float));
+  area= (float *)calloc(MaxNoofC180s, sizeof(float));
+  cell_div = (char *)calloc(MaxNoofC180s, sizeof(char));
+  cell_div_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
+  cell_Apo = (char *)calloc(MaxNoofC180s, sizeof(char));
+  cell_Apo_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
+  NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
+  NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
+  resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
+  
+//volume= (float *)calloc(MaxNoofC180s, sizeof(float));  
+//  SysCx = (float *) calloc(1024 , sizeof(float));
+//  SysCy = (float *) calloc(1024 , sizeof(float));
+//  SysCz = (float *) calloc(1024 , sizeof(float));
+
+  thrust::device_vector<float> d_volumeV(MaxNoofC180s);
+  thrust::host_vector<float> h_volume(MaxNoofC180s);
+  thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
+  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]);
+  volume = thrust::raw_pointer_cast(&h_volume[0]);
   
   thrust::host_vector<angles3> h_theta0(192);
   thrust::device_vector<angles3> d_theta0V(192);
   angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
   theta0 = thrust::raw_pointer_cast(&h_theta0[0]);
+  
+  
+  thrust::host_vector<float4> h_SVCM(1);
+  thrust::device_vector<float4> d_SVCM(1);
+  d_sysVCM = thrust::raw_pointer_cast(&d_SVCM[0]);
+
+
+  thrust::host_vector<float4> h_SCM(1);
+  thrust::device_vector<float4> d_SCM(1);
+  d_sysCM = thrust::raw_pointer_cast(&d_SCM[0]);
+  h_sysCM = thrust::raw_pointer_cast(&h_SCM[0]);
+
+
 
   CPUMemory += 6L*192L*MaxNoofC180s*sizeof(float);
   CPUMemory += MaxNoofC180s*10L*sizeof(float);
-
+  CPUMemory += MaxNoofC180s*7L*sizeof(float);
+  CPUMemory += MaxNoofC180s*sizeof(float);
+  CPUMemory += 3L*MaxNoofC180s*sizeof(float);
+  CPUMemory += 6L*1024L*sizeof(float);
+  CPUMemory += MaxNoofC180s*sizeof(char);
+  CPUMemory += MaxNoofC180s*sizeof(int);
+  CPUMemory += MaxNoofC180s*sizeof(int); 
+  CPUMemory += 3*180*sizeof(float); 
 
 
   h_R0 = (float *)calloc(192*3, sizeof(float));
@@ -487,9 +544,7 @@ int main(int argc, char *argv[])
   //     if ( cudaSuccess != myError )
   //         { printf( "1: Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
 
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_XP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_YP , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  //if ( cudaSuccess != cudaMalloc( (void **)&d_ZP , 192*MaxNoofC180s*sizeof(float))) return(-1);
+
   if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Y  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Z  , 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -499,7 +554,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
-//  if ( cudaSuccess != cudaMalloc( (void **)&d_volume ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1); 
@@ -533,14 +587,16 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
-  
+  if ( cudaSuccess != cudaMalloc((void **)&d_SysCx, 1024*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_SysCy, 1024*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_SysCz, 1024*sizeof(float))) return -1;
+
+
 
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
   cudaMemset(d_C180_sign, 0, 180*sizeof(int));
+  CudaErrorCheck();
 
-  //cudaMemset(d_XP, 0, 192*MaxNoofC180s*sizeof(float));
-  //cudaMemset(d_YP, 0, 192*MaxNoofC180s*sizeof(float));
-  //cudaMemset(d_ZP, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_X, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_Y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_Z, 0, 192*MaxNoofC180s*sizeof(float));
@@ -594,51 +650,13 @@ int main(int argc, char *argv[])
   cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
-  h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  h_contactForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-
-  h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  h_ExtForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
- 
-
-  thrust::device_vector<float> d_volumeV(MaxNoofC180s);
-  thrust::host_vector<float> h_volume(MaxNoofC180s);
-  thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
-  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]);
-  volume = thrust::raw_pointer_cast(&h_volume[0]);
-
+  cudaMemset(d_SysCx, 0, 1024*sizeof(float));
+  cudaMemset(d_SysCy, 0, 1024*sizeof(float));
+  cudaMemset(d_SysCz, 0, 1024*sizeof(float));
+  CudaErrorCheck();
 
 
   if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
-
-
-  
-  CMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  CMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  CMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  VCMx   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  VCMy   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  VCMz   = (float *)calloc(MaxNoofC180s, sizeof(float));
-  //volume= (float *)calloc(MaxNoofC180s, sizeof(float));
-  area= (float *)calloc(MaxNoofC180s, sizeof(float));
-  cell_div = (char *)calloc(MaxNoofC180s, sizeof(char));
-  cell_div_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
-  cell_Apo = (char *)calloc(MaxNoofC180s, sizeof(char));
-  cell_Apo_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
-  NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
-  NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
-  resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
-  
-  CPUMemory += MaxNoofC180s*7L*sizeof(float);
-  CPUMemory += MaxNoofC180s*sizeof(float);
-  CPUMemory += 3L*MaxNoofC180s*sizeof(float);
-  CPUMemory += 6L*1024L*sizeof(float);
-  CPUMemory += MaxNoofC180s*sizeof(char);
-  CPUMemory += MaxNoofC180s*sizeof(int);
-  CPUMemory += MaxNoofC180s*sizeof(int); 
-  CPUMemory += 3*180*sizeof(float); 
 
 
   //cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
@@ -654,20 +672,6 @@ int main(int argc, char *argv[])
   	 
   }
 
-
-  
-
-  // Better way to see how much GPU memory is being used.
-  size_t totalGPUMem;
-  size_t freeGPUMem;
-
-  if ( cudaSuccess != cudaMemGetInfo ( &freeGPUMem, &totalGPUMem ) ) {
-      printf("Couldn't read GPU Memory status\nExiting...\n");
-      CudaErrorCheck();
-      exit(1);
-  }
-
-  GPUMemory = totalGPUMem - freeGPUMem;
 
 
   cudaMemcpy(d_C180_nn,   C180_nn,   3*192*sizeof(int),cudaMemcpyHostToDevice);
@@ -723,12 +727,7 @@ if (Restart == 0) {
   
  } // end of restart if else
 
- 
- // copy to device after reading restart file or initial values
-  //cudaMemcpy(d_XP, X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
- // cudaMemcpy(d_YP, Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
- // cudaMemcpy(d_ZP, Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
-  //CudaErrorCheck();
+
   cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
@@ -845,46 +844,6 @@ if (Restart == 0) {
 #endif 
 
 
-  if (correct_com == true){
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_X, d_Y, d_Z,
-                                        d_CMx, d_CMy, d_CMz);
-      cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      calc_sys_CM();
-      //printf("sysCMx = %f, sysCMy = %f, sysCmz = %f\n", sysCMx, sysCMy, sysCMz);
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
-                                                             sysCMx, sysCMy, sysCMz,
-                                                             No_of_C180s*192);
-          
-      CudaErrorCheck();
-      
-      //CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_XP, d_YP, d_ZP,
-      //                                                       sysCMx, sysCMy, sysCMz,
-      //                                                       No_of_C180s*192);
-
-      //CudaErrorCheck(); 
-  }
-  
-
-  if ( correct_Vcom == true){
-     
-      VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        	  d_velListX, d_velListY, d_velListZ,
-                                        	  d_VCMx, d_VCMy, d_VCMz);
-      cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-      calc_sys_VCM();
-      CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
-                                                               sysVCMx, sysVCMy, sysVCMz,
-                                                               No_of_C180s*192);
-          
-      CudaErrorCheck(); 
-      //printf("sysVCMx = %f, sysVCMy = %f, sysVCmz = %f\n", sysVCMx, sysVCMy, sysVCMz);
-  }  
-  
   
 
 
@@ -894,7 +853,12 @@ if (Restart == 0) {
   
   // Setup simulation box, if needed (non-pbc)
   if (useRigidSimulationBox){
+      
       printf("   Setup rigid (non-PBC) box...\n"); 
+ 
+      BoxCen.x = (boxMax.x - BoxMin.x)/2;
+      BoxCen.y = (boxMax.y - BoxMin.y)/2;
+      BoxCen.z = (boxMax.z - BoxMin.z)/2;
  
       
       if ((boxMax.z - BoxMin.z) < divVol){
@@ -925,6 +889,10 @@ if (Restart == 0) {
     BoxMin.x = 0.0;
     BoxMin.y = 0.0;
     BoxMin.z = 0.0;
+    
+    BoxCen.x = (boxMax.x - BoxMin.x)/2;
+    BoxCen.y = (boxMax.y - BoxMin.y)/2;
+    BoxCen.z = (boxMax.z - BoxMin.z)/2;
   
 
     if ((boxMax.z - BoxMin.z) < divVol){
@@ -953,7 +921,67 @@ if (Restart == 0) {
     printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
   }
 
+  if (correct_com == true){
+  
+      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                        d_X, d_Y, d_Z,
+                                        d_CMx, d_CMy, d_CMz);
 
+      CudaErrorCheck();
+     
+     
+      reductionblocks = (No_of_C180s-1)/1024+1;
+      SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+			   		      d_SysCx, d_SysCy, d_SysCz);
+      CudaErrorCheck(); 
+
+
+      SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        		    d_SysCx, d_SysCy, d_SysCz,
+			    d_sysCM);
+      
+         
+      CudaErrorCheck();
+      
+      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
+                                                             d_sysCM,BoxCen,
+                                                             No_of_C180s*192);
+      CudaErrorCheck();
+      
+
+      
+  }
+  
+
+  if ( correct_Vcom == true){
+  
+     
+      VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                        	  d_velListX, d_velListY, d_velListZ,
+                                        	  d_VCMx, d_VCMy, d_VCMz);
+      CudaErrorCheck();
+      
+      reductionblocks = (No_of_C180s-1)/1024+1;
+      SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
+			   			d_SysCx, d_SysCy, d_SysCz);
+      CudaErrorCheck(); 
+
+
+      SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        		    d_SysCx, d_SysCy, d_SysCz,
+			    d_sysVCM);
+      
+     CudaErrorCheck();
+      
+      
+      CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
+                                                               d_sysVCM,
+                                                               No_of_C180s*192);
+          
+      CudaErrorCheck(); 
+  }  
+  
+  
 
 
   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
@@ -965,6 +993,22 @@ if (Restart == 0) {
   thrust::device_vector<int> d_NoofNNlistV(Xdiv*Ydiv*Zdiv);
   thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
   int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
+
+
+  // Better way to see how much GPU memory is being used.
+  size_t totalGPUMem;
+  size_t freeGPUMem;
+
+  if ( cudaSuccess != cudaMemGetInfo ( &freeGPUMem, &totalGPUMem ) ) {
+      printf("Couldn't read GPU Memory status\nExiting...\n");
+      CudaErrorCheck();
+      exit(1);
+  }
+
+  GPUMemory = totalGPUMem - freeGPUMem;
+
+
+
 
 
    if(usePBCs ){
@@ -1222,7 +1266,7 @@ if (Restart == 0) {
 
 
   int numNodes = No_of_C180s*192;
-  int NewCellInd = No_of_C180s;
+  NewCellInd = No_of_C180s;
   asym[0] = 0.5;
   WithoutApo = true;
   // Simulation loop
@@ -1275,6 +1319,13 @@ if (Restart == 0) {
       		
       		
       		if ((step)%1000 == 0){
+      		
+            		
+            		cudaMemcpy(Growth_rate, d_Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+            		CudaErrorCheck(); 
+            		
+                       cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+        	        CudaErrorCheck();
 	 		      		
       			ApoNum1 = ceil (Apo_rate * (No_of_Cell1- impurityNum));
       		        
@@ -1320,7 +1371,11 @@ if (Restart == 0) {
     					CellInApo2 ++;
         	        	
         	        	}
-        	        }        	        
+        	        }  
+        	        
+        	        
+        	        cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+            		CudaErrorCheck();      	        
         	        
 			count_and_die();
 			
@@ -1739,7 +1794,9 @@ if (Restart == 0) {
         }
 #endif
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
+          
           globalrank = cell_div_inds[divCell];
+          
           float norm[3];
 
           norm[0] = 0; 
@@ -1771,9 +1828,14 @@ if (Restart == 0) {
                                    d_X, d_Y, d_Z, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ,
-                                   No_of_C180s, d_ran2, repulsion_range,asym[0]);
+                                   No_of_C180s, d_ran2, repulsion_range,asym[0],
+                                   useDifferentCell, daughtSame,
+                                   NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
+                                   d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+                                   d_gamma_env, d_viscotic_damp, d_CellINdex);
                                    
           CudaErrorCheck()
+          
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
 	 
@@ -1781,36 +1843,36 @@ if (Restart == 0) {
 
 
 		
-	if (useDifferentCell && daughtSame){
+//	if (useDifferentCell && daughtSame){
 	
-		ScaleFactor[No_of_C180s] = ScaleFactor[globalrank];
-        	youngsModArray[No_of_C180s] = youngsModArray[globalrank];
-        	Growth_rate[No_of_C180s] = Growth_rate[globalrank];
-        	DivisionVolume[No_of_C180s] = DivisionVolume[globalrank];      
-       	gamma_env[No_of_C180s] = gamma_env[globalrank];
-       	viscotic_damp[No_of_C180s] = viscotic_damp[globalrank];
+//		ScaleFactor[No_of_C180s] = ScaleFactor[globalrank];
+//        	youngsModArray[No_of_C180s] = youngsModArray[globalrank];
+//        	Growth_rate[No_of_C180s] = Growth_rate[globalrank];
+//        	DivisionVolume[No_of_C180s] = DivisionVolume[globalrank];      
+//       	gamma_env[No_of_C180s] = gamma_env[globalrank];
+//       	viscotic_damp[No_of_C180s] = viscotic_damp[globalrank];
        	
-       	if(CellINdex[globalrank] < 0 ){
-       		CellINdex[No_of_C180s] = - NewCellInd;
-       	} else {
-       		CellINdex[No_of_C180s] = NewCellInd;
-       	}
+//       	if(CellINdex[globalrank] < 0 ){
+//       		CellINdex[No_of_C180s] = - NewCellInd;
+//       	} else {
+//       		CellINdex[No_of_C180s] = NewCellInd;
+//       	}
         
-        } else {
+//        } else {
         
-              	youngsModArray[No_of_C180s] = stiffness1; 
-          	ScaleFactor[No_of_C180s] = 1;
-          	Growth_rate[No_of_C180s] = rMax;
-          	DivisionVolume[No_of_C180s] = divVol;
-          	gamma_env[No_of_C180s] = gamma_visc;
-          	viscotic_damp[No_of_C180s] = viscotic_damping;
-          	CellINdex[No_of_C180s] = NewCellInd;
+//              youngsModArray[No_of_C180s] = stiffness1; 
+//          	ScaleFactor[No_of_C180s] = 1;
+//          	Growth_rate[No_of_C180s] = rMax;
+//          	DivisionVolume[No_of_C180s] = divVol;
+//          	gamma_env[No_of_C180s] = gamma_visc;
+//          	viscotic_damp[No_of_C180s] = viscotic_damping;
+//          	CellINdex[No_of_C180s] = NewCellInd;
           	  	
-        }
+//        }
 
           
-          if (CellINdex[No_of_C180s] > 0) ++No_of_Cell1;
-          if (CellINdex[No_of_C180s] < 0) ++No_of_Cell2;
+          if (CellINdex[globalrank] > 0) ++No_of_Cell1;
+          if (CellINdex[globalrank] < 0) ++No_of_Cell2;
           
           
           ++No_of_C180s;
@@ -1829,39 +1891,63 @@ if (Restart == 0) {
         
         if (num_cell_div>0){
             
-            cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int),
-                       cudaMemcpyHostToDevice);
-
+            cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int), cudaMemcpyHostToDevice);
             CudaErrorCheck(); 
 
             PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
             CudaErrorCheck();
 
-            cudaMemcpy(d_Youngs_mod, youngsModArray, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-            CudaErrorCheck();
+//            cudaMemcpy(d_Youngs_mod, youngsModArray, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+//            CudaErrorCheck();
             
-            cudaMemcpy(d_ScaleFactor, ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-            CudaErrorCheck();
+//            cudaMemcpy(d_ScaleFactor, ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+//            CudaErrorCheck();
             
-            cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-            CudaErrorCheck();
+//            cudaMemcpy(d_DivisionVolume, DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+//            CudaErrorCheck();
             
-            cudaMemcpy(d_DivisionVolume, DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-            CudaErrorCheck();
+//            cudaMemcpy(d_gamma_env, gamma_env, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+//            CudaErrorCheck();
             
-            cudaMemcpy(d_gamma_env, gamma_env, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-            CudaErrorCheck();
+//            cudaMemcpy(d_viscotic_damp, viscotic_damp, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
+//            CudaErrorCheck();
             
-            cudaMemcpy(d_viscotic_damp, viscotic_damp, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-            CudaErrorCheck();
-            
-            cudaMemcpy(d_CellINdex, CellINdex, No_of_C180s*sizeof(int), cudaMemcpyHostToDevice);
-            CudaErrorCheck();            
-            
+                  		
+//            cudaMemcpy(d_CellINdex, CellINdex, No_of_C180s*sizeof(int), cudaMemcpyHostToDevice);
+//            CudaErrorCheck();  
+
+         
+//            cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
+//            CudaErrorCheck(); 
+	 		      	            
 
         }
 
         if (countOnlyInternal == 1){
+        
+         	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               	                         d_X, d_Y, d_Z,
+                       	                 d_CMx, d_CMy, d_CMz);
+
+      		CudaErrorCheck();
+     
+     
+      		reductionblocks = (No_of_C180s-1)/1024+1;
+      		SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+		    		   		          d_SysCx, d_SysCy, d_SysCz);
+      		CudaErrorCheck(); 
+
+
+      		SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        	  		      d_SysCx, d_SysCy, d_SysCz,
+				      d_sysCM);
+      
+         
+      		CudaErrorCheck();
+
+		h_SCM = d_SCM;
+        
+        
           num_cell_div -= num_cells_far();
         }
 
@@ -1964,23 +2050,42 @@ if (Restart == 0) {
               }
               else {
                   // search for the oldest cells near the center of the system, and make them soft
-                  cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-                  cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-                  cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
 
+      		   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               	                         d_X, d_Y, d_Z,
+                       	                 d_CMx, d_CMy, d_CMz);
+
+      		   CudaErrorCheck();
+     
+     
+      		   reductionblocks = (No_of_C180s-1)/1024+1;
+      		   SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+		    		   		          d_SysCx, d_SysCy, d_SysCz);
+      		   CudaErrorCheck(); 
+
+
+      		   SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        	  		      d_SysCx, d_SysCy, d_SysCz,
+				      d_sysCM);
+      
+         
+      		   CudaErrorCheck();
+
+		   h_SCM = d_SCM;	
+                  
                   float Rmax2 = getRmax2();
                   float R2, dx, dy, dz;
                   int cellInd = 0; 
-                  calc_sys_CM();
+
 
                   float f = 1 - closenessToCenter;
               
                   printf("Made cells with indices "); 
 
                   while (softCellCounter < numberOfCells && cellInd < No_of_C180s){
-                      dx = CMx[cellInd] - sysCMx; 
-                      dy = CMy[cellInd] - sysCMy; 
-                      dz = CMz[cellInd] - sysCMz;
+                      dx = CMx[cellInd] - h_SCM[0].x; 
+                      dy = CMy[cellInd] - h_SCM[0].y; 
+                      dz = CMz[cellInd] - h_SCM[0].z;
 
                       R2 = dx*dx + dy*dy + dz*dz;
 
@@ -2001,36 +2106,70 @@ if (Restart == 0) {
       }
 
       if (correct_com == true){
-          cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          calc_sys_CM();
-          //printf("sysCMx = %f, sysCMy = %f, sysCmz = %f\n", sysCMx, sysCMy, sysCMz);
-          CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
-                                                                 sysCMx, sysCMy, sysCMz,
-                                                                 No_of_C180s*192);
-          CudaErrorCheck(); 
+
+
+      		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               	                         d_X, d_Y, d_Z,
+                       	                 d_CMx, d_CMy, d_CMz);
+
+      		CudaErrorCheck();
+     
+     
+      		reductionblocks = (No_of_C180s-1)/1024+1;
+      		SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+				   		      d_SysCx, d_SysCy, d_SysCz);
+      		CudaErrorCheck(); 
+
+
+      		SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        			    d_SysCx, d_SysCy, d_SysCz,
+				    d_sysCM);
+      
+         
+      		CudaErrorCheck();
+      
+      		CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
+               	                                              d_sysCM, BoxCen,
+               	                                              No_of_C180s*192);
+      		CudaErrorCheck();
+      
+      		//h_SCM = d_SCM;
+      		//printf("sysCMx = 	%f, sysCMy = 		%f, sysCmz = 		%f\n", h_SCM[0].x, h_SCM[0].y, h_SCM[0].z);
+      
       }
 
-    if ( correct_Vcom == true && step%1000 == 0){
+    if ( correct_Vcom == true ){
      
      
-        VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                          d_velListX, d_velListY, d_velListZ,
-                                          d_VCMx, d_VCMy, d_VCMz);
-        cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-        cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-        cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-        calc_sys_VCM();
-        //calc_Multiplier();
+       VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                                          	    d_velListX, d_velListY, d_velListZ,
+                                          	    d_VCMx, d_VCMy, d_VCMz);
+                                          
+        CudaErrorCheck();                        
+                  
+        reductionblocks = (No_of_C180s-1)/1024+1;
+        
+        SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
+			   			d_SysCx, d_SysCy, d_SysCz);
+        CudaErrorCheck(); 
+
+
+        SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        		    d_SysCx, d_SysCy, d_SysCz,
+			    d_sysVCM);
+      
+        CudaErrorCheck(); 
+
         CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
-                                                             sysVCMx, sysVCMy, sysVCMz,
-                                                             No_of_C180s*192);
+                                                                 d_sysVCM,
+                                                                 No_of_C180s*192);
           
         CudaErrorCheck(); 
         
+        //h_SVCM = d_SVCM;
+        //printf("sysVCMx = 	%f, sysVCMy = 		%f, sysVCmz = 		%f\n", h_SVCM[0].x, h_SVCM[0].y, h_SVCM[0].z);
         
-      //printf("sysVCMx = %f, sysVCMy = %f, sysVCmz = %f\n", sysVCMx, sysVCMy, sysVCMz);
+ 
     }
 
 
@@ -3727,52 +3866,12 @@ inline void count_and_die(){
 }
 
 
-
-inline void calc_sys_CM(){ // Put this into a kernel at some point
-
-  sysCMx = 0;
-  sysCMy = 0;
-  sysCMz = 0;
-
-  for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
-    sysCMx += CMx[cellInd];
-    sysCMy += CMy[cellInd];
-    sysCMz += CMz[cellInd];
-  }
-
-  sysCMx = sysCMx/No_of_C180s;
-  sysCMy = sysCMy/No_of_C180s;
-  sysCMz = sysCMz/No_of_C180s;
-
-}
-
-
-inline void calc_sys_VCM(){ // Put this into a kernel at some point
-
-  sysVCMx = 0;
-  sysVCMy = 0;
-  sysVCMz = 0;
-
-  for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
-    sysVCMx += VCMx[cellInd];
-    sysVCMy += VCMy[cellInd];
-    sysVCMz += VCMz[cellInd];
-  }
-
-  sysVCMx = sysVCMx/No_of_C180s;
-  sysVCMy = sysVCMy/No_of_C180s;
-  sysVCMz = sysVCMz/No_of_C180s;
-
-}
-
-
-
 inline float getRmax2(){
   float dx, dy, dz, Rmax2 = 0;
   for (int cell = 0; cell < No_of_C180s; cell++) {
-    dx = CMx[cell] - sysCMx;
-    dy = CMy[cell] - sysCMy;
-    dz = CMz[cell] - sysCMz;
+    dx = CMx[cell] - h_sysCM[0].x;
+    dy = CMy[cell] - h_sysCM[0].y;
+    dz = CMz[cell] - h_sysCM[0].z;
 
     Rmax2 = max(Rmax2, dx*dx + dy*dy + dz*dz);
 
@@ -3786,20 +3885,17 @@ inline int num_cells_far(){
 
   if (num_cell_div == 0 || No_of_C180s < 50) return 0;
 
-  cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 
-  calc_sys_CM();
 
   float dx, dy, dz, dr2;
   float Rmax2 = getRmax2();
   int farCellCount = 0;
 
+
   for (int cell = No_of_C180s - num_cell_div; cell < No_of_C180s; cell++) { // Only check the newest cells
-    dx = CMx[cell] - sysCMx;
-    dy = CMy[cell] - sysCMy;
-    dz = CMz[cell] - sysCMz;
+    dx = CMx[cell] - h_sysCM[0].x;
+    dy = CMy[cell] - h_sysCM[0].y;
+    dz = CMz[cell] - h_sysCM[0].z;
 
     dr2 = dx*dx + dy*dy + dz*dz;
 

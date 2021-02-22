@@ -4,11 +4,16 @@
 #include<curand_kernel.h>
 cudaDeviceProp getDevice(void);
 
-__global__ void  cell_division(int rank,
+
+__global__ void  cell_division(int rank, 
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ,
-                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym);
+                               float* d_velListX, float* d_velListY, float* d_velListZ, 
+                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym,
+                               bool useDifferentCell, bool daughtSame,
+                               int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex );
 
 
 __global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
@@ -167,10 +172,17 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
 void writeForces(FILE* forceFile, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
-                                 float sysCMx, float sysCMy, float sysCMz, long int numParts);
+                                 float4 *d_sysCM, float3 BoxCen, long int numParts);
 
 __global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
-                                 float sysVCMx, float sysVCMy, float sysVCMz, long int numParts);
+                                   float4 *d_sysVCM, long int numParts);
+
+__global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz, 
+			   float* SysCx, float* SysCy, float* SysCz);
+
+__global__ void SysCM( int No_of_C180s, int reductionblocks,
+			float* SysCx, float* SysCy, float* SysCz,
+			float4 *d_sysCM);
 
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,

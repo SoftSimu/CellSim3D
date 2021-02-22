@@ -2029,28 +2029,69 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
 }
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
-                                 float sysCMx, float sysCMy, float sysCMz, long int numParts){
+                                 float4 *d_sysCM, float3 BoxCen, long int numParts){
     
+    
+    __shared__ float Cmx;
+    __shared__ float Cmy;
+    __shared__ float Cmz;
+    
+    int tid = threadIdx.x;
     long int partInd = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    if (tid == 0){
+    
+    	Cmx = d_sysCM[0].x - BoxCen.x;
+    	Cmy = d_sysCM[0].y - BoxCen.y;
+    	Cmz = d_sysCM[0].z - BoxCen.z;
+    
+    }
+    
+    __syncthreads();
+    
 
     if (partInd < numParts){
-        d_X[partInd] -= sysCMx;
-        d_Y[partInd] -= sysCMy;
-        d_Z[partInd] -= sysCMz;
+    
+        d_X[partInd] -= Cmx;
+        d_Y[partInd] -= Cmy;
+        d_Z[partInd] -= Cmz;
+    
     }
+
 }
 
 
+
 __global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
-                                 float sysVCMx, float sysVCMy, float sysVCMz, long int numParts){
+                                   float4 *d_sysVCM, long int numParts){
+
+    __shared__ float VCmx;
+    __shared__ float VCmy;
+    __shared__ float VCmz;
     
+    int tid = threadIdx.x;
     long int partInd = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    if (tid == 0){
+    
+    	VCmx = d_sysVCM[0].x;
+    	VCmy = d_sysVCM[0].y;
+    	VCmz = d_sysVCM[0].z;
+    
+    }
+    
+    __syncthreads();
+
 
     if (partInd < numParts){
-        d_velListX[partInd] -= sysVCMx;
-        d_velListY[partInd] -= sysVCMy;
-        d_velListZ[partInd] -= sysVCMz;
+
+        d_velListX[partInd] -= VCmx;       
+        d_velListY[partInd] -= VCmy;
+        d_velListZ[partInd] -= VCmz;    
+        
     }
+
+
 }
 
 
