@@ -170,3 +170,149 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         }
     }
 }
+
+__device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap,
+                                       float CMx, float CMy, float CMz,
+                                       float X, float Y, float Z,
+                                       float* d_X,  float* d_Y,  float* d_Z,
+                                       float planeNx, float planeNy, float planeNz){
+             
+    // redefine position of parent cell wrt to an origin that includes
+    // 0.5 the minimum gap between daughter cells
+    X = X - CMx - halfGap*planeNx; 
+    Y = Y - CMy - halfGap*planeNy; 
+    Z = Z - CMz - halfGap*planeNz;
+
+    float posDotN = X*planeNx + Y*planeNy + Z*planeNz;
+
+    // If particle is below the plane, project onto the plane
+    if (posDotN < 0.0f || posDotN == 0){
+        X = X - posDotN*planeNx;
+        Y = Y - posDotN*planeNy;
+        Z = Z - posDotN*planeNz;
+    }
+    
+    d_X[daughtInd*192+partInd] = X + (CMx + halfGap*planeNx);
+    d_Y[daughtInd*192+partInd] = Y + (CMy + halfGap*planeNy);
+    d_Z[daughtInd*192+partInd] = Z + (CMz + halfGap*planeNz);
+    
+}
+
+
+__global__ void  cell_division(int rank, 
+                               float *d_X,  float *d_Y,  float *d_Z,
+                               float* AllCMx, float* AllCMy, float* AllCMz,
+                               float* d_velListX, float* d_velListY, float* d_velListZ, 
+                               int No_of_C180s, float repulsion_range, float asym,
+                               bool useDifferentCell, bool daughtSame,
+                               int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex, R3Nptrs d_DivPlane, int* d_division_counter){
+   
+    int newrank = No_of_C180s;
+         
+    __shared__ float CMx, CMy, CMz;
+    __shared__ int index;
+    
+    int tid  = threadIdx.x;
+    int atom = tid;
+
+    if (tid == 0){
+    
+        index = atomicAdd( d_division_counter, 1);
+        CMx = AllCMx[rank];
+        CMy = AllCMy[rank];
+        CMz = AllCMz[rank];
+    }
+
+    __syncthreads();
+
+
+    if ( atom < 180 ) 
+    {
+
+        // planeN is the division plane's normal vector
+        //loat planeNx = d_randNorm[0];
+        //float planeNy = d_randNorm[1];
+        //float planeNz = d_randNorm[2];
+
+
+        float planeNx = d_DivPlane.x[index];
+        float planeNy = d_DivPlane.y[index];
+        float planeNz = d_DivPlane.z[index];
+
+
+        if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
+            printf("OH SHIT: normal is not normalized\n");
+            printf("Crash now :(\n"); 
+            asm("trap;");
+        }
+
+
+        // First generate and write positions for the first daughter
+
+        float X = d_X[rank*192+atom]; 
+        float Y = d_Y[rank*192+atom]; 
+        float Z = d_Z[rank*192+atom]; 
+         
+        CalcAndUpdateDaughtPos(rank, atom, (1-asym)*repulsion_range,
+                               CMx, CMy, CMz,
+                               X, Y, Z, 
+                               d_X, d_Y, d_Z, 
+                               planeNx, planeNy, planeNz);
+
+        
+        // Invert the normal
+        planeNx = -1*planeNx; 
+        planeNy = -1*planeNy; 
+        planeNz = -1*planeNz;
+
+        // Now repeat for the second daughter
+        CalcAndUpdateDaughtPos(newrank, atom, asym*repulsion_range,
+                               CMx, CMy, CMz,
+                               X, Y, Z, 
+                               d_X, d_Y, d_Z,
+                               planeNx, planeNy, planeNz);
+
+        // give the daughter the same velocities as the parent
+        d_velListX[newrank*192 + atom] = d_velListX[rank*192+atom];
+        d_velListY[newrank*192 + atom] = d_velListY[rank*192+atom];
+        d_velListZ[newrank*192 + atom] = d_velListZ[rank*192+atom];
+    
+    }
+    
+    
+    if (tid == 0){
+    
+    	if (useDifferentCell && daughtSame){
+	
+		d_ScaleFactor[newrank] = d_ScaleFactor[rank];
+        	d_Youngs_mod[newrank] = d_Youngs_mod[rank];
+        	d_Growth_rate[newrank] = d_Growth_rate[rank];
+        	d_DivisionVolume[newrank] = d_DivisionVolume[rank];      
+       	d_gamma_env[newrank] = d_gamma_env[rank];
+       	d_viscotic_damp[newrank] = d_viscotic_damp[rank];
+       	
+       	if( d_CellINdex[rank] < 0 ){
+       		d_CellINdex[newrank] = - NewCellInd;
+       	} else {
+       		d_CellINdex[newrank] = NewCellInd;
+       	}
+        
+        } else {
+        
+              	d_Youngs_mod[newrank] = stiffness1; 
+          	d_ScaleFactor[newrank] = 1;
+          	d_Growth_rate[newrank] = rMax;
+          	d_DivisionVolume[newrank] = divVol;
+          	d_gamma_env[newrank] = gamma_visc;
+          	d_viscotic_damp[newrank] = viscotic_damping;
+          	d_CellINdex[newrank] = NewCellInd;
+          	  	
+        }
+    
+    }
+    
+    
+}
+    

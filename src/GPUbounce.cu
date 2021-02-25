@@ -318,6 +318,11 @@ bool duringGrowth;
 bool recalc_r0; 
 
 
+R3Nptrs DivPlane;
+R3Nptrs d_DivPlane;
+int* d_division_counter;
+
+
 int main(int argc, char *argv[])
 {
   int i;
@@ -431,6 +436,9 @@ int main(int argc, char *argv[])
   h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  DivPlane.x = (float *)calloc(MaxNoofC180s, sizeof(float));
+  DivPlane.y = (float *)calloc(MaxNoofC180s, sizeof(float));
+  DivPlane.z = (float *)calloc(MaxNoofC180s, sizeof(float));
   h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -537,14 +545,9 @@ int main(int argc, char *argv[])
       return -1;
   }
 
+  if ( cudaSuccess != cudaMalloc((void **)&d_division_counter, sizeof(int))) return -1;
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
-  GPUMemory +=  3*192*sizeof(int) + 180*sizeof(int);
-  //  cudaError_t myError = cudaGetLastError();
-  //     if ( cudaSuccess != myError )
-  //         { printf( "1: Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);}
-
-
   if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Y  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Z  , 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -587,12 +590,16 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fRanList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.x, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.y, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.z, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCx, 1024*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCy, 1024*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCz, 1024*sizeof(float))) return -1;
 
 
 
+  cudaMemset(d_division_counter, 0, sizeof(int));
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
   cudaMemset(d_C180_sign, 0, 180*sizeof(int));
   CudaErrorCheck();
@@ -650,6 +657,13 @@ int main(int argc, char *argv[])
   cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
+  
+  cudaMemset(d_DivPlane.x, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_DivPlane.y, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_DivPlane.z, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+  
+  
   cudaMemset(d_SysCx, 0, 1024*sizeof(float));
   cudaMemset(d_SysCy, 0, 1024*sizeof(float));
   cudaMemset(d_SysCz, 0, 1024*sizeof(float));
@@ -981,7 +995,6 @@ if (Restart == 0) {
       CudaErrorCheck(); 
   }  
   
-  
 
 
   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
@@ -1007,8 +1020,8 @@ if (Restart == 0) {
 
   GPUMemory = totalGPUMem - freeGPUMem;
 
-
-
+ // Precalculate random plane
+  initialize_Plane(MaxNoofC180s);
 
 
    if(usePBCs ){
@@ -1793,30 +1806,14 @@ if (Restart == 0) {
             printf("\n");
         }
 #endif
+
+
+
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           
           globalrank = cell_div_inds[divCell];
-          
-          float norm[3];
-
-          norm[0] = 0; 
-          norm[1] = 1; 
-          norm[2] = 0;
-          
-          if (useDivPlaneBasis)
-              GetRandomVectorBasis(norm, divPlaneBasis);
-          else
-              GetRandomVector(norm);
-
-#ifdef TURNOFF_RAN
-          norm[0] = 0; 
-          norm[1] = 1; 
-          norm[2] = 0;
-#endif
-          
-          cudaMemcpy( d_ran2, norm, 3*sizeof(float), cudaMemcpyHostToDevice);
-          CudaErrorCheck();
-          
+   
+            
           NDIV[globalrank] += 1;
           
 
@@ -1828,47 +1825,16 @@ if (Restart == 0) {
                                    d_X, d_Y, d_Z, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ,
-                                   No_of_C180s, d_ran2, repulsion_range,asym[0],
+                                   No_of_C180s, repulsion_range,asym[0],
                                    useDifferentCell, daughtSame,
                                    NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
                                    d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
-                                   d_gamma_env, d_viscotic_damp, d_CellINdex);
+                                   d_gamma_env, d_viscotic_damp, d_CellINdex, d_DivPlane, d_division_counter);
                                    
           CudaErrorCheck()
           
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
-	 
-	 
-
-
-		
-//	if (useDifferentCell && daughtSame){
-	
-//		ScaleFactor[No_of_C180s] = ScaleFactor[globalrank];
-//        	youngsModArray[No_of_C180s] = youngsModArray[globalrank];
-//        	Growth_rate[No_of_C180s] = Growth_rate[globalrank];
-//        	DivisionVolume[No_of_C180s] = DivisionVolume[globalrank];      
-//       	gamma_env[No_of_C180s] = gamma_env[globalrank];
-//       	viscotic_damp[No_of_C180s] = viscotic_damp[globalrank];
-       	
-//       	if(CellINdex[globalrank] < 0 ){
-//       		CellINdex[No_of_C180s] = - NewCellInd;
-//       	} else {
-//       		CellINdex[No_of_C180s] = NewCellInd;
-//       	}
-        
-//        } else {
-        
-//              youngsModArray[No_of_C180s] = stiffness1; 
-//          	ScaleFactor[No_of_C180s] = 1;
-//          	Growth_rate[No_of_C180s] = rMax;
-//          	DivisionVolume[No_of_C180s] = divVol;
-//          	gamma_env[No_of_C180s] = gamma_visc;
-//          	viscotic_damp[No_of_C180s] = viscotic_damping;
-//          	CellINdex[No_of_C180s] = NewCellInd;
-          	  	
-//        }
 
           
           if (CellINdex[globalrank] > 0) ++No_of_Cell1;
@@ -1895,31 +1861,7 @@ if (Restart == 0) {
             CudaErrorCheck(); 
 
             PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
-            CudaErrorCheck();
-
-//            cudaMemcpy(d_Youngs_mod, youngsModArray, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-//            CudaErrorCheck();
-            
-//            cudaMemcpy(d_ScaleFactor, ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-//            CudaErrorCheck();
-            
-//            cudaMemcpy(d_DivisionVolume, DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-//            CudaErrorCheck();
-            
-//            cudaMemcpy(d_gamma_env, gamma_env, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-//            CudaErrorCheck();
-            
-//            cudaMemcpy(d_viscotic_damp, viscotic_damp, sizeof(float)*No_of_C180s, cudaMemcpyHostToDevice);
-//            CudaErrorCheck();
-            
-                  		
-//            cudaMemcpy(d_CellINdex, CellINdex, No_of_C180s*sizeof(int), cudaMemcpyHostToDevice);
-//            CudaErrorCheck();  
-
-         
-//            cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
-//            CudaErrorCheck(); 
-	 		      	            
+            CudaErrorCheck();	 		      	            
 
         }
 
@@ -2294,12 +2236,6 @@ if (Restart == 0) {
    }
  
  
-   
-
-  //cudaFree( (void *)d_bounding_xyz );
-  //cudaFree( (void *)d_XP );
-  //cudaFree( (void *)d_YP );
-  //cudaFree( (void *)d_ZP );
   cudaFree( (void *)d_X  );
   cudaFree( (void *)d_Y  );
   cudaFree( (void *)d_Z  );
@@ -2312,8 +2248,13 @@ if (Restart == 0) {
   cudaFree( (void *)d_C180_sign);
   cudaFree( (void *)d_cell_div);
   cudaFree( (void *)d_cell_Apo);
+  
+  cudaFree( (void *)d_DivPlane.x);
+  cudaFree( (void *)d_DivPlane.y);
+  cudaFree( (void *)d_DivPlane.z);
+  
+  
   free(X); free(Y); free(Z);
-  //free(bounding_xyz);
   free(CMx); free(CMy); free(CMz);
   free(dividingCells); free(totalCells);
   free(NDIV);
@@ -2328,6 +2269,10 @@ if (Restart == 0) {
   free(velListX); 
   free(velListY); 
   free(velListZ); 
+  
+  free(DivPlane.x);
+  free(DivPlane.y);
+  free(DivPlane.z);
 
   fclose(trajfile);
   fclose(forceFile);
@@ -2759,6 +2704,93 @@ void RotationMatrix(float* RMat,float* axis,float* theta){
   	RMat[8] =  1.0f + (1.0f - C)*(-axis[0]*axis[0] - axis[1]*axis[1]);
 
 }
+
+
+inline void initialize_Plane(int MaxNoofC180s){
+
+
+
+   float v[3], w[3];
+     
+   if (useDivPlaneBasis){
+          
+              
+              if (divPlaneBasis[1] != 0){
+        		
+        		v[0] = 0;
+        		v[1] = divPlaneBasis[2];
+        		v[2] = -1*divPlaneBasis[1];
+
+        		w[0] = divPlaneBasis[1];
+        		w[1] = -1*divPlaneBasis[0];
+        		w[2] = 0;
+    		}else{ // this branch is very unlikely, placed for correctness
+        		v[0] = 0;
+        		v[1] = 1;
+        		v[2] = 0;
+
+        		w[0] = divPlaneBasis[2];
+        		w[1] = 0;
+       		w[2] = -1*divPlaneBasis[0];
+    		}
+
+    		// Orthogonalize
+   		float f = (w[0]*v[0] + w[1]*v[1] + w[2]*w[2])/(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+
+    		w[0] = w[0] - f*v[0];
+    		w[1] = w[1] - f*v[1];
+      		w[2] = w[2] - f*v[2];
+
+    		// normalize
+    		f = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+
+    		v[0] = v[0]/f;
+    		v[1] = v[1]/f;
+    		v[2] = v[2]/f;
+
+    		f = sqrt(w[0]*w[0] + w[1]*w[1] + w[2]*w[2]);
+
+    		w[0] = w[0]/f;
+    		w[1] = w[1]/f;
+    		w[2] = w[2]/f;
+    
+    }
+    
+    for (int i = 0; i < MaxNoofC180s; i++) {
+     
+          
+          float norm[3];
+          
+          if (useDivPlaneBasis)
+              	
+              	GetRandomVectorBasis(norm,v,w);
+          
+          else
+          
+              GetRandomVector(norm);
+
+#ifdef TURNOFF_RAN
+
+          norm[0] = 0; 
+          norm[1] = 1; 
+          norm[2] = 0;
+          
+#endif
+          
+          DivPlane.x[i] = norm[0];
+          DivPlane.y[i] = norm[1];
+          DivPlane.z[i] = norm[2]; 
+
+   }
+
+          cudaMemcpy( d_DivPlane.x, DivPlane.x, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+          cudaMemcpy( d_DivPlane.y, DivPlane.y, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+          cudaMemcpy( d_DivPlane.z, DivPlane.z, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+          CudaErrorCheck();
+
+}
+
+
 
 
 int initialize_Vel(int Orig_No_of_C180s)

@@ -9,11 +9,11 @@ __global__ void  cell_division(int rank,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float *d_randNorm, float repulsion_range, float asym,
+                               int No_of_C180s, float repulsion_range, float asym,
                                bool useDifferentCell, bool daughtSame,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
-                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex );
+                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex, R3Nptrs d_DivPlane, int* d_division_counter);
 
 
 __global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
@@ -136,6 +136,7 @@ int ReadRestartFile();
 // Function to get the indeces of dividing cells
 inline void count_and_get_div();
 inline void count_and_die();
+inline void initialize_Plane( int MaxNoofC180s);
 
 
 int DispersityFunc(int Orig_No_of_C180s);
