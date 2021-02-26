@@ -207,7 +207,8 @@ __global__ void  cell_division(int rank,
                                bool useDifferentCell, bool daughtSame,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
-                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex, R3Nptrs d_DivPlane, int* d_division_counter){
+                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
+                               R3Nptrs d_DivPlane, int* d_division_counter, int* d_No_of_C180s){
    
     int newrank = No_of_C180s;
          
@@ -220,6 +221,8 @@ __global__ void  cell_division(int rank,
     if (tid == 0){
     
         index = atomicAdd( d_division_counter, 1);
+        int i = atomicAdd( d_No_of_C180s, 1);
+        //printf("Num of Cells:		%d\n",i);
         CMx = AllCMx[rank];
         CMy = AllCMy[rank];
         CMz = AllCMz[rank];

@@ -214,10 +214,6 @@ int *d_NNlist;
 int *NoofNNlist;
 int *NNlist;
 
-int  No_of_Cell1;
-int  No_of_Cell2;
-int CellInApo1;
-int CellInApo2;
 
 bool correct_com = false;
 bool correct_Vcom = false;
@@ -264,6 +260,7 @@ float Apo_rate;
 int popToStartApo;
 bool WithoutApo;
 int NumApoCell;
+int NumRemoveCell;
 
 
 
@@ -321,6 +318,7 @@ bool recalc_r0;
 R3Nptrs DivPlane;
 R3Nptrs d_DivPlane;
 int* d_division_counter;
+int* d_No_of_C180s;
 
 
 int main(int argc, char *argv[])
@@ -331,11 +329,9 @@ int main(int argc, char *argv[])
   int noofblocks, threadsperblock;
   int newcells;
   
-  No_of_Cell1 =0;
-  No_of_Cell2 =0;
-  CellInApo1 = 0;
-  CellInApo2 = 0;
   NumApoCell = 0;
+  NumRemoveCell = 0;
+  
   
   FILE *outfile;
   FILE *trajfile; // pointer to xyz file
@@ -545,6 +541,8 @@ int main(int argc, char *argv[])
       return -1;
   }
 
+
+  if ( cudaSuccess != cudaMalloc((void **)&d_No_of_C180s, sizeof(int))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_division_counter, sizeof(int))) return -1;
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
@@ -671,7 +669,7 @@ int main(int argc, char *argv[])
 
 
   if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
-
+  if (cudaSuccess != cudaMemcpy(d_No_of_C180s, &No_of_C180s, sizeof(int), cudaMemcpyHostToDevice)) return -1; 
 
   //cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
@@ -1159,7 +1157,7 @@ if (Restart == 0) {
   }
   if(useLEbc){
   
-  CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+  CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign,
                                                      	d_X,  d_Y,  d_Z,
                                                      	d_CMx, d_CMy, d_CMz,
                                                      	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
@@ -1177,15 +1175,15 @@ if (Restart == 0) {
   	
   	                                                     	
       CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        d_X, d_Y, d_Z,
-                                                        d_CMx, d_CMy, d_CMz,
-                                                        internal_damping,
-                                                        attraction_range,
-                                                        d_viscotic_damp,
-                                                        Xdiv, Ydiv, Zdiv, boxMax,
-                                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
-                                                        d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,shapeLim);
+                                                        	d_X, d_Y, d_Z,
+                                                        	d_CMx, d_CMy, d_CMz,
+                                                        	internal_damping,
+                                                        	attraction_range,
+                                                       	d_viscotic_damp,
+                                                        	Xdiv, Ydiv, Zdiv, boxMax,
+                                                        	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                        	d_velListX, d_velListY, d_velListZ,
+                                                        	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,shapeLim);
     CudaErrorCheck();	
   
   
@@ -1319,16 +1317,10 @@ if (Restart == 0) {
 	// ----------------------------------------- Begin Cell Death ------------	
 	if (apoptosis && !WithoutApo) {	
      
-		int ApoNum1;
-		int ApoNum2;
+		
       		float rans[1];
         	int DInd;
         	int Aporank;
-        	int count;
-        	int Rcell = 0;
-        	
-        	
-		if(!useDifferentCell) No_of_Cell1 = No_of_C180s;
       		
       		
       		if ((step)%1000 == 0){
@@ -1340,52 +1332,36 @@ if (Restart == 0) {
                        cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
         	        CudaErrorCheck();
 	 		      		
-      			ApoNum1 = ceil (Apo_rate * (No_of_Cell1- impurityNum));
-      		        
-	 		count = 0;
-	 		Rcell = floor((No_of_Cell1 - impurityNum) * 0.9);
-
-
-      		 	while (count < ApoNum1){
+     		 	for (int s= impurityNum; s < No_of_C180s - impurityNum; s++){
       		 		  	 	
-      		 		if ( CellInApo1 >= Rcell) break;  	
-      		 		 		
-      		 		ranmar(rans, 1);
-        	        	DInd = floor(rans[0]*(No_of_C180s - impurityNum)) + impurityNum;
+ 	
+      		 		if (CellINdex[s] >= 0){
+      		 		
+      		 			if (Growth_rate[s] == - squeeze_rate) continue; 		
+      		 		
+        	        		ranmar(rans, 1);
+        	        		if (rans[0] < Apo_rate*0.1){
+        	        			Growth_rate[s] = - squeeze_rate;
+        	        			NumApoCell ++;
+        	        		}
         	        	
-        	        	if (Growth_rate[DInd] == - squeeze_rate || CellINdex[DInd] < 0) continue;
+        	        	} else {
+        	        	
+        	        	       if (Growth_rate[DInd] == - squeeze_rate2 ) continue;	
+      		 			
+        	        		ranmar(rans, 1);
+        	        		if(rans[0] < Apo_rate2*0.1){
+        	        			Growth_rate[DInd] = - squeeze_rate2;
+        	        			NumApoCell ++;	
+        	        		}
         	        	
         	        	
-        	        		Growth_rate[DInd] = - squeeze_rate;
-    					count++;
-    					CellInApo1 ++;
+        	        	
+        	        	
+        	        	}			
         	        	
         	        }
-        	        
-        	        if(useDifferentCell){
-        	        
-        	        	ApoNum2 = ceil (Apo_rate2 * (No_of_Cell2- impurityNum));
-        	        		
-        	        	count = 0;
-        	        	Rcell = floor((No_of_Cell2 - impurityNum) * 0.9);
-        	        	
-      		 		while (count < ApoNum2){
-      		 		  	 	
-      		 			if ( CellInApo2 >= Rcell ) break;  	
-      		 		 		
-      		 			ranmar(rans, 1);
-        	        		DInd = floor(rans[0]*(No_of_C180s - impurityNum)) + impurityNum;
-        	        	
-        	        		if (Growth_rate[DInd] == - squeeze_rate2 || CellINdex[DInd] >= 0) continue;
-        	        	
-        	        	
-        	        		Growth_rate[DInd] = - squeeze_rate2;
-    					count++;
-    					CellInApo2 ++;
-        	        	
-        	        	}
-        	        }  
-        	        
+
         	        
         	        cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
             		CudaErrorCheck();      	        
@@ -1429,14 +1405,7 @@ if (Restart == 0) {
           			
           				Aporank = cell_Apo_inds[ApoCell] - ApoCell; 
           				EndShift =  (No_of_C180s - Aporank-1)*192*sizeof(float); 
-          				
-          				if (CellINdex[Aporank] >= 0) {
-          					-- CellInApo1;
-          					-- No_of_Cell1;
-					} else {
-						-- CellInApo2;
-						-- No_of_Cell2;
-					}
+
 
   				
   					cudaMemcpy(X + 192*Aporank,  d_X + 192*(Aporank + 1), EndShift ,cudaMemcpyDeviceToHost);
@@ -1502,7 +1471,7 @@ if (Restart == 0) {
         	               	CudaErrorCheck();  				
 
       					
-      					NumApoCell ++;
+      					NumRemoveCell ++;
 
       				}
       			}       
@@ -1568,7 +1537,7 @@ if (Restart == 0) {
       
       if ( (step)%1000 == 0)
       {
-          printf("   time %-8d %d cells, CellInApoptosis %d, NumCellDeath %d\n",step,No_of_C180s, CellInApo1 + CellInApo2, NumApoCell);
+          printf("   time %-8d %d cells, CellInApoptosis %d, NumCellDeath %d\n",step,No_of_C180s, NumApoCell, NumRemoveCell);
       }
 
 
@@ -1829,16 +1798,13 @@ if (Restart == 0) {
                                    useDifferentCell, daughtSame,
                                    NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
                                    d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
-                                   d_gamma_env, d_viscotic_damp, d_CellINdex, d_DivPlane, d_division_counter);
+                                   d_gamma_env, d_viscotic_damp, d_CellINdex,
+                                   d_DivPlane, d_division_counter, d_No_of_C180s);
                                    
           CudaErrorCheck()
           
           resetIndices[divCell] = globalrank;
           resetIndices[divCell + num_cell_div] = No_of_C180s;
-
-          
-          if (CellINdex[globalrank] > 0) ++No_of_Cell1;
-          if (CellINdex[globalrank] < 0) ++No_of_Cell2;
           
           
           ++No_of_C180s;
@@ -2234,6 +2200,7 @@ if (Restart == 0) {
  	printf("Unable to call Restart Kernel. \n");
 	return(-1);
    }
+ 
  
  
   cudaFree( (void *)d_X  );
@@ -2901,11 +2868,9 @@ int SecondCell (int Orig_No_of_C180s){
 				sumz = 0;
 				
                   		++c;
-                  		No_of_Cell2++; 
+                  		
               		}
           	}
-          	
-		No_of_Cell1 = No_of_C180s - No_of_Cell2;
           	
           	printf("Made %d cells softer\n", c);
 
@@ -2970,13 +2935,11 @@ int SecondCell (int Orig_No_of_C180s){
 			sumz = 0;
 			
 			coun--;
-			No_of_Cell2 ++;
+			
 			
 			if (coun == 0 ) break;
 
 	      }
-	      
-	      No_of_Cell1 = No_of_C180s - No_of_Cell2;
 
 	}	      
 
@@ -4008,11 +3971,8 @@ int writeRestartFile(int t_step, int frameCount){
 	fwrite(&frameCount, sizeof(int), 1, Restartfile); 
 	fwrite(&No_of_C180s, sizeof(int), 1, Restartfile); 
 	fwrite(&impurityNum, sizeof(int), 1, Restartfile);
-	fwrite(&No_of_Cell1, sizeof(int), 1, Restartfile);
-	fwrite(&No_of_Cell2, sizeof(int), 1, Restartfile);
-	fwrite(&CellInApo1, sizeof(int), 1, Restartfile);
-	fwrite(&CellInApo2, sizeof(int), 1, Restartfile);
-	fwrite(&NumApoCell, sizeof(int), 1, Restartfile);  
+	fwrite(&NumApoCell, sizeof(int), 1, Restartfile);
+	fwrite(&NumRemoveCell, sizeof(int), 1, Restartfile);  
  
         	
         for (int c = 0; c < No_of_C180s; c++){
@@ -4058,11 +4018,8 @@ int ReadRestartFile( ){
   int nImp;  
   int CellInd;
   int shift;
-  int CA1;
-  int CA2;
-  int NC1;
-  int NC2;
   int NCA;
+  int NCR;
   
 
   printf("Reading Restart.xyz ...\n");
@@ -4095,31 +4052,15 @@ int ReadRestartFile( ){
 	return(-1);
   }
 
-  if ( fread(&NC1, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
-
-  if ( fread(&NC2, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
-
-  if ( fread(&CA1, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
-
-  if ( fread(&CA2, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
-
   if ( fread(&NCA, sizeof(int),1,infil) != 1 ) { 
 	printf("Data missing from trajectory. \n");
 	return(-1);
   }
 
+  if ( fread(&NCR, sizeof(int),1,infil) != 1 ) { 
+	printf("Data missing from trajectory. \n");
+	return(-1);
+  }
 
   Laststep = s-1;
   Lastframe = f-1;
@@ -4127,11 +4068,8 @@ int ReadRestartFile( ){
   No_of_C180s = nCell;
   Orig_No_of_C180s = nCell;
   impurityNum = nImp;
-  CellInApo1 = CA1;
-  CellInApo2 = CA2;
-  No_of_Cell1 = NC1;
-  No_of_Cell2 = NC2;
-  NumApoCell = NCA;  
+  NumApoCell = NCA;
+  NumRemoveCell = NCR;  
 
   printf("Number of the initial Cells is: %d \n",Orig_No_of_C180s);
   printf("Number of the  impurity is: %d \n",impurityNum);
