@@ -203,7 +203,7 @@ __global__ void  cell_division(int rank,
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float repulsion_range, float asym,
+                               int No_of_C180s, float repulsion_range, float* d_asym,
                                bool useDifferentCell, bool daughtSame,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
@@ -243,6 +243,7 @@ __global__ void  cell_division(int rank,
         float planeNx = d_DivPlane.x[index];
         float planeNy = d_DivPlane.y[index];
         float planeNz = d_DivPlane.z[index];
+        float asym = d_asym[index];
 
 
         if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){

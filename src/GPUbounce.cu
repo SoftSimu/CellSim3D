@@ -80,6 +80,9 @@ int   Time_steps;
 int   trajWriteInt; // trajectory write interval
 
 float delta_t;
+
+//__constant__ float d_dt;
+
 float dt_max;
 float dt_tol;
 bool doAdaptive_dt;
@@ -96,7 +99,8 @@ char mitIndFileName[256];
 
 
 bool asymDivision;
-float asym[1];
+float* asym;
+float* d_asym;
 bool checkSphericity; 
 bool useDivPlaneBasis;
 float divPlaneBasis[3]; 
@@ -109,7 +113,7 @@ int   countOnlyInternal; // 0 - Count all new cells
 float radFrac; 	// The factor to count cells within a raduys (<Rmax)
 int newCellCountInt; // Interval at which to count the divided cells
 int equiStepCount;
-
+bool countCells;
 
 // equilibrium length of springs between fullerene atoms
 float* d_R0;
@@ -199,9 +203,8 @@ float* velListX, *velListY, *velListZ;
 R3Nptrs d_fConList;
 R3Nptrs d_fDisList;
 R3Nptrs d_fRanList; 
-R3Nptrs d_contactForces;
-R3Nptrs h_contactForces;
 R3Nptrs d_ExtForces;
+R3Nptrs h_contactForces;
 R3Nptrs h_ExtForces;
 
 
@@ -225,9 +228,10 @@ float *d_VCMx, *d_VCMy, *d_VCMz;
 float *VCMx, *VCMy, *VCMz;
 float *d_SysCx, *d_SysCy, *d_SysCz; 
 
-float4* h_sysCM;
-float4* d_sysCM;
-float4* d_sysVCM;
+R3Nptrs h_sysCM;
+R3Nptrs d_sysCM;
+R3Nptrs d_sysVCM;
+R3Nptrs h_sysVCM;
 
 
 //float Pressure;          // pressure
@@ -319,11 +323,12 @@ R3Nptrs DivPlane;
 R3Nptrs d_DivPlane;
 int* d_division_counter;
 int* d_No_of_C180s;
-
+float f_range;
 
 int main(int argc, char *argv[])
 {
-  int i;
+
+
   int globalrank;
   int step = 0;
   int noofblocks, threadsperblock;
@@ -386,6 +391,8 @@ int main(int argc, char *argv[])
   }
 
   if(!colloidal_dynamics) shapeLim = 1.0f;
+  
+  f_range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
   	
   if ( line ) {
   
@@ -451,8 +458,14 @@ int main(int argc, char *argv[])
   cell_Apo_inds = (int *)calloc(MaxNoofC180s, sizeof(int));
   NoofNNlist = (int *)calloc( 1024*1024,sizeof(int));
   NNlist =  (int *)calloc(32*1024*1024, sizeof(int));
+  asym = (float *)calloc(MaxNoofC180s, sizeof(float));
   resetIndices = (int *)calloc(MaxNoofC180s, sizeof(int));
-  
+  h_sysCM.x = (float *)calloc(1, sizeof(float));
+  h_sysCM.y = (float *)calloc(1, sizeof(float));
+  h_sysCM.z = (float *)calloc(1, sizeof(float));
+  h_sysVCM.x = (float *)calloc(1, sizeof(float));
+  h_sysVCM.y = (float *)calloc(1, sizeof(float));
+  h_sysVCM.z = (float *)calloc(1, sizeof(float));
 //volume= (float *)calloc(MaxNoofC180s, sizeof(float));  
 //  SysCx = (float *) calloc(1024 , sizeof(float));
 //  SysCy = (float *) calloc(1024 , sizeof(float));
@@ -468,17 +481,6 @@ int main(int argc, char *argv[])
   thrust::device_vector<angles3> d_theta0V(192);
   angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
   theta0 = thrust::raw_pointer_cast(&h_theta0[0]);
-  
-  
-  thrust::host_vector<float4> h_SVCM(1);
-  thrust::device_vector<float4> d_SVCM(1);
-  d_sysVCM = thrust::raw_pointer_cast(&d_SVCM[0]);
-
-
-  thrust::host_vector<float4> h_SCM(1);
-  thrust::device_vector<float4> d_SCM(1);
-  d_sysCM = thrust::raw_pointer_cast(&d_SCM[0]);
-  h_sysCM = thrust::raw_pointer_cast(&h_SCM[0]);
 
 
 
@@ -491,7 +493,8 @@ int main(int argc, char *argv[])
   CPUMemory += MaxNoofC180s*sizeof(char);
   CPUMemory += MaxNoofC180s*sizeof(int);
   CPUMemory += MaxNoofC180s*sizeof(int); 
-  CPUMemory += 3*180*sizeof(float); 
+  CPUMemory += 3*180*sizeof(float);
+  CPUMemory += 2*MaxNoofC180s*sizeof(int); 
 
 
   h_R0 = (float *)calloc(192*3, sizeof(float));
@@ -503,15 +506,8 @@ int main(int argc, char *argv[])
   if (DispersityFunc(Orig_No_of_C180s) != 0 ) return(-1);
   if (Restart == 0 ) if ( initialize_C180s(Orig_No_of_C180s) != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
-  NDIV = (int *)calloc(MaxNoofC180s,sizeof(int));
-  CPUMemory += 2*MaxNoofC180s*sizeof(int);
-  for ( i = 0; i < No_of_C180s; ++i ){
-   NDIV[i] = 1;
-  }
-  for ( i = No_of_C180s; i < MaxNoofC180s; ++i ) {
-   NDIV[i] = 0;
-  }
-
+  
+ 
   // empty the psfil from previous results
   outfile = fopen("psfil","w");
   if ( outfile == NULL ) {printf("Unable to open file psfil\n");return(-1);}
@@ -542,6 +538,12 @@ int main(int argc, char *argv[])
   }
 
 
+  if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.x, sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.y, sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.z, sizeof(float))) return -1;  
+  if ( cudaSuccess != cudaMalloc((void **)&d_sysCM.x, sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_sysCM.y, sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_sysCM.z, sizeof(float))) return -1;    
   if ( cudaSuccess != cudaMalloc((void **)&d_No_of_C180s, sizeof(int))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_division_counter, sizeof(int))) return -1;
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
@@ -549,9 +551,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Y  , 192*MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Z  , 192*MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_CMx ,          MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_CMy ,          MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_CMz ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_CMx , MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_CMy , MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_CMz , MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
@@ -573,9 +575,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return -1; 
   if ( cudaSuccess != cudaMalloc((void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return -1; 
   if ( cudaSuccess != cudaMalloc((void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_contactForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
@@ -591,6 +590,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.x, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.y, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.z, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_asym, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCx, 1024*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCy, 1024*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCz, 1024*sizeof(float))) return -1;
@@ -650,11 +650,6 @@ int main(int argc, char *argv[])
   cudaMemset(d_ExtForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
-  cudaMemset(d_contactForces.x, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_contactForces.y, 0, 192*MaxNoofC180s*sizeof(float));
-  cudaMemset(d_contactForces.z, 0, 192*MaxNoofC180s*sizeof(float));
-  CudaErrorCheck();
-
   
   cudaMemset(d_DivPlane.x, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_DivPlane.y, 0, MaxNoofC180s*sizeof(float));
@@ -666,6 +661,9 @@ int main(int argc, char *argv[])
   cudaMemset(d_SysCy, 0, 1024*sizeof(float));
   cudaMemset(d_SysCz, 0, 1024*sizeof(float));
   CudaErrorCheck();
+  
+  
+  //cudaMemcpyToSymbol(d_dt, &delta_t, sizeof(float),0, cudaMemcpyHostToDevice);
 
 
   if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
@@ -1103,8 +1101,8 @@ if (Restart == 0) {
                                                      	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                      	threshDist,
 								BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces, d_ExtForces,
-                                                     	impurityNum,shapeLim); 
+                                                     	constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                                                     	impurityNum,f_range); 
                                                      	
        CudaErrorCheck();
                                                      	
@@ -1117,7 +1115,7 @@ if (Restart == 0) {
                                                         	Xdiv, Ydiv, Zdiv,BoxMin,
                                                         	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList,impurityNum,shapeLim);
+                                                        	d_fDisList,impurityNum,f_range);
                                                         
                                                         
        CudaErrorCheck();                                                  
@@ -1136,8 +1134,8 @@ if (Restart == 0) {
                                                      	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
-                                                     	useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
+                                                     	constrainAngles, d_theta0, d_fConList,
+                                                     	useRigidBoxZ,useRigidBoxY,impurityNum,f_range);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1151,7 +1149,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
+                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,f_range);
     CudaErrorCheck();	
   
   }
@@ -1168,8 +1166,8 @@ if (Restart == 0) {
                                                      	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
-                                                     	Pshift,useRigidBoxZ,impurityNum,shapeLim);
+                                                     	constrainAngles, d_theta0, d_fConList,
+                                                     	Pshift,useRigidBoxZ,impurityNum,f_range);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1183,7 +1181,7 @@ if (Restart == 0) {
                                                         	Xdiv, Ydiv, Zdiv, boxMax,
                                                         	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,shapeLim);
+                                                        	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,f_range);
     CudaErrorCheck();	
   
   
@@ -1234,9 +1232,9 @@ if (Restart == 0) {
   
       		fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,VX,VY,VZ,V,X,Y,Z,P,Vol,Area\n");
       
-      		cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -1278,7 +1276,6 @@ if (Restart == 0) {
 
   int numNodes = No_of_C180s*192;
   NewCellInd = No_of_C180s;
-  asym[0] = 0.5;
   WithoutApo = true;
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
@@ -1557,8 +1554,8 @@ if (Restart == 0) {
                                                      	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                      	threshDist,
 								BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces, d_ExtForces,
-                                                     	impurityNum,shapeLim); 
+                                                     	constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                                                     	impurityNum,f_range); 
                                                      	
        CudaErrorCheck();
                                                      	
@@ -1571,7 +1568,7 @@ if (Restart == 0) {
                                                         	Xdiv, Ydiv, Zdiv,BoxMin,
                                                         	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList,impurityNum,shapeLim);
+                                                        	d_fDisList,impurityNum,f_range);
                                                         
                                                         
        CudaErrorCheck();                                                  
@@ -1590,8 +1587,8 @@ if (Restart == 0) {
                                                      	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
-                                                     	useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
+                                                     	constrainAngles, d_theta0, d_fConList,
+                                                     	useRigidBoxZ,useRigidBoxY,impurityNum,f_range);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1605,7 +1602,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv,boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,shapeLim);
+                                                        d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,f_range);
     CudaErrorCheck();	
   
   }
@@ -1622,8 +1619,8 @@ if (Restart == 0) {
                                                      	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_contactForces,
-                                                     	Pshift,useRigidBoxZ,impurityNum,shapeLim);
+                                                     	constrainAngles, d_theta0, d_fConList,
+                                                     	Pshift,useRigidBoxZ,impurityNum,f_range);
                                                      	
        CudaErrorCheck();                                             	
   	
@@ -1637,7 +1634,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv,boxMax,
                                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,shapeLim);
+                                                        d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,f_range);
     CudaErrorCheck();	
   
   
@@ -1675,7 +1672,7 @@ if (Restart == 0) {
                                                         Xdiv, Ydiv, Zdiv, BoxMin,
                                                         d_NoofNNlist, d_NNlist, DL, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
-                                                        d_fDisList, impurityNum,shapeLim);
+                                                        d_fDisList, impurityNum,f_range);
                                                         
        	CudaErrorCheck();                                                  
   	}
@@ -1689,7 +1686,7 @@ if (Restart == 0) {
                 	                                        Xdiv, Ydiv, Zdiv,boxMax,
                 	                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                 	                                        d_velListX, d_velListY, d_velListZ,
-                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY, impurityNum,shapeLim);
+                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY, impurityNum,f_range);
     		CudaErrorCheck();	
   
   	}
@@ -1705,7 +1702,7 @@ if (Restart == 0) {
                	                                         Xdiv, Ydiv, Zdiv,boxMax,
                	                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
                	                                         d_velListX, d_velListY, d_velListZ,
-               	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ, impurityNum,shapeLim);
+               	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ, impurityNum,f_range);
     CudaErrorCheck();
   	
   	}
@@ -1734,7 +1731,116 @@ if (Restart == 0) {
                                      recalc_r0,ApoVol,d_cell_Apo, d_ScaleFactor);
         CudaErrorCheck();
 
+
+
+        count_and_get_div();
+
+
+
+
+
+        for (int divCell = 0; divCell < num_cell_div; divCell++) {
+          
+          globalrank = cell_div_inds[divCell];
+   
+
+          cell_division<<<1,256>>>(globalrank, 
+                                   d_X, d_Y, d_Z, 
+                                   d_CMx, d_CMy, d_CMz,
+                                   d_velListX, d_velListY, d_velListZ,
+                                   No_of_C180s, repulsion_range, d_asym,
+                                   useDifferentCell, daughtSame,
+                                   NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
+                                   d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+                                   d_gamma_env, d_viscotic_damp, d_CellINdex,
+                                   d_DivPlane, d_division_counter, d_No_of_C180s);
+                                   
+          CudaErrorCheck()
+          
+          resetIndices[divCell] = globalrank;
+          resetIndices[divCell + num_cell_div] = No_of_C180s;
+          
+          
+          ++No_of_C180s;
+          ++NewCellInd;
+          
+          
+          if (No_of_C180s > MaxNoofC180s){
+          
+              printf("ERROR: Population is %d, only allocated enough memory for %d\n",
+                     No_of_C180s, MaxNoofC180s);
+              printf("ERROR: Fatal error, crashing...\n");
+              return -69;
+          }
+        
+         
+        }
+        
+        if (num_cell_div>0){
+            
+            cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int), cudaMemcpyHostToDevice);
+            CudaErrorCheck(); 
+
+            PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
+            CudaErrorCheck();	 		      	            
+
+        }
+
+
+	if (countCells) {
+
+        	if (countOnlyInternal == 1){
+        
+         		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               		                         d_X, d_Y, d_Z,
+               	        	                 d_CMx, d_CMy, d_CMz);
+
+      			CudaErrorCheck();
+     
+     
+      			reductionblocks = (No_of_C180s-1)/1024+1;
+      			SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+		    		   		          d_SysCx, d_SysCy, d_SysCz);
+      			CudaErrorCheck(); 
+
+
+      			SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        		  		      d_SysCx, d_SysCy, d_SysCz,
+					      d_sysCM);
+      
+         
+      			CudaErrorCheck();
+      			
+      			cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyHostToDevice);
+      			cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyHostToDevice);
+      			cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyHostToDevice);
+                       CudaErrorCheck();
+
+//			h_SCM = d_SCM;
+        
+        
+          		num_cell_div -= num_cells_far();
+          
+        	}
+
+        	num_new_cells_per_step[step-1] = num_cell_div;
+        	
+        	if (step%newCellCountInt == 0){
+          		newcells = 0;
+          		for (int i = 0; i < newCellCountInt; i++) {
+            			newcells += num_new_cells_per_step[countOffset + i];
+          		}
+          		dividingCells[(step-1)/newCellCountInt] = newcells;
+          		totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells;
+          		// Need to make sure this is how MIs are even calculated
+          		countOffset += newCellCountInt;
+        	}
+      
+       }
+      
+      
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
+      
       if (checkSphericity){
           //cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
           h_volume = d_volumeV; 
@@ -1762,114 +1868,8 @@ if (Restart == 0) {
           }
       }
 #endif
-
-        count_and_get_div();
-
-#ifdef PRINT_VOLUMES
-        if (num_cell_div > 0){
-            printf("Dividing cells: ");
-            for (int i = 0; i<num_cell_div; i++){
-                printf("%d ", cell_div_inds[i]);
-            }
-          
-            printf("\n");
-        }
-#endif
-
-
-
-        for (int divCell = 0; divCell < num_cell_div; divCell++) {
-          
-          globalrank = cell_div_inds[divCell];
-   
-            
-          NDIV[globalrank] += 1;
-          
-
-	  if (asymDivision){ 
-	      ranmar(asym, 1);	
-	  } 
-
-          cell_division<<<1,256>>>(globalrank, 
-                                   d_X, d_Y, d_Z, 
-                                   d_CMx, d_CMy, d_CMz,
-                                   d_velListX, d_velListY, d_velListZ,
-                                   No_of_C180s, repulsion_range,asym[0],
-                                   useDifferentCell, daughtSame,
-                                   NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
-                                   d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
-                                   d_gamma_env, d_viscotic_damp, d_CellINdex,
-                                   d_DivPlane, d_division_counter, d_No_of_C180s);
-                                   
-          CudaErrorCheck()
-          
-          resetIndices[divCell] = globalrank;
-          resetIndices[divCell + num_cell_div] = No_of_C180s;
-          
-          
-          ++No_of_C180s;
-          ++NewCellInd;
-          
-          
-          if (No_of_C180s > MaxNoofC180s){
-              printf("ERROR: Population is %d, only allocated enough memory for %d\n",
-                     No_of_C180s, MaxNoofC180s);
-              printf("ERROR: Fatal error, crashing...\n");
-              return -69;
-          }
-        
-         
-        }
-        
-        if (num_cell_div>0){
-            
-            cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int), cudaMemcpyHostToDevice);
-            CudaErrorCheck(); 
-
-            PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
-            CudaErrorCheck();	 		      	            
-
-        }
-
-        if (countOnlyInternal == 1){
-        
-         	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-               	                         d_X, d_Y, d_Z,
-                       	                 d_CMx, d_CMy, d_CMz);
-
-      		CudaErrorCheck();
-     
-     
-      		reductionblocks = (No_of_C180s-1)/1024+1;
-      		SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
-		    		   		          d_SysCx, d_SysCy, d_SysCz);
-      		CudaErrorCheck(); 
-
-
-      		SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
-        	  		      d_SysCx, d_SysCy, d_SysCz,
-				      d_sysCM);
       
-         
-      		CudaErrorCheck();
-
-		h_SCM = d_SCM;
-        
-        
-          num_cell_div -= num_cells_far();
-        }
-
-        num_new_cells_per_step[step-1] = num_cell_div;
-        if (step%newCellCountInt == 0){
-          newcells = 0;
-          for (int i = 0; i < newCellCountInt; i++) {
-            newcells += num_new_cells_per_step[countOffset + i];
-          }
-          dividingCells[(step-1)/newCellCountInt] = newcells;
-          totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells;
-          // Need to make sure this is how MIs are even calculated
-          countOffset += newCellCountInt;
-        }
+      
         // --------------------------------------- End Cell Division -----------
       }
 
@@ -1979,7 +1979,14 @@ if (Restart == 0) {
          
       		   CudaErrorCheck();
 
-		   h_SCM = d_SCM;	
+
+      		   cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyHostToDevice);
+      		   cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyHostToDevice);
+      		   cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyHostToDevice);
+                   CudaErrorCheck();
+
+
+//		   h_SCM = d_SCM;	
                   
                   float Rmax2 = getRmax2();
                   float R2, dx, dy, dz;
@@ -1991,9 +1998,9 @@ if (Restart == 0) {
                   printf("Made cells with indices "); 
 
                   while (softCellCounter < numberOfCells && cellInd < No_of_C180s){
-                      dx = CMx[cellInd] - h_SCM[0].x; 
-                      dy = CMy[cellInd] - h_SCM[0].y; 
-                      dz = CMz[cellInd] - h_SCM[0].z;
+                      dx = CMx[cellInd] - *h_sysCM.x; 
+                      dy = CMy[cellInd] - *h_sysCM.y; 
+                      dz = CMz[cellInd] - *h_sysCM.z;
 
                       R2 = dx*dx + dy*dy + dz*dz;
 
@@ -2041,8 +2048,11 @@ if (Restart == 0) {
                	                                              No_of_C180s*192);
       		CudaErrorCheck();
       
-      		//h_SCM = d_SCM;
-      		//printf("sysCMx = 	%f, sysCMy = 		%f, sysCmz = 		%f\n", h_SCM[0].x, h_SCM[0].y, h_SCM[0].z);
+      		//cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyHostToDevice);
+      		//cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyHostToDevice);
+      		//cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyHostToDevice);
+                //CudaErrorCheck();
+      		//printf("sysCMx = 	%f, sysCMy = 		%f, sysCmz = 		%f\n", h_sysCM.x, h_sysCM.y, h_sysCM.z);
       
       }
 
@@ -2097,9 +2107,9 @@ if (Restart == 0) {
 
           if (write_cont_force == true){
 
-              cudaMemcpy(h_contactForces.x, d_contactForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              cudaMemcpy(h_contactForces.y, d_contactForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              cudaMemcpy(h_contactForces.z, d_contactForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -2224,7 +2234,6 @@ if (Restart == 0) {
   free(X); free(Y); free(Z);
   free(CMx); free(CMy); free(CMz);
   free(dividingCells); free(totalCells);
-  free(NDIV);
   free(NoofNNlist);
   free(NNlist);
   free(ran2);
@@ -2723,6 +2732,7 @@ inline void initialize_Plane(int MaxNoofC180s){
     
     }
     
+    
     for (int i = 0; i < MaxNoofC180s; i++) {
      
           
@@ -2754,6 +2764,17 @@ inline void initialize_Plane(int MaxNoofC180s){
           cudaMemcpy( d_DivPlane.y, DivPlane.y, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
           cudaMemcpy( d_DivPlane.z, DivPlane.z, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
           CudaErrorCheck();
+
+   if (asymDivision){	
+   
+	ranmar(asym, MaxNoofC180s); 
+	 
+   } else {
+   	for (int i = 0; i < MaxNoofC180s; i++) asym[i] = 0.5;
+   }
+   
+   cudaMemcpy( d_asym, asym, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+   CudaErrorCheck();	
 
 }
 
@@ -3263,7 +3284,7 @@ int read_json_params(const char* inpFile){
         return -1;
     }
     else {
-        // countCells = countParams["countcells"].asBool();
+        countCells = countParams["countcells"].asBool();
         std::strcpy(mitIndFileName, countParams["mit-index_file_name"].asString().c_str()); 
         countOnlyInternal = countParams["count_only_internal_cells?"].asBool();
         radFrac = countParams["radius_cutoff"].asFloat();
@@ -3839,6 +3860,18 @@ inline void count_and_get_div(){
     }
   }
   cudaMemcpy(d_cell_div, cell_div, No_of_C180s*sizeof(char), cudaMemcpyHostToDevice);
+
+#ifdef PRINT_VOLUMES
+        if (num_cell_div > 0){
+            printf("Dividing cells: ");
+            for (int i = 0; i<num_cell_div; i++){
+                printf("%d ", cell_div_inds[i]);
+            }
+          
+            printf("\n");
+        }
+#endif
+
 }
 
 
@@ -3864,9 +3897,9 @@ inline void count_and_die(){
 inline float getRmax2(){
   float dx, dy, dz, Rmax2 = 0;
   for (int cell = 0; cell < No_of_C180s; cell++) {
-    dx = CMx[cell] - h_sysCM[0].x;
-    dy = CMy[cell] - h_sysCM[0].y;
-    dz = CMz[cell] - h_sysCM[0].z;
+    dx = CMx[cell] - *h_sysCM.x;
+    dy = CMy[cell] - *h_sysCM.y;
+    dz = CMz[cell] - *h_sysCM.z;
 
     Rmax2 = max(Rmax2, dx*dx + dy*dy + dz*dz);
 
@@ -3888,9 +3921,9 @@ inline int num_cells_far(){
 
 
   for (int cell = No_of_C180s - num_cell_div; cell < No_of_C180s; cell++) { // Only check the newest cells
-    dx = CMx[cell] - h_sysCM[0].x;
-    dy = CMy[cell] - h_sysCM[0].y;
-    dz = CMz[cell] - h_sysCM[0].z;
+    dx = CMx[cell] - *h_sysCM.x;
+    dy = CMy[cell] - *h_sysCM.y;
+    dz = CMz[cell] - *h_sysCM.z;
 
     dr2 = dx*dx + dy*dy + dz*dz;
 

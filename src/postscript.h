@@ -2,14 +2,19 @@
 #include<stdio.h>
 #include"VectorFunctions.hpp"
 #include<curand_kernel.h>
+
+
+//__constant__ float d_dt;
+
 cudaDeviceProp getDevice(void);
+
 
 
 __global__ void  cell_division(int rank, 
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float repulsion_range, float asym,
+                               int No_of_C180s, float repulsion_range, float* d_asym,
                                bool useDifferentCell, bool daughtSame,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
@@ -74,8 +79,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces, R3Nptrs d_ExtForces, 
-                           int impurityNum, float shapeLim);
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
+                           int impurityNum, float f_range);
 
                            
 
@@ -90,8 +95,8 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces,
-                           bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float shapeLim);
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
+                           bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range);
                            
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
@@ -104,8 +109,8 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                            float threshDist,  
                            float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_contactForces,
-                           float Pshift , bool useRigidBoxZ,int impurityNum, float shapeLim);
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
+                           float Pshift , bool useRigidBoxZ,int impurityNum, float f_range);
 
 __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
@@ -174,17 +179,17 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
 void writeForces(FILE* forceFile, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
-                                 float4 *d_sysCM, float3 BoxCen, long int numParts);
+                                 R3Nptrs d_sysCM, float3 BoxCen, long int numParts);
 
 __global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   float4 *d_sysVCM, long int numParts);
+                                   R3Nptrs d_sysVCM, long int numParts);
 
 __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz, 
 			   float* SysCx, float* SysCy, float* SysCz);
 
 __global__ void SysCM( int No_of_C180s, int reductionblocks,
 			float* SysCx, float* SysCy, float* SysCz,
-			float4 *d_sysCM);
+			R3Nptrs d_sysCM);
 
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
@@ -203,7 +208,7 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
                                    int Xdiv, int Ydiv, int Zdiv,  float3 BoxMin,
                                    int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, int impurityNum, float shapeLim);
+                                   R3Nptrs d_fDisList, int impurityNum, float f_range);
                                    
 
 __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -215,7 +220,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float shapeLim);
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range);
                                    
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
@@ -226,7 +231,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float shapeLim);
+                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float f_range);
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
                                   R3Nptrs d_fRanList, int impurityNum);

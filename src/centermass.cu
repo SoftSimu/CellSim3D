@@ -6,9 +6,10 @@
 
 
 __global__ void CenterOfMass( int No_of_C180s, 
-               float *d_XP, float *d_YP, float *d_ZP, 
+               float *d_X, float *d_Y, float *d_Z, 
                float *CMx, float *CMy,float *CMz)
 {
+
 __shared__ float  sumx[256];
 __shared__ float  sumy[256];
 __shared__ float  sumz[256];
@@ -22,9 +23,9 @@ sumz[tid] = 0.0;
 
 if ( tid < 180 )
     {
-    sumx[tid] = d_XP[rank*192+tid];
-    sumy[tid] = d_YP[rank*192+tid];
-    sumz[tid] = d_ZP[rank*192+tid];
+    sumx[tid] = d_X[rank*192+tid];
+    sumy[tid] = d_Y[rank*192+tid];
+    sumz[tid] = d_Z[rank*192+tid];
     }
 
 __syncthreads();
@@ -48,8 +49,6 @@ if ( tid == 0 )
    }
 
 }
-
-
 
 
 __global__ void VelocityCenterOfMass( int No_of_C180s, 
@@ -108,16 +107,17 @@ __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz
 
   	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 	int tid = threadIdx.x;
+	int rank = blockIdx.x;
 	  
-	sumx[fullerene] = 0.0;
-	sumy[fullerene] = 0.0;
-	sumz[fullerene] = 0.0;
+	sumx[tid] = 0.0;
+	sumy[tid] = 0.0;
+	sumz[tid] = 0.0;
 
 	if ( fullerene < No_of_C180s )
     	{
-    		sumx[fullerene] = d_Cx[fullerene];
-    		sumy[fullerene] = d_Cy[fullerene];
-    		sumz[fullerene] = d_Cz[fullerene];
+    		sumx[tid] = d_Cx[fullerene];
+    		sumy[tid] = d_Cy[fullerene];
+    		sumz[tid] = d_Cz[fullerene];
     	}
 
         __syncthreads();
@@ -136,9 +136,9 @@ __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz
         if ( tid == 0 )
 	{
 	      
-	      SysCx[blockIdx.x]  = sumx[0];
-	      SysCy[blockIdx.x]  = sumy[0];
-	      SysCz[blockIdx.x]  = sumz[0];
+	      SysCx[rank]  = sumx[0];
+	      SysCy[rank]  = sumy[0];
+	      SysCz[rank]  = sumz[0];
 
 	}
 
@@ -147,7 +147,7 @@ __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz
 
 __global__ void SysCM( int No_of_C180s, int reductionblocks,
 			float* SysCx, float* SysCy, float* SysCz,
-			float4 *d_sysCM)
+			R3Nptrs d_sysCM)
 {
 
 	__shared__ float  sysCmx[1024];
@@ -186,9 +186,9 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 
   	if ( tid == 0 )
 	{
-		d_sysCM[0].x = sysCmx[0]/No_of_C180s;
-		d_sysCM[0].y = sysCmy[0]/No_of_C180s;
-		d_sysCM[0].z = sysCmz[0]/No_of_C180s;
+		*d_sysCM.x = sysCmx[0]/No_of_C180s;
+		*d_sysCM.y = sysCmy[0]/No_of_C180s;
+		*d_sysCM.z = sysCmz[0]/No_of_C180s;
 	}
 
 }

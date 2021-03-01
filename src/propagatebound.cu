@@ -299,12 +299,18 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 	  
 		int posx = 0;
 		int posy = 0;
-		int posz = 0;		
+		int posz = 0;	
+		float boxX = boxMax.x;
+		float boxY = boxMax.y;
+		float boxZ = boxMax.z;	
+		float DX = DLp.x;
+		float DY = DLp.y;
+		float DZ = DLp.z;	
 
 	  	
-	  	posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DLp.x); 	
- 	  	posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DLp.y); 	
-	  	posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxMax.z) * boxMax.z )/DLp.z); 		
+	  	posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxX) * boxX )/DX); 	
+ 	  	posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxY) * boxY )/DY); 	
+	  	posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxZ) * boxZ )/DZ); 		
 	 
 		int j1 = 0;
 	  	int j2 = 0;
