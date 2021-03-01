@@ -1,15 +1,15 @@
 compiler = $(shell which nvcc)
 debug = -g -G -lineinfo
-arch = -arch=sm_35
-oflags = $(arch) -Xptxas="-v" -I inc -dc -D_FORCE_INLINES
+arch = -arch=sm_70
+oflags = $(arch) -Xptxas="-v" -I inc -dc 
 objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
 objects = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
-	propagatebound.o propagate.o volume.o BondKernels.o
+	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
 linkObjects = $(patsubst %, $(objDir)%, $(objects))
 
-eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) bin/jsoncpp.o -lm -lcurand
+eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) -lm -lcurand
 opt = -O3
 
 debug: opt= -O0
@@ -24,7 +24,7 @@ eflags += $(opt)
 # 	@mkdir -p $(@D)
 # 	$(compiler) $(oflags) -c $< -o $@
 
-$(objDir)centermass.o: src/centermass.cu
+$(objDir)centermass.o: src/centermass.cu src/postscript.h
 	$(compiler) $(oflags) -c src/centermass.cu -o $(objDir)centermass.o
 
 # NeighbourSearch.o: src/NeighbourSearch.cu
@@ -33,10 +33,10 @@ $(objDir)centermass.o: src/centermass.cu
 $(objDir)postscriptinit.o: src/postscriptinit.cu
 	$(compiler) $(oflags) -c src/postscriptinit.cu -o $(objDir)postscriptinit.o
 
-$(objDir)PressureKernels.o: src/PressureKernels.cu
+$(objDir)PressureKernels.o: src/PressureKernels.cu src/postscript.h
 	$(compiler) $(oflags) -c src/PressureKernels.cu -o $(objDir)PressureKernels.o
 
-$(objDir)propagatebound.o: src/propagatebound.cu
+$(objDir)propagatebound.o: src/propagatebound.cu src/postscript.h
 	$(compiler) $(oflags) -c src/propagatebound.cu -o $(objDir)propagatebound.o
 
 $(objDir)propagate.o: src/propagate.cu
@@ -48,10 +48,10 @@ $(objDir)volume.o : src/volume.cu
 $(objDir)BondKernels.o : src/BondKernels.cu
 	$(compiler) $(oflags) -c src/BondKernels.cu -o $(objDir)BondKernels.o
 
-$(objDir)GPUbounce.o : src/GPUbounce.cu
+$(objDir)GPUbounce.o : src/GPUbounce.cu src/postscript.h
 	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
 
-CellDiv: $(linkObjects) $(objDir)jsoncpp.o
+CellDiv: $(linkObjects)
 	$(compiler) $(eflags)
 
 # Third party libraries
