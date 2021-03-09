@@ -358,6 +358,15 @@ int main(int argc, char *argv[])
       printf("Usage: CellDiv no_of_threads inpFile.json gpuid\n");
       return(0);
   }
+  
+  
+  cudaDeviceProp deviceProp = getDevice();
+  if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
+      CudaErrorCheck();
+      printf("Could not set to divice %d\n", atoi(argv[3]));
+      return -1;
+  }
+  
 
   No_of_threads = atoi(argv[1]);
 
@@ -525,17 +534,7 @@ int main(int argc, char *argv[])
 
 
   CPUMemory += (2L*(long)(Time_steps/newCellCountInt) + 1L + (long)Time_steps) * sizeof(int);
-
-
-
   CPUMemory += (long)MaxNoofC180s * sizeof(char);
-
-  cudaDeviceProp deviceProp = getDevice();
-  if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
-      CudaErrorCheck();
-      printf("Could not set to divice %d\n", atoi(argv[3]));
-      return -1;
-  }
 
 
   if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.x, sizeof(float))) return -1;
@@ -1343,8 +1342,10 @@ if (Restart == 0) {
         	        		}
         	        	
         	        	} else {
+        	        		
+        	        	       	
         	        	
-        	        	       if (Growth_rate[DInd] == - squeeze_rate2 ) continue;	
+        	        	       if (Growth_rate[DInd] == - squeeze_rate2 || !useDifferentCell) continue;	
       		 			
         	        		ranmar(rans, 1);
         	        		if(rans[0] < Apo_rate2*0.1){
@@ -1735,10 +1736,12 @@ if (Restart == 0) {
 
         count_and_get_div();
 
-
-
-
-
+	//cudaStream_t *streams = (cudaStream_t *)malloc(num_cell_div*sizeof(cudaStream_t));
+	
+	//for (int i = 0 ; i < num_cell_div; i++) cudaStreamCreate(&streams[i]);
+	//CudaErrorCheck();
+	
+        
         for (int divCell = 0; divCell < num_cell_div; divCell++) {
           
           globalrank = cell_div_inds[divCell];
@@ -1775,6 +1778,10 @@ if (Restart == 0) {
         
          
         }
+        
+        
+        //for (int i = 0 ; i < num_cell_div; i++) cudaStreamDestroy(streams[i]);
+	//CudaErrorCheck();
         
         if (num_cell_div>0){
             
