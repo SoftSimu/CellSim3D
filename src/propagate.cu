@@ -233,11 +233,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     if ( rank >= impurityNum ){
   
     	
-    	int NooflocalNN;
-    	int localNNs[10];
-    	float deltaX, deltaY, deltaZ;
-    	float R;
-    	int N1;
+
     	//int N1, N2, N3;
     	//float A1, A2, A3;
     	//float B1, B2, B3;
@@ -249,14 +245,26 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     	//float3 disForce = make_float3(0, 0, 0);
 
     	int cellOffset = rank*192;
-    	int atomInd = cellOffset + atom;
-    	float Pressure = d_pressList[rank]; 
-    	float stiffness = d_stiffness[rank];
-    	float Scale = d_ScaleFactor[rank];
-    	float R0=0;
+    	int atomInd = cellOffset + atom;    	
+    	
     	
     	if ( rank < No_of_C180s && atom < 180 )
     	{
+
+
+    	int NooflocalNN;
+    	int localNNs[10];
+    	float deltaX, deltaY, deltaZ;
+    	float R;
+    	int N1;
+    	
+
+    	
+    	float R0=0;
+    	float Pressure = d_pressList[rank];
+    	float stiffness = d_stiffness[rank];
+    	float Scale = d_ScaleFactor[rank];
+    	
         	if (isnan(d_X[rank*192+atom]) ||
         	    isnan(d_Y[rank*192+atom]) || 
         	    isnan(d_Z[rank*192+atom])){
@@ -313,9 +321,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	{
             		N1 = d_C180_nn[i*192+atom];
 
-            		deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
-            		deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
-            		deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
+            		deltaX = d_X[rank*192+N1]-X;
+            		deltaY = d_Y[rank*192+N1]-Y;
+            		deltaZ = d_Z[rank*192+N1]-Z;
 
             		R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
@@ -329,9 +337,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	// new growth force
 
-        	float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
-               	                  d_Y[atomInd] - d_CMy[rank], 
-               	                  d_Z[atomInd] - d_CMz[rank]);
+        	float3 r_CM = make_float3(X - d_CMx[rank], 
+               	                  Y - d_CMy[rank], 
+               	                  Z - d_CMz[rank]);
         	float3 gForce  = make_float3(0.f, 0.f, 0.f);
 
         	gForce = 3*Pressure*calcUnitVec(r_CM);
@@ -499,8 +507,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	// add forces from simulation box if needed:
         	float gap1, gap2; 
 
-        	gap1 = d_X[atomInd] - BoxMin.x;
-       	gap2 = boxMax.x - d_X[atomInd]; 
+        	gap1 = X - BoxMin.x;
+       	gap2 = boxMax.x - X; 
 
         	if (gap1 < threshDist){
             		FX += -100*Youngs_mod*(gap1 - threshDist);
@@ -512,8 +520,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             		FX_ext += 100*Youngs_mod*(gap2 - threshDist);
         	}
             
-        	gap1 = d_Y[atomInd] - BoxMin.y;
-        	gap2 = boxMax.y - d_Y[atomInd];
+        	gap1 = Y - BoxMin.y;
+        	gap2 = boxMax.y - Y;
 
         	if (gap1 < threshDist){
             		FY += -100*Youngs_mod*(gap1 - threshDist);
@@ -525,8 +533,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             		FY_ext += 100*Youngs_mod*(gap2 - threshDist);
         	}
 
-        	gap1 = d_Z[atomInd] - BoxMin.z;
-        	gap2 = boxMax.z - d_Z[atomInd];
+        	gap1 = Z - BoxMin.z;
+        	gap2 = boxMax.z - Z;
 	
         	if (gap1 < threshDist){
             		FZ += -100*Youngs_mod*(gap1 - threshDist);
@@ -593,11 +601,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
    
     
-    int NooflocalNN;
-    int localNNs[10];
-    float deltaX, deltaY, deltaZ;
-    float R;
-    int N1;
+
     //int N1, N2, N3;
     //float A1, A2, A3;
     //float B1, B2, B3;
@@ -608,14 +612,23 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
     //float3 disForce = make_float3(0, 0, 0);
 
-    float Pressure = d_pressList[rank]; 
-    float stiffness = d_stiffness[rank];
-    float Scale = d_ScaleFactor[rank];
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
     
     if ( rank < No_of_C180s && atom < 180 )
     {
+    
+    
+    int NooflocalNN;
+    int localNNs[10];
+    float deltaX, deltaY, deltaZ;
+    float R;
+    int N1;
+    
+    float Pressure = d_pressList[rank]; 
+    float stiffness = d_stiffness[rank];
+    float Scale = d_ScaleFactor[rank];
+    
         if (isnan(d_X[rank*192+atom]) ||
             isnan(d_Y[rank*192+atom]) || 
             isnan(d_Z[rank*192+atom])){
@@ -673,9 +686,9 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         {
             N1 = d_C180_nn[i*192+atom];
 
-            deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
-            deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
-            deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
+            deltaX = d_X[rank*192+N1]-X;
+            deltaY = d_Y[rank*192+N1]-Y;
+            deltaZ = d_Z[rank*192+N1]-Z;
 
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
@@ -689,9 +702,9 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
         // new growth force
 
-        float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
-                                  d_Y[atomInd] - d_CMy[rank], 
-                                  d_Z[atomInd] - d_CMz[rank]);
+        float3 r_CM = make_float3(X - d_CMx[rank], 
+                                  Y - d_CMy[rank], 
+                                  Z - d_CMz[rank]);
         float3 gForce  = make_float3(0.f, 0.f, 0.f);
 
         gForce = 3*Pressure*calcUnitVec(r_CM);
@@ -873,8 +886,8 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         if (useRigidBoxZ){
             float gap1, gap2; 
 
-            gap1 = d_Z[atomInd];
-            gap2 = boxMax.z - d_Z[atomInd];
+            gap1 = Z;
+            gap2 = boxMax.z - Z;
 
             if (gap1 < threshDist){
                 FZ += -100*Youngs_mod*(gap1 - threshDist);
@@ -890,8 +903,8 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         
             float gap1, gap2; 
 
-            gap1 = d_Y[atomInd];
-            gap2 = boxMax.y - d_Y[atomInd];
+            gap1 = Y;
+            gap2 = boxMax.y - Y;
 
             if (gap1 < threshDist){
                 FY += -100*Youngs_mod*(gap1 - threshDist);
@@ -957,11 +970,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
     
     
     
-    int NooflocalNN;
-    int localNNs[10];
-    float deltaX, deltaY, deltaZ;
-    float R;
-    int N1;
+
     //int N1, N2, N3;
     //float A1, A2, A3;
     //float B1, B2, B3;
@@ -973,13 +982,22 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
     //float3 disForce = make_float3(0, 0, 0);
 
 
-    float Pressure = d_pressList[rank]; 
-    float stiffness = d_stiffness[rank];
-    float Scale = d_ScaleFactor[rank]; 
+
     int cellOffset = rank*192;
     int atomInd = cellOffset + atom;
     if ( rank < No_of_C180s && atom < 180 )
     {
+
+    int NooflocalNN;
+    int localNNs[10];
+    float deltaX, deltaY, deltaZ;
+    float R;
+    int N1;
+
+    float Pressure = d_pressList[rank]; 
+    float stiffness = d_stiffness[rank];
+    float Scale = d_ScaleFactor[rank]; 
+
         if (isnan(d_X[rank*192+atom]) ||
             isnan(d_Y[rank*192+atom]) || 
             isnan(d_Z[rank*192+atom])){
@@ -1037,9 +1055,9 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         {
             N1 = d_C180_nn[i*192+atom];
 
-            deltaX = d_X[rank*192+N1]-d_X[rank*192+atom];
-            deltaY = d_Y[rank*192+N1]-d_Y[rank*192+atom];
-            deltaZ = d_Z[rank*192+N1]-d_Z[rank*192+atom];
+            deltaX = d_X[rank*192+N1]-X;
+            deltaY = d_Y[rank*192+N1]-Y;
+            deltaZ = d_Z[rank*192+N1]-Z;
 
             R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
@@ -1053,9 +1071,9 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
         // new growth force
 
-        float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
-                                  d_Y[atomInd] - d_CMy[rank], 
-                                  d_Z[atomInd] - d_CMz[rank]);
+        float3 r_CM = make_float3(X - d_CMx[rank], 
+                                  Y - d_CMy[rank], 
+                                  Z - d_CMz[rank]);
         float3 gForce  = make_float3(0.f, 0.f, 0.f);
 
         gForce = 3*Pressure*calcUnitVec(r_CM);
@@ -1287,8 +1305,8 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         if (useRigidBoxZ){
             float gap1, gap2; 
 
-            gap1 = d_Z[atomInd];
-            gap2 = boxMax.z - d_Z[atomInd];
+            gap1 = Z;
+            gap2 = boxMax.z - Z;
 
             if (gap1 < threshDist){
                 FZ += -100*Youngs_mod*(gap1 - threshDist);
@@ -1336,8 +1354,6 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	size_t globalNodeInd = cellInd*192 + nodeInd;
         	size_t N = 0;
 
-        	float gamma = d_gamma_env[cellInd];;
-    		float viscotic = d_viscotic_damp[cellInd];
         	
         	float3 force = make_float3(0, 0, 0);
         	float3 nodeVelocity = make_float3(d_velListX[globalNodeInd],
@@ -1466,13 +1482,13 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		
         	        // Tangential component of relative velocity
         	        float3 vTau = v_ij - dot(v_ij, normal)*normal;
-        	        force = force - viscotic*vTau;
+        	        force = force - d_viscotic_damp[cellInd]*vTau;
         	    }
 
         	}
 
         	// viscous drag  
-        	force = force - gamma*nodeVelocity;
+        	force = force - d_gamma_env[cellInd]*nodeVelocity;
         
         	// write force to global memory
         	d_fDisList.x[globalNodeInd] = force.x; 
@@ -1503,8 +1519,6 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
     if (cellInd < No_of_C180s && nodeInd < 180){
     
-        float gamma = d_gamma_env[cellInd];;
-    	float viscotic = d_viscotic_damp[cellInd];
         
         size_t globalNodeInd = cellInd*192 + nodeInd;
         size_t N = 0;
@@ -1655,14 +1669,14 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
                 // Tangential component of relative velocity
                 float3 vTau = v_ij - dot(v_ij, normal)*normal;
-                force = force - viscotic*vTau;
+                force = force - d_viscotic_damp[cellInd]*vTau;
               
 
            }
 	}
 	
         // viscous drag  ????
-        force = force - gamma*nodeVelocity;
+        force = force - d_gamma_env[cellInd]*nodeVelocity;
         
         // write force to global memory
         d_fDisList.x[globalNodeInd] = force.x; 
@@ -1691,8 +1705,6 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
     if (  cellInd < No_of_C180s && nodeInd < 180){
     
-        float gamma = d_gamma_env[cellInd];;
-    	 float viscotic = d_viscotic_damp[cellInd];
     
         size_t globalNodeInd = cellInd*192 + nodeInd;
         size_t N = 0;
@@ -1892,14 +1904,14 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
                 // Tangential component of relative velocity
                 float3 vTau = v_ij - dot(v_ij, normal)*normal;
-                force = force - viscotic*vTau;
+                force = force - d_viscotic_damp[cellInd]*vTau;
               
 
            }
 	}
 	
         // viscous drag  
-        force = force - gamma*nodeVelocity;
+        force = force - d_gamma_env[cellInd]*nodeVelocity;
         
         // write force to global memory
         d_fDisList.x[globalNodeInd] = force.x; 
@@ -1944,6 +1956,7 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
      
     
     if ( cellInd >= impurityNum && cellInd < numCells && node < 180){
+        
         int nodeInd = cellInd*192 + node;
         const float root_dt = sqrtf(dt);
         //if(nodeInd == 0) printf("dt is:	%f",d_dt);    
@@ -1957,9 +1970,9 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                                                          root_dt*d_fRanList.z[nodeInd])/m;
 
 
-	 d_X[nodeInd] += d_velListX[nodeInd]*dt; 
-         d_Y[nodeInd] += d_velListY[nodeInd]*dt; 
-         d_Z[nodeInd] += d_velListZ[nodeInd]*dt; 
+	d_X[nodeInd] += d_velListX[nodeInd]*dt; 
+	d_Y[nodeInd] += d_velListY[nodeInd]*dt; 
+	d_Z[nodeInd] += d_velListZ[nodeInd]*dt; 
          
 
     }

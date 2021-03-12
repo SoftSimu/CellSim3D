@@ -321,8 +321,6 @@ bool recalc_r0;
 
 R3Nptrs DivPlane;
 R3Nptrs d_DivPlane;
-int* d_division_counter;
-int* d_No_of_C180s;
 float f_range;
 
 int main(int argc, char *argv[])
@@ -357,14 +355,6 @@ int main(int argc, char *argv[])
   {
       printf("Usage: CellDiv no_of_threads inpFile.json gpuid\n");
       return(0);
-  }
-  
-  
-  cudaDeviceProp deviceProp = getDevice();
-  if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
-      CudaErrorCheck();
-      printf("Could not set to divice %d\n", atoi(argv[3]));
-      return -1;
   }
   
 
@@ -480,17 +470,6 @@ int main(int argc, char *argv[])
 //  SysCy = (float *) calloc(1024 , sizeof(float));
 //  SysCz = (float *) calloc(1024 , sizeof(float));
 
-  thrust::device_vector<float> d_volumeV(MaxNoofC180s);
-  thrust::host_vector<float> h_volume(MaxNoofC180s);
-  thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
-  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]);
-  volume = thrust::raw_pointer_cast(&h_volume[0]);
-  
-  thrust::host_vector<angles3> h_theta0(192);
-  thrust::device_vector<angles3> d_theta0V(192);
-  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
-  theta0 = thrust::raw_pointer_cast(&h_theta0[0]);
-
 
 
   CPUMemory += 6L*192L*MaxNoofC180s*sizeof(float);
@@ -504,6 +483,27 @@ int main(int argc, char *argv[])
   CPUMemory += MaxNoofC180s*sizeof(int); 
   CPUMemory += 3*180*sizeof(float);
   CPUMemory += 2*MaxNoofC180s*sizeof(int); 
+
+
+
+  cudaDeviceProp deviceProp = getDevice();
+  if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
+      CudaErrorCheck();
+      printf("Could not set to divice %d\n", atoi(argv[3]));
+      return -1;
+  }
+
+
+  thrust::device_vector<float> d_volumeV(MaxNoofC180s);
+  thrust::host_vector<float> h_volume(MaxNoofC180s);
+  thrust::fill(d_volumeV.begin(), d_volumeV.end(), 0.f);
+  d_volume = thrust::raw_pointer_cast(&d_volumeV[0]);
+  volume = thrust::raw_pointer_cast(&h_volume[0]);
+  
+  thrust::host_vector<angles3> h_theta0(192);
+  thrust::device_vector<angles3> d_theta0V(192);
+  angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
+  theta0 = thrust::raw_pointer_cast(&h_theta0[0]);
 
 
   h_R0 = (float *)calloc(192*3, sizeof(float));
@@ -537,14 +537,15 @@ int main(int argc, char *argv[])
   CPUMemory += (long)MaxNoofC180s * sizeof(char);
 
 
+
+
+
   if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.x, sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.y, sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM.z, sizeof(float))) return -1;  
   if ( cudaSuccess != cudaMalloc((void **)&d_sysCM.x, sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_sysCM.y, sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_sysCM.z, sizeof(float))) return -1;    
-  if ( cudaSuccess != cudaMalloc((void **)&d_No_of_C180s, sizeof(int))) return -1;
-  if ( cudaSuccess != cudaMalloc((void **)&d_division_counter, sizeof(int))) return -1;
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_nn, 3*192*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_sign, 180*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_X  , 192*MaxNoofC180s*sizeof(float))) return(-1);
@@ -596,7 +597,6 @@ int main(int argc, char *argv[])
 
 
 
-  cudaMemset(d_division_counter, 0, sizeof(int));
   cudaMemset(d_C180_nn, 0, 3*192*sizeof(int));
   cudaMemset(d_C180_sign, 0, 180*sizeof(int));
   CudaErrorCheck();
@@ -666,7 +666,6 @@ int main(int argc, char *argv[])
 
 
   if (cudaSuccess != cudaMemcpy(d_R0, h_R0, 3*192*sizeof(float), cudaMemcpyHostToDevice)) return -1; 
-  if (cudaSuccess != cudaMemcpy(d_No_of_C180s, &No_of_C180s, sizeof(int), cudaMemcpyHostToDevice)) return -1; 
 
   //cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
@@ -1756,7 +1755,7 @@ if (Restart == 0) {
                                    NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
                                    d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                                    d_gamma_env, d_viscotic_damp, d_CellINdex,
-                                   d_DivPlane, d_division_counter, d_No_of_C180s);
+                                   d_DivPlane);
                                    
           CudaErrorCheck()
           
@@ -1887,7 +1886,7 @@ if (Restart == 0) {
 
 
 
-   if(usePBCs && (step)%1000 == 0){
+   if(usePBCs && (step)%2000 == 0){
         
             CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
                                                               d_CMx, d_CMy, d_CMz,
