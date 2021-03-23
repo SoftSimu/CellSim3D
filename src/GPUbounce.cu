@@ -2827,6 +2827,14 @@ int SecondCell (int Orig_No_of_C180s){
 	  
 	 if (closenessToCenter > 0.f && closenessToCenter < 1.f){
           printf("Only making cells within %f of max radius different\n", closenessToCenter);
+          	
+          	
+          	cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  		cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  		cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  		CudaErrorCheck();
+          	
+          	
           	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                               	              d_X, d_Y, d_Z,
                                       	      d_CMx, d_CMy, d_CMz);
