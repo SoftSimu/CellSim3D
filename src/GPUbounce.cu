@@ -3996,6 +3996,39 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
 
 
 int writeRestartFile(int t_step, int frameCount){
+
+
+	cudaMemcpy(X , d_X, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+  	cudaMemcpy(Y , d_Y, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+  	cudaMemcpy(Z , d_Z, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+  	cudaMemcpy(velListX , d_velListX , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+  	cudaMemcpy(velListY , d_velListY , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+  	cudaMemcpy(velListZ , d_velListZ , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+        cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+        CudaErrorCheck();
+        cudaMemcpy(youngsModArray, d_Youngs_mod ,No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+  	CudaErrorCheck();
+  	cudaMemcpy(Growth_rate, d_Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+        CudaErrorCheck();			
+	cudaMemcpy(ScaleFactor, d_ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+        CudaErrorCheck();
+        cudaMemcpy(DivisionVolume, d_DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+        CudaErrorCheck();
+        cudaMemcpy(gamma_env, d_gamma_env, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+        CudaErrorCheck();
+        cudaMemcpy(viscotic_damp, d_viscotic_damp, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+        CudaErrorCheck();
+	cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+        CudaErrorCheck();
+
+
+
 	
 	FILE *Restartfile;
 	Restartfile = fopen ("Restart.xyz", "w");
