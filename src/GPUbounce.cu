@@ -313,6 +313,7 @@ float squeeze_rate2;
 int   numberOfCells;
 float fractionOfCells;
 float closenessToCenter;
+float Yseparation;
 bool  chooseRandomCellIndices;
 bool daughtSame;
 bool duringGrowth;
@@ -2554,7 +2555,7 @@ int initialize_C180s(int Orig_No_of_C180s)
   
   			rCheck *= 1.2;
   			c = Orig_No_of_C180s-1;
-  			float l = 2.5;
+  			float l = 2.0;
 			int Side = int (((boxMax.x - BoxMin.x) / l) + 0.1 );
 			printf(" Max number of initial cells:  %d\n", Side*Side);
 			
@@ -2826,9 +2827,10 @@ int SecondCell (int Orig_No_of_C180s){
 	  
 	  
 	 if (closenessToCenter > 0.f && closenessToCenter < 1.f){
-          printf("Only making cells within %f of max radius different\n", closenessToCenter);
           	
+          	printf("Only making cells within %f of max radius different\n", closenessToCenter);
           	
+          	         	
           	cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   		cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   		cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
@@ -2857,6 +2859,7 @@ int SecondCell (int Orig_No_of_C180s){
          	 float mags[No_of_C180s];
           
          	 for (int i =0; i < No_of_C180s; ++i){
+         	     
          	     float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
          	     mags[i] = mag(pos);
          	     rMax = max(rMax, mags[i]);
@@ -2909,7 +2912,78 @@ int SecondCell (int Orig_No_of_C180s){
           	
           	printf("Made %d cells softer\n", c);
 
-	  }else{
+	  }else if( Yseparation > 0.f && Yseparation < 1.f ){
+	  
+	  
+	        cudaMemcpy(d_X,  X, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  		cudaMemcpy(d_Y,  Y, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  		cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
+  		CudaErrorCheck();
+          	
+          	
+          	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                              	              d_X, d_Y, d_Z,
+                                      	      d_CMx, d_CMy, d_CMz);
+          
+         	 cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         	 cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         	 cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+	  
+	  	 int c = 0;
+	  	 for (int i = 0; i < No_of_C180s; ++i){
+              		
+              		if ( CMy[i] <= Yseparation*boxMax.y ){
+              		
+              			ScaleFactor[i] = SizeFactor;
+                  		youngsModArray[i] = Stiffness2;
+                  		Growth_rate[i] = gRate;
+                  		DivisionVolume[i] = divisionV;
+                  		gamma_env[i] = gEnv;
+                  		viscotic_damp[i] = gVis;
+                  		CellINdex[i] = - CellINdex[i];
+                  		
+                  		
+                  		for (int j =0; j < 180; ++j){
+      					
+      					sumx += X[i*192 + j]; 
+      					sumy += Y[i*192 + j]; 
+      					sumz += Z[i*192 + j]; 
+  				}
+
+  				sumx /= 180.0; 
+  				sumy /= 180.0; 
+  				sumz /= 180.0;
+
+
+  				for (int j =0; j < 180; ++j){
+      					
+      					X[i*192 + j] -= sumx; 
+      					Y[i*192 + j] -= sumy; 
+      					Z[i*192 + j] -= sumz; 
+  				}
+                  		
+		
+				for(int j = 0; j < 180; ++j){
+       	           		
+       	           		X[i*192 + j] = SizeFactor*X[i*192 + j] + sumx;
+       	           		Y[i*192 + j] = SizeFactor*Y[i*192 + j] + sumy;
+       	           		Z[i*192 + j] = SizeFactor*Z[i*192 + j] + sumz;
+       			}
+
+				sumx = 0;
+				sumy = 0;
+				sumz = 0;
+				
+                  		++c;
+                  		
+              		}
+          	}
+          	
+          	printf("Made %d cells softer\n", c);
+	  
+	  
+	  }else {
 
 		printf("Choosing second cell randomly\n");
         	int c = numberOfCells;
@@ -3368,6 +3442,7 @@ int read_json_params(const char* inpFile){
         numberOfCells = NewCell["numberOfCells"].asInt();
         fractionOfCells = NewCell["fractionOfCells"].asFloat();
         closenessToCenter = NewCell["closenessToCenter"].asFloat();
+        Yseparation = NewCell["Yseparation"].asFloat();
         chooseRandomCellIndices = NewCell["chooseRandomCellIndices"].asBool(); 
         daughtSame = NewCell["daughtSame"].asBool(); 
         duringGrowth = NewCell["duringGrowth"].asBool();

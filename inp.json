@@ -72,6 +72,7 @@
     },
 
     "NewCell":{
+    
         "useDifferentCell": 0,
         "SizeFactor": 0.75,
         "StiffFactor": 0.75,
@@ -83,7 +84,8 @@
         "squeeze_rate2": 0.005,
         "numberOfCells": 10,
         "fractionOfCells": 0.5,
-        "closenessToCenter": 0,
+        "closenessToCenter": 0.0,
+        "Yseparation": 0.0,
         "chooseRandomCellIndices": 0,
         "daughtSame": 1,
         "duringGrowth": 1,
