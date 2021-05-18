@@ -1818,9 +1818,9 @@ if (Restart == 0) {
          
       			CudaErrorCheck();
       			
-      			cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyHostToDevice);
-      			cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyHostToDevice);
-      			cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyHostToDevice);
+      			cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyDeviceToHost);
                        CudaErrorCheck();
 
 //			h_SCM = d_SCM;
@@ -1987,9 +1987,9 @@ if (Restart == 0) {
       		   CudaErrorCheck();
 
 
-      		   cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyHostToDevice);
-      		   cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyHostToDevice);
-      		   cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyHostToDevice);
+      		   cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyDeviceToHost);
+      		   cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyDeviceToHost);
+      		   cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyDeviceToHost);
                    CudaErrorCheck();
 
 
@@ -2055,9 +2055,9 @@ if (Restart == 0) {
                	                                              No_of_C180s*192);
       		CudaErrorCheck();
       
-      		//cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyHostToDevice);
-      		//cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyHostToDevice);
-      		//cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyHostToDevice);
+      		//cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyDeviceToHost);
+      		//cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyDeviceToHost);
+      		//cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyDeviceToHost);
                 //CudaErrorCheck();
       		//printf("sysCMx = 	%f, sysCMy = 		%f, sysCmz = 		%f\n", h_sysCM.x, h_sysCM.y, h_sysCM.z);
       
@@ -2557,15 +2557,23 @@ int initialize_C180s(int Orig_No_of_C180s)
   			c = Orig_No_of_C180s-1;
   			float l = 2.0;
 			int Side = int (((boxMax.x - BoxMin.x) / l) + 0.1 );
-			printf(" Max number of initial cells:  %d\n", Side*Side);
+			int SideY = int (((boxMax.y - BoxMin.y) / l) + 0.1 );
+			
+			printf(" Max number of initial cells:  %d\n", Side*SideY);
+			
+			if(Orig_No_of_C180s - impurityNum > Side*SideY){
+				
+				printf(" Max number of initial cells should be less than %d.\n", Side*SideY);
+				return 12517;
+			}
 			
 			for ( rank = 0; rank < Orig_No_of_C180s - impurityNum ; rank++ )
         	        {
                         
-        	               ey=rank%Side;
-        			ex=rank/Side;         
+        	               ey=rank/Side;
+        			ex=rank%Side;         
         	          	CM.x = l*ex + 0.5*l + BoxMin.x;
-        	          	CM.y = l*ey + 0.5*l + BoxMin.x;
+        	          	CM.y = l*ey + 0.5*l + BoxMin.y;
         	    	      	CM.z = BoxMin.z + 1 ;
 				allCMs[c] = CM; 
         	    	  	c--;
@@ -3913,7 +3921,7 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
     if (useDifferentCell){
         int cellType = 0; 
         for (int c = 0; c < No_of_C180s; c++){
-            fwrite(&c, sizeof(int), 1, velFile);
+            fwrite(&CellINdex[c], sizeof(int), 1, velFile);
             fwrite(velListX + (c*192), sizeof(float), 192, velFile); 
             fwrite(velListY + (c*192), sizeof(float), 192, velFile); 
             fwrite(velListZ + (c*192), sizeof(float), 192, velFile);

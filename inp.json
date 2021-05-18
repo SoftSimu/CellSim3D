@@ -36,7 +36,7 @@
         "correct_Vcom" : 0
     },
     "counting": {
-        "countCells": 0,
+        "countcells": 0,
         "mit-index_file_name": "inp.dat",
         "count_only_internal_cells?": 0,
         "radius_cutoff": 0.6,
