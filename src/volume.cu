@@ -14,7 +14,6 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
     __shared__ float locY[192];
     __shared__ float locZ[192];
     __shared__ float volume;
-    __shared__ float volume2;
     __shared__ float area; 
 
     int fullerene = blockIdx.x;
@@ -29,7 +28,6 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
 
     if ( tid == 0){
         volume = 0.0f;
-        volume2 = 0.0f; 
         area = 0.0f;
     }
 
@@ -64,14 +62,11 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         avZ *= avefactor;
 
         float totvol = 0.0f;
-        float totvol2 = 0.0f;
         float n1 = 0.0f;
         float n2 = 0.0f;
         float n3 = 0.0f;
         float faceArea = 0.0f;
 
-        float3 p0 = make_float3(avX, avY, avZ); 
-        float3 p1, p2;
 
         for ( int i = 0; i < 6; ++i ){
             n1 = (locY[C180_56[7*tid+i+1]]*avZ-avY*locZ[C180_56[7*tid+i+1]])*locX[C180_56[7*tid+i]];
@@ -80,15 +75,6 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             totvol += fabsf(n1+n2+n3);
 
 
-            p1.x = locX[C180_56[7*tid+i]];
-            p1.y = locY[C180_56[7*tid+i]];
-            p1.z = locZ[C180_56[7*tid+i]];
-
-            p2.x = locX[C180_56[7*tid+i+1]];
-            p2.y = locY[C180_56[7*tid+i+1]];
-            p2.z = locZ[C180_56[7*tid+i+1]];
-
-            totvol2 += dot(p0, cross(p1, p2)); 
 
             if (checkSphericity){
        
@@ -101,25 +87,16 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                 float y2 = locY[C180_56[7*tid+i+1]] - avY;
                 float z2 = locZ[C180_56[7*tid+i+1]] - avZ;
 
-                p1.x = p1.x - p0.x;
-                p1.y = p1.y - p0.y;
-                p1.z = p1.z - p0.z;
-
-                p2.x = p2.x - p0.x;
-                p2.y = p2.y - p0.y;
-                p2.z = p2.z - p0.z;
-
                 // now 1 will hold 1X2
                 float xx = y1*z2 - z1*y2;
                 float yy = z1*x2 - x1*z2;
                 float zz = x1*y2 - y1*x2;
 
                 // area of triangle is then 0.5*|1|
-                faceArea += 0.5 * sqrt(xx*xx + yy*yy + zz*zz);
+                faceArea += 0.5 * sqrtf(xx*xx + yy*yy + zz*zz);
             }
         }
         atomicAdd(&volume, totvol);
-        atomicAdd(&volume2, totvol2); 
     
         if (checkSphericity)
             atomicAdd(&area, faceArea); 
@@ -129,11 +106,10 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
 
     if ( tid == 0){
         volume = volume/6.0;
-        volume2 = volume2/6.0;
         vol[fullerene] = volume;
         
         if (!isfinite(volume)){
-            printf("OH SHIT: non-finite volume %f, cell %d\nvol2 %f\n", volume, fullerene, volume2);
+            printf("OH SHIT: non-finite volume %f, cell %d\n", volume, fullerene);
             printf("Crash now :(\n");
             asm("trap;");
             volume = 1.f;
@@ -213,7 +189,6 @@ __global__ void  cell_division(int rank,
     int newrank = No_of_C180s;
          
     __shared__ float CMx, CMy, CMz;
-    __shared__ int index;
     
     int tid  = threadIdx.x;
     int atom = tid;
