@@ -8,7 +8,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          char* cell_div, float* d_DivisionVolume, bool checkSphericity,
                          float* areaList,
                          float stiffness1, bool useDifferentCell, float* d_younds_mod,
-                         bool recalc_r0, float ApoVol, char* cell_Apo, float* d_ScaleFactor){
+                         bool recalc_r0, float ApoVol, char* cell_Apo, float* d_ScaleFactor, int *num_cell_div, int *cell_div_inds){
                          
     __shared__ float locX[192];
     __shared__ float locY[192];
@@ -144,6 +144,14 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                 }
             }
         }
+    
+        if ( cell_div[fullerene] == 1 )                      
+	{                                                    
+		int index = atomicAdd(&num_cell_div[0],1);   
+		cell_div_inds[index] = fullerene;            
+	} 
+    
+    
     }
 }
 
@@ -175,7 +183,7 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
 }
 
 
-__global__ void  cell_division(int rank, 
+__global__ void  cell_division( 
                                float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
@@ -184,14 +192,17 @@ __global__ void  cell_division(int rank,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
-                               R3Nptrs d_DivPlane){
+				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure){ 
    
-    int newrank = No_of_C180s;
          
     __shared__ float CMx, CMy, CMz;
     
     int tid  = threadIdx.x;
     int atom = tid;
+    int bid  = blockIdx.x;
+    
+    int rank    = cell_div_inds[bid]; 
+    int newrank = No_of_C180s+bid;    
 
     if (tid == 0){
     
@@ -213,12 +224,12 @@ __global__ void  cell_division(int rank,
         //loat planeNx = d_randNorm[0];
         //float planeNy = d_randNorm[1];
         //float planeNz = d_randNorm[2];
-
-
-        float planeNx = d_DivPlane.x[No_of_C180s];
-        float planeNy = d_DivPlane.y[No_of_C180s];
-        float planeNz = d_DivPlane.z[No_of_C180s];
-        float asym = d_asym[No_of_C180s];
+        
+        
+        float planeNx = d_DivPlane.x[newrank];                 
+        float planeNy = d_DivPlane.y[newrank];                 
+        float planeNz = d_DivPlane.z[newrank];                 
+        float asym = d_asym[newrank];                          
 
 
         if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
@@ -286,9 +297,12 @@ __global__ void  cell_division(int rank,
           	d_DivisionVolume[newrank] = divVol;
           	d_gamma_env[newrank] = gamma_visc;
           	d_viscotic_damp[newrank] = viscotic_damping;
-          	d_CellINdex[newrank] = NewCellInd;
+          	d_CellINdex[newrank] = newrank;
           	  	
         }
+        
+        pressList[rank] = minPressure;             
+	pressList[newrank] = minPressure;          
     
     }
     

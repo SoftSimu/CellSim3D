@@ -136,7 +136,9 @@ float *area;
 char* cell_div;
 char* d_cell_div;
 int num_cell_div;
+int *d_num_cell_div;
 int* cell_div_inds;
+int* d_cell_div_inds; 
 
 char* cell_Apo;
 char* d_cell_Apo;
@@ -328,7 +330,6 @@ int main(int argc, char *argv[])
 {
 
 
-  int globalrank;
   int step = 0;
   int noofblocks, threadsperblock;
   int newcells;
@@ -560,6 +561,8 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div_inds, MaxNoofC180s*sizeof(int))) return(-1);          //JW
+  if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_div,  32*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1); 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
@@ -814,7 +817,8 @@ if (Restart == 0) {
 
 
   
-  globalrank = 0;
+  
+  
 
 
   // open trajectory file
@@ -1193,7 +1197,7 @@ if (Restart == 0) {
                                      d_volume, d_cell_div, d_DivisionVolume,
                                      checkSphericity, d_area, 
                                      stiffness1, useDifferentCell, d_Youngs_mod,
-                                     recalc_r0, ApoVol ,d_cell_Apo, d_ScaleFactor);
+                                     recalc_r0, ApoVol ,d_cell_Apo, d_ScaleFactor, d_num_cell_div, d_cell_div_inds);
   
 
 	
@@ -1723,75 +1727,62 @@ if (Restart == 0) {
         // ------------------------------ Begin Cell Division ------------------------------------------------
 
 
+	cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
+	
+	
         volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_X, d_Y, d_Z,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, d_DivisionVolume,
                                      checkSphericity, d_area,
                                      stiffness1, useDifferentCell, d_Youngs_mod,
-                                     recalc_r0,ApoVol,d_cell_Apo, d_ScaleFactor);
+                                     recalc_r0, ApoVol, d_cell_Apo, d_ScaleFactor, d_num_cell_div, d_cell_div_inds);
         CudaErrorCheck();
 
 
 
-        count_and_get_div();
+//        count_and_get_div();
 
 	//cudaStream_t *streams = (cudaStream_t *)malloc(num_cell_div*sizeof(cudaStream_t));
 	
 	//for (int i = 0 ; i < num_cell_div; i++) cudaStreamCreate(&streams[i]);
 	//CudaErrorCheck();
 	
-        
-        for (int divCell = 0; divCell < num_cell_div; divCell++) {
-          
-          globalrank = cell_div_inds[divCell];
-   
 
-          cell_division<<<1,256>>>(globalrank, 
+	cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
+	
+	if (No_of_C180s + num_cell_div > MaxNoofC180s){                                    
+              printf("ERROR: Population is %d, only allocated enough memory for %d\n",     
+                     No_of_C180s, MaxNoofC180s);                                           
+              printf("ERROR: Fatal error, crashing...\n");                                 
+              return -69;                                                                  
+          }
+        
+//        for (int divCell = 0; divCell < num_cell_div; divCell++) {
+          
+//          globalrank = cell_div_inds[divCell];
+   
+	 if ( num_cell_div > 0 ) 
+          cell_division<<<num_cell_div,192>>>(
                                    d_X, d_Y, d_Z, 
                                    d_CMx, d_CMy, d_CMz,
                                    d_velListX, d_velListY, d_velListZ,
-                                   No_of_C180s, repulsion_range, d_asym,
-                                   useDifferentCell, daughtSame,
-                                   NewCellInd, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
+                                   No_of_C180s, repulsion_range, d_asym,    
+                                   useDifferentCell, daughtSame,  
+                                   No_of_C180s, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,  
                                    d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                                    d_gamma_env, d_viscotic_damp, d_CellINdex,
-                                   d_DivPlane);
+                                   d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, minPressure);       
                                    
-          CudaErrorCheck()
-          
-          resetIndices[divCell] = globalrank;
-          resetIndices[divCell + num_cell_div] = No_of_C180s;
+          CudaErrorCheck();                                                                                
           
           
-          ++No_of_C180s;
-          ++NewCellInd;
-          
-          
-          if (No_of_C180s > MaxNoofC180s){
-          
-              printf("ERROR: Population is %d, only allocated enough memory for %d\n",
-                     No_of_C180s, MaxNoofC180s);
-              printf("ERROR: Fatal error, crashing...\n");
-              return -69;
-          }
-        
-         
-        }
+        No_of_C180s += num_cell_div;                           
+        NewCellInd  += num_cell_div;                           
         
         
         //for (int i = 0 ; i < num_cell_div; i++) cudaStreamDestroy(streams[i]);
 	//CudaErrorCheck();
-        
-        if (num_cell_div>0){
-            
-            cudaMemcpy(d_resetIndices, resetIndices, 2*num_cell_div*sizeof(int), cudaMemcpyHostToDevice);
-            CudaErrorCheck(); 
-
-            PressureReset <<<(2*num_cell_div)/512 + 1, 512>>> (d_resetIndices, d_pressList, minPressure, 2*num_cell_div); 
-            CudaErrorCheck();	 		      	            
-
-        }
 
 
 	if (countCells) {
@@ -3942,33 +3933,6 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
             fwrite(velListZ + (c*192), sizeof(float), 192, velFile);
         }
     }
-}
-
-
-inline void count_and_get_div(){
-  num_cell_div = 0;
-  cudaMemcpy(cell_div, d_cell_div, No_of_C180s*sizeof(char), cudaMemcpyDeviceToHost);
-  
-  for (int cellInd = 0; cellInd < No_of_C180s; cellInd++) {
-    if (cell_div[cellInd] == 1){
-      cell_div[cellInd] = 0;
-      cell_div_inds[num_cell_div] = cellInd;
-      num_cell_div++;
-    }
-  }
-  cudaMemcpy(d_cell_div, cell_div, No_of_C180s*sizeof(char), cudaMemcpyHostToDevice);
-
-#ifdef PRINT_VOLUMES
-        if (num_cell_div > 0){
-            printf("Dividing cells: ");
-            for (int i = 0; i<num_cell_div; i++){
-                printf("%d ", cell_div_inds[i]);
-            }
-          
-            printf("\n");
-        }
-#endif
-
 }
 
 
