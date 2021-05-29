@@ -204,8 +204,7 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 }
 
 
-
-__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlist(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL)
 {
@@ -214,6 +213,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
+  if ( fullerene >= impurityNum ){
 
 	if ( fullerene < No_of_C180s )
 	{
@@ -279,12 +279,13 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 		
 	}
 
+   }
 }
 
 
 
 
-__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistPBC(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY)
 {
@@ -293,6 +294,8 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
+
+  if ( fullerene >= impurityNum ){
 
 	if ( fullerene < No_of_C180s )
 	{
@@ -373,12 +376,12 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 		
 	}
 		
-
+   }
 }
 
 
 
-__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistLEbc(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ)
 {
@@ -387,6 +390,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
+  if ( fullerene >= impurityNum ){
 
 	if ( fullerene < No_of_C180s )
 	{
@@ -508,8 +512,316 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 		
 	}
 		
+   }
+}
+
+
+// Pinning
+__global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float DL)
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( fullerene < impurityNum )
+	{
+	  
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+
+
+	 	posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
+	  	if ( posx < 0 ) posx = 0;
+	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
+	  	
+
+	  	posy = (int)((CMy[fullerene]-BoxMin.y)/DL);
+	  	if ( posy < 0 ) posy = 0;
+	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
+
+	   	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
+	  	if ( posz < 0 ) posz = 0;
+	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
+	  	
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	  	int j3 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if(j1 < 0 || j1 > Xdiv-1) continue;
+			
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv-1) continue;
+				
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+					j3 = posz + k;
+					if(j3 < 0 || j3 > Zdiv-1) continue;
+		
+
+			  		int index = atomicAdd( &d_NoofNNlistPin[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > 32 )
+					{
+                         			printf("Fullerene %d, NN-listPin too short, atleast %d\n", fullerene, index);
+                                  			// for ( int k = 0; k < 32; ++k )
+                                  			//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                                 			// printf("\n");
+						 continue;
+					}
+#endif
+			  		d_NNlistPin[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}	
+		
+	}
 
 }
+
+
+
+
+__global__ void makeNNlistPBCPin(int impurityNum, float *CMx, float *CMy,float *CMz,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY)
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
+
+
+	if ( fullerene < impurityNum )
+	{
+	  
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;	
+		float boxX = boxMax.x;
+		float boxY = boxMax.y;
+		float boxZ = boxMax.z;	
+		float DX = DLp.x;
+		float DY = DLp.y;
+		float DZ = DLp.z;	
+
+	  	
+	  	posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxX) * boxX )/DX); 	
+ 	  	posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxY) * boxY )/DY); 	
+	  	posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxZ) * boxZ )/DZ); 		
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	  	int j3 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			j1 = j1 - floor((float)j1/(float)Xdiv) * Xdiv;	 
+
+			for (  int j = -1; j < 2; ++j ){ 
+
+
+				j2 = posy + j;
+					
+				if(useRigidBoxY){
+					
+					if(j2 < 0 || j2 > Ydiv-1) continue;
+					
+				}else{	
+					
+					j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
+					
+				}
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+			
+					j3 = posz + k;
+					
+					if(useRigidBoxZ){
+					
+						if(j3 < 0 || j3 > Zdiv-1) continue;
+					
+					}else{	
+					
+						j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+					
+					}
+
+			  		int index = atomicAdd( &d_NoofNNlistPin[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > 32 )
+					{
+                         			printf("Fullerene %d, NN-listPin too short, atleast %d\n", fullerene, index);
+                                  		// for ( int k = 0; k < 32; ++k )
+                                  		// printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
+                                  		// printf("\n");
+						continue;
+					}
+#endif
+			  		d_NNlistPin[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}	
+
+		
+		
+	}
+		
+
+}
+
+
+
+__global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float *CMz,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ)
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( fullerene < impurityNum )
+	{
+	  
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+
+	  	
+	  	posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DLp.x); 	
+ 	  	posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DLp.y); 	
+	  	posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxMax.z) * boxMax.z )/DLp.z); 		
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	  	int j3 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if (j1 >= Xdiv || j1 <= -1) continue; 
+				 
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+			
+					j3 = posz + k;
+					
+					if(useRigidBoxZ){
+					
+						if(j3 < 0 || j3 > Zdiv-1) continue;
+					
+					}else{	
+					
+						j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+					
+					}
+
+			  		int index = atomicAdd( &d_NoofNNlistPin[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > 32 )
+					{
+                         			printf("Fullerene %d, NN-listPin too short, atleast %d\n", fullerene, index);
+                                  		// for ( int k = 0; k < 32; ++k )
+                                  		// printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
+                                  		// printf("\n");
+						continue;
+					}
+#endif
+			  		d_NNlistPin[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}
+		
+				
+		if(posx == Xdiv-1 ){
+			
+			posy = (int)(( (CMy[fullerene] - Pshift) - floor((CMy[fullerene] - Pshift) / boxMax.y) * boxMax.y )/DLp.y);	
+			
+			j1 = 0;
+			j3 = posz;
+			if(useRigidBoxZ){
+				if ( posz < 0 ) posz = 0;
+	  			if ( posz > Zdiv - 1 ) posz = Zdiv - 1;	
+			}else{						
+				j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+			}
+				 
+			for (  int i = -1; i < 2 ; ++i ){
+				
+				j2 = posy + i;
+				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;
+		
+				int index = atomicAdd( &d_NoofNNlistPin[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1);
+				d_NNlistPin[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+		
+			}
+		}
+			
+			
+			
+			
+		if (posx == 0){
+			
+			posy = (int)(( (CMy[fullerene] + Pshift) - floor( (CMy[fullerene] + Pshift) / boxMax.y) * boxMax.y )/DLp.y);	
+			
+			j1 = Xdiv - 1;
+			j3 = posz;
+			if(useRigidBoxZ){
+				if ( posz < 0 ) posz = 0;
+	  			if ( posz > Zdiv - 1 ) posz = Zdiv - 1;	
+			}else{						
+				j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+			}
+				
+			for (  int i = -1; i < 2 ; ++i ){
+				
+				j2 = posy + i;
+				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;
+		
+				int index = atomicAdd( &d_NoofNNlistPin[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1);
+				d_NNlistPin[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+		
+			}	
+			
+				
+
+		}
+			
+
+		
+		
+	}
+		
+
+}
+
+
 
 
 

@@ -196,7 +196,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
@@ -474,7 +474,83 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
            		 }
 
         	}
+        	
+        	
+        	if (impurityNum > 0){
+        	
+        		NooflocalNN = 0;
+        		
+        		for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+	        	{
+	            		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
+                
+                
+	            		deltaX  = X - d_CMx[nn_rank];
+	            		deltaY  = Y - d_CMy[nn_rank];                
+	            		deltaZ  = Z - d_CMz[nn_rank];
 
+
+               
+	            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+	                		continue;
+
+	            		++NooflocalNN;
+
+	           		//printf("NooflocalNN %d\n", NooflocalNN);
+
+	            		if ( NooflocalNN > MAX_NN ){
+	                		printf("Recoverable error: NooflocalNNPin = %d, should be < 8\n",NooflocalNN);
+	                		continue;
+	            		}
+
+	            		localNNs[NooflocalNN-1] = nn_rank;
+	        	}
+
+	        	for ( int i = 0; i < NooflocalNN; ++i )
+	        	{
+	        		
+	        		nn_rank =localNNs[i];
+        	    		nnAtomInd = nn_rank*192;
+
+            			for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            			{
+               			
+               			nnAtomInd += nn_atom;
+	
+               			deltaX = X - d_X[nn_rank*192+nn_atom];
+               			deltaY = Y - d_Y[nn_rank*192+nn_atom];
+               			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+        
+            
+               		 	R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+               		 	if ( R >= attraction_range*attraction_range )
+               		     		continue;
+
+               		 	R = sqrt(R);
+
+               		 	if ( R < attraction_range )
+               		 	{
+               		     		contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+               		     		contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+               		     		contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+               		 	}
+               		 	if ( R <= repulsion_range )
+               		 	{
+               		     	 
+               		     		contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+               		     		contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+               		     		contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+               		 	}
+
+           		 	}
+
+        		}
+        	
+        	}
+        	
+        	
+        	
         	FX += contactForce.x;
         	FY += contactForce.y;
         	FZ += contactForce.z; 
@@ -482,6 +558,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	FX_ext += contactForce.x;
         	FY_ext += contactForce.y;
         	FZ_ext += contactForce.z; 
+        	
 
 #ifdef FORCE_DEBUG
 
@@ -568,7 +645,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
@@ -857,6 +934,92 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         }
 
 
+	if (impurityNum > 0){
+	
+	
+		NooflocalNN = 0;
+		
+		for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        	{
+            		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
+            		
+                
+            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+    
+            		deltaY  = Y - d_CMy[nn_rank];	            
+            		if (!useRigidBoxY)deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+
+                             
+            		deltaZ  = Z - d_CMz[nn_rank];
+            		if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+	    	
+               
+            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+                		continue;
+
+            		++NooflocalNN;
+
+
+            		if ( NooflocalNN > MAX_NN ){
+                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+            		    		continue;
+            		}
+
+            		localNNs[NooflocalNN-1] = nn_rank;
+        	}
+
+        	for ( int i = 0; i < NooflocalNN; ++i )
+        	{
+            		nn_rank =localNNs[i];
+            		nnAtomInd = nn_rank*192;
+
+            		for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            		{
+                		nnAtomInd += nn_atom;
+
+                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+            
+                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                		if (!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+              	   
+              	     
+                		deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                		if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+            	 
+            	 
+                		R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+                		if ( R >= attraction_range*attraction_range )
+                    			continue;
+
+                		R = sqrt(R);
+
+                		if ( R < attraction_range )
+                		{
+                    			contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+                    			contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+                    			contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                		}
+                		if ( R <= repulsion_range )
+                		{
+
+                    			contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+                    			contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+                    			contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                		}
+
+            		}
+
+        	}
+	
+	}
+
+
+
+
+
         FX += contactForce.x;
         FY += contactForce.y;
         FZ += contactForce.z; 
@@ -937,7 +1100,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
@@ -1274,8 +1437,128 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             }
 
         }
+        
+        
+        if (impurityNum > 0){
+	
+		NooflocalNN = 0;
+		
+		for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        	{
+            		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
+
+                
+            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+    
+            		deltaY  = Y - d_CMy[nn_rank];	
+            		if ( abs(d_CMx[rank] - d_CMx[nn_rank]) > boxMax.x /2){
+            	
+			if(X > boxMax.x - DLp.x ){
+			
+				deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+			}
+			 
+			if(X <  DLp.x){
+				
+				deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+			}
+			  	
+            		}else{
+            
+            			deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+  
+            		}    
+              
+            		if (useRigidBoxZ){
+            			deltaZ  = Z - d_CMz[nn_rank];
+            		}else{    
+            			deltaZ  = Z - d_CMz[nn_rank];
+            			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+	    		}	
+               
+            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+                		continue;
+
+            		++NooflocalNN;
 
 
+            		if ( NooflocalNN > MAX_NN ){
+                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		continue;
+            		}
+
+            		localNNs[NooflocalNN-1] = nn_rank;
+        	}
+
+        	for ( int i = 0; i < NooflocalNN; ++i )
+        	{
+            		nn_rank =localNNs[i];
+            		nnAtomInd = nn_rank*192;
+
+            		for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            		{
+                		nnAtomInd += nn_atom;
+
+                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+            
+                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                		if ( abs(d_CMx[rank] - d_CMx[nn_rank]) > boxMax.x /2){
+    			
+				if(X > boxMax.x - DLp.x){
+					deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y - d_Y[nn_rank*192+nn_atom];
+					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+				}  
+				if( X < DLp.x ){
+				
+					deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y - d_Y[nn_rank*192+nn_atom];
+					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+				}  
+            		
+            			}else{
+            
+            				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+            
+            			}  
+		     
+				if (useRigidBoxZ){
+		 			deltaZ = Z - d_Z[nn_rank*192+nn_atom];	
+				}else{
+                			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+            	 
+            	 		}
+            	 
+                		R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+                		if ( R >= attraction_range*attraction_range )
+                    			continue;
+
+                		R = sqrt(R);
+
+                		if ( R < attraction_range )
+                		{
+                    			contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+                    			contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+                    			contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+                		}
+                		if ( R <= repulsion_range )
+                		{
+                     
+                    			contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+                    			contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+                    			contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+                		}
+
+            		}
+
+        	}
+
+	}
+        
         FX += contactForce.x;
         FY += contactForce.y;
         FZ += contactForce.z; 
@@ -1335,7 +1618,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
-                                   int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
+                                   int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, int impurityNum, float f_range){
     size_t cellInd = blockIdx.x;
@@ -1486,6 +1769,63 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    }
 
         	}
+        	
+        	
+        	if (impurityNum > 0){
+	
+			
+			NooflocalNN = 0;
+			for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        		{
+        	    		
+        	    		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; 
+
+        	    		deltaX  = X - d_CMx[nn_rank];
+        	    		deltaY  = Y - d_CMy[nn_rank];            
+        	    		deltaZ  = Z - d_CMz[nn_rank];
+
+        	    		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+        	        		continue;
+
+        	    		++NooflocalNN;
+
+        	    		if ( NooflocalNN > MAX_NN ){
+        	        		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+        	        		continue;
+        	    		}
+        	    		localNNs[NooflocalNN-1] = nn_rank;
+        		}
+
+
+        		for ( int i = 0; i < NooflocalNN; ++i )
+        		{
+        	    		nn_rank =localNNs[i];
+
+        	    		for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+        	    		{
+                
+                
+        	        		deltaX = X - d_X[nn_rank*192+nn_atom];   
+        	        		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+        	        		deltaZ = Z - d_Z[nn_rank*192+nn_atom];                
+                
+
+        	        		R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
+	
+	
+        	        		if ( R > attraction_range*attraction_range )
+        	            			continue;
+		
+		
+        	        		// Tangential component of the node velocity
+        	        		float3 vTau = nodeVelocity - dot(nodeVelocity, normal)*normal;
+        	        		force = force - d_viscotic_damp[cellInd]*vTau;
+        	    		}
+
+        		}  	
+        	
+        	}
+        	
 
         	// viscous drag  
         	force = force - d_gamma_env[cellInd]*nodeVelocity;
@@ -1508,7 +1848,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                                   int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range){
                                    
@@ -1675,6 +2015,77 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
            }
 	}
 	
+	
+	if (impurityNum > 0){	
+		
+		NooflocalNN = 0;
+		
+		for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        	{
+            		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; // MAGIC NUMBER!!
+
+            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+
+
+            		deltaY  = Y - d_CMy[nn_rank];	
+            		if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y; 
+            
+           
+            		deltaZ  = Z - d_CMz[nn_rank];
+            		if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+            
+            
+            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+                		continue;
+
+            		++NooflocalNN;
+
+            		if ( NooflocalNN > MAX_NN ){
+                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		continue;
+            		}
+            			
+            		localNNs[NooflocalNN-1] = nn_rank;
+        	}
+
+        	for ( int i = 0; i < NooflocalNN; ++i )
+        	{
+            		nn_rank =localNNs[i];
+
+            		for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            		{
+                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+
+
+                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                		if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+                
+                
+                		deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                		if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
+                
+
+                		R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
+
+                		if ( R > attraction_range*attraction_range )
+                    			continue;
+
+
+
+		                // Tangential component of the velocity
+                		float3 vTau = nodeVelocity - dot(nodeVelocity, normal)*normal;
+                		force = force - d_viscotic_damp[cellInd]*vTau;
+              
+
+           		}
+		}
+	
+	
+	}
+	
+	
         // viscous drag  ????
         force = force - d_gamma_env[cellInd]*nodeVelocity;
         
@@ -1693,7 +2104,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                                   int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float f_range)
 {
@@ -1908,6 +2319,120 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
               
 
            }
+	}
+	
+	
+	if (impurityNum > 0){	
+		
+		NooflocalNN = 0;
+		
+		for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        	{
+            		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; 
+            
+
+            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+
+            
+            		deltaY  = Y - d_CMy[nn_rank];	
+            		if ( abs(d_CMx[cellInd] - d_CMx[nn_rank]) > boxMax.x /2){
+            	
+			if(X > boxMax.x - DLp.x){
+				deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+			} 
+			if(X < DLp.x){
+				deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+			}
+            
+            		}else{
+            
+            			deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+            
+            		}
+            
+            
+            		if(useRigidBoxZ){
+            			deltaZ  = Z - d_CMz[nn_rank];
+            		}else{
+            			deltaZ  = Z - d_CMz[nn_rank];
+            			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+            		}
+            
+            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+                		continue;
+
+            		++NooflocalNN;
+
+            		if ( NooflocalNN > MAX_NN ){
+                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		continue;
+            		}
+            		
+            		localNNs[NooflocalNN-1] = nn_rank;
+        	}
+
+        	for ( int i = 0; i < NooflocalNN; ++i )
+        	{
+            		nn_rank =localNNs[i];
+
+            		for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            		{
+                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+                   
+                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                		if ( abs(d_CMx[cellInd] - d_CMx[nn_rank]) > boxMax.x /2){
+            		
+				if(X > boxMax.x - DLp.x){
+					deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;	
+				} 
+				if(X < DLp.x ){	
+					deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+				}  	
+            			}else{
+            
+            				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+            
+            			}
+            
+                		if(useRigidBoxZ){
+                
+                			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                
+                		}else{  
+                
+                			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
+                		}
+
+                		R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
+
+                		if ( R > attraction_range*attraction_range )
+                    			continue;
+
+	
+				float3 v_ij = nodeVelocity;
+
+				if ( abs(d_CMx[cellInd] - d_CMx[nn_rank]) > boxMax.x /2){	
+					if(X > boxMax.x - DLp.x) v_ij.y = v_ij.y - Vshift;
+					if(X < DLp.x ) v_ij.y = v_ij.y + Vshift;
+				}
+
+
+                		// Tangential component of relative velocity
+                		float3 vTau = v_ij - dot(v_ij, normal)*normal;
+                		force = force - d_viscotic_damp[cellInd]*vTau;
+              
+
+           		}
+		}
+	
+	
 	}
 	
         // viscous drag  

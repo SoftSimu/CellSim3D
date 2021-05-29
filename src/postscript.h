@@ -22,16 +22,31 @@ __global__ void  cell_division(
                                R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure);
 
 
-__global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
+
+__global__ void makeNNlistPin( int impurityNum, float *CMx, float *CMy,float *CMz,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float DL);
+
+__global__ void makeNNlistPBCPin(int impurityNum, float *CMx, float *CMy,float *CMz,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
+
+                           
+__global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float *CMz,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ);
+
+
+__global__ void makeNNlist( int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL);
 
-__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistPBC(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
 
                            
-__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistLEbc(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);
 
@@ -76,7 +91,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin,  float DL, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
@@ -92,7 +107,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
@@ -106,7 +121,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
                            int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist,  
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
@@ -206,7 +221,7 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,  float3 BoxMin,
-                                   int *d_NoofNNlist, int *d_NNlist, float DL, float* d_gamma_env,
+                                   int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, int impurityNum, float f_range);
                                    
@@ -218,7 +233,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                                   int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range);
                                    
@@ -229,7 +244,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
-                                   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float* d_gamma_env,
+                                   int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float f_range);
 

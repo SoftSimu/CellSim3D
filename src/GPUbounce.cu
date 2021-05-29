@@ -214,10 +214,13 @@ float DL;
 float3 DLp;
 int Xdiv, Ydiv, Zdiv;
 
-//int *d_NoofNNlist;
+int *d_NoofNNlist;
 int *d_NNlist;
 int *NoofNNlist;
 int *NNlist;
+
+int *d_NoofNNlistPin;
+int *d_NNlistPin;
 
 
 bool correct_com = false;
@@ -1000,11 +1003,23 @@ if (Restart == 0) {
   //DL = divVol; 
   CudaErrorCheck(); 
 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*64*sizeof(int))) return(-1); 
-
-  thrust::device_vector<int> d_NoofNNlistV(Xdiv*Ydiv*Zdiv);
-  thrust::fill(d_NoofNNlistV.begin(), d_NoofNNlistV.end(), 0);
-  int *d_NoofNNlist = thrust::raw_pointer_cast(&d_NoofNNlistV[0]);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*64*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,    Xdiv*Ydiv*Zdiv*sizeof(int))) return(-1);
+  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*64*sizeof(int)); 
+  cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int)); 
+  
+  CudaErrorCheck();
+  
+  if(impurity){
+  	
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_NNlistPin ,    Xdiv*Ydiv*Zdiv*32*sizeof(int))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlistPin ,    Xdiv*Ydiv*Zdiv*sizeof(int))) return(-1);
+  	cudaMemset(d_NNlistPin, 0, Xdiv*Ydiv*Zdiv*32*sizeof(int)); 
+	cudaMemset(d_NoofNNlistPin, 0, Xdiv*Ydiv*Zdiv*sizeof(int)); 
+	CudaErrorCheck(); 
+  
+  }
+  
 
 
   // Better way to see how much GPU memory is being used.
@@ -1042,32 +1057,53 @@ if (Restart == 0) {
                         
         CudaErrorCheck();	
 	
-    }
+    } 	
 
 
+   if (useRigidSimulationBox){
+      	
+      	makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, impurityNum, d_CMx, d_CMy, d_CMz,
+        Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);        
+        CudaErrorCheck(); 
+   
+   }if(usePBCs){
+    
+       makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, impurityNum, d_CMx, d_CMy, d_CMz,
+        attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);        
+        CudaErrorCheck(); 
+   
+   }if(useLEbc){
+    
+       makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, impurityNum, d_CMx, d_CMy, d_CMz,
+        attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);     	
+        CudaErrorCheck();
+       
+   } 
+  
 
-
-
-      if (useRigidSimulationBox){	
-      		makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
-        
+   if(impurity){
+   
+   	if (useRigidSimulationBox){
+      	
+      		makeNNlistPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMx, d_CMy, d_CMz,
+        	Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlistPin, d_NNlistPin, DL);        
         	CudaErrorCheck(); 
-       }
-	if(usePBCs){
-       	makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
-        
+   
+   	}if(usePBCs){
+    
+       	makeNNlistPBCPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMx, d_CMy, d_CMz,
+        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, useRigidBoxZ,useRigidBoxY);        
         	CudaErrorCheck(); 
-       }
-       if(useLEbc){
-       	makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
-        	
+   
+   	}if(useLEbc){
+    
+       	makeNNlistLEbcPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMx, d_CMy, d_CMz,
+        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, Pshift, useRigidBoxZ);     	
         	CudaErrorCheck();
        
-       } 
-  
+   	} 
+   
+   }
 
 
 
@@ -1101,7 +1137,7 @@ if (Restart == 0) {
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
                                                      	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                      	threshDist,
 								BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
@@ -1116,7 +1152,7 @@ if (Restart == 0) {
                                                         	attraction_range,
                                                         	d_viscotic_damp,
                                                         	Xdiv, Ydiv, Zdiv,BoxMin,
-                                                        	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                         	d_velListX, d_velListY, d_velListZ,
                                                         	d_fDisList,impurityNum,f_range);
                                                         
@@ -1134,7 +1170,7 @@ if (Restart == 0) {
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
                                                      	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList,
@@ -1150,7 +1186,7 @@ if (Restart == 0) {
                                                         attraction_range,
                                                         d_viscotic_damp,
                                                         Xdiv, Ydiv, Zdiv, boxMax,
-                                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                        d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,f_range);
     CudaErrorCheck();	
@@ -1166,7 +1202,7 @@ if (Restart == 0) {
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
                                                      	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList,
@@ -1182,7 +1218,7 @@ if (Restart == 0) {
                                                         	attraction_range,
                                                        	d_viscotic_damp,
                                                         	Xdiv, Ydiv, Zdiv, boxMax,
-                                                        	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                         	d_velListX, d_velListY, d_velListZ,
                                                         	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,f_range);
     CudaErrorCheck();	
@@ -1491,19 +1527,19 @@ if (Restart == 0) {
       cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
 
       if (useRigidSimulationBox){	
-      		makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+      		makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, impurityNum, d_CMx, d_CMy, d_CMz,
         	Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
         
         	CudaErrorCheck(); 
        }
 	if(usePBCs){
-       	makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+       	makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, impurityNum, d_CMx, d_CMy, d_CMz,
         	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
         
         	CudaErrorCheck(); 
        }
        if(useLEbc){
-       	makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+       	makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, impurityNum, d_CMx, d_CMy, d_CMz,
         	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
         	
         	CudaErrorCheck();
@@ -1556,7 +1592,7 @@ if (Restart == 0) {
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
                                                      	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                      	threshDist,
 								BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
@@ -1571,7 +1607,7 @@ if (Restart == 0) {
                                                         	attraction_range,
                                                         	d_viscotic_damp,
                                                         	Xdiv, Ydiv, Zdiv,BoxMin,
-                                                        	d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                         	d_velListX, d_velListY, d_velListZ,
                                                         	d_fDisList,impurityNum,f_range);
                                                         
@@ -1589,7 +1625,7 @@ if (Restart == 0) {
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
                                                      	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList,
@@ -1605,7 +1641,7 @@ if (Restart == 0) {
                                                         attraction_range,
                                                         d_viscotic_damp,
                                                         Xdiv, Ydiv, Zdiv,boxMax,
-                                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                        d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList, useRigidBoxZ,useRigidBoxY,impurityNum,f_range);
     CudaErrorCheck();	
@@ -1621,7 +1657,7 @@ if (Restart == 0) {
                                                      	repulsion_strength, repulsion_range,
                                                      	d_viscotic_damp,
                                                      	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                      	threshDist,
                                                      	BoxMin, Youngs_mod,
                                                      	constrainAngles, d_theta0, d_fConList,
@@ -1637,7 +1673,7 @@ if (Restart == 0) {
                                                         attraction_range,
                                                         d_viscotic_damp,
                                                         Xdiv, Ydiv, Zdiv,boxMax,
-                                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                                                        d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList, Pshift, Vshift, useRigidBoxZ,impurityNum,f_range);
     CudaErrorCheck();	
@@ -1675,7 +1711,7 @@ if (Restart == 0) {
                                                         attraction_range,
                                                         d_viscotic_damp,
                                                         Xdiv, Ydiv, Zdiv, BoxMin,
-                                                        d_NoofNNlist, d_NNlist, DL, d_gamma_env,
+                                                        d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                         d_velListX, d_velListY, d_velListZ,
                                                         d_fDisList, impurityNum,f_range);
                                                         
@@ -1689,7 +1725,7 @@ if (Restart == 0) {
                 	                                        attraction_range,
                 	                                        d_viscotic_damp,
                 	                                        Xdiv, Ydiv, Zdiv,boxMax,
-                	                                        d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+                	                                        d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                 	                                        d_velListX, d_velListY, d_velListZ,
                 	                                        d_fDisList,useRigidBoxZ,useRigidBoxY, impurityNum,f_range);
     		CudaErrorCheck();	
@@ -1705,7 +1741,7 @@ if (Restart == 0) {
                	                                         attraction_range,
                	                                         d_viscotic_damp,
                	                                         Xdiv, Ydiv, Zdiv,boxMax,
-               	                                         d_NoofNNlist, d_NNlist, DLp, d_gamma_env,
+               	                                         d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                	                                         d_velListX, d_velListY, d_velListZ,
                	                                         d_fDisList, Pshift, Vshift, useRigidBoxZ, impurityNum,f_range);
     CudaErrorCheck();
