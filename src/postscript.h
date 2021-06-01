@@ -37,16 +37,16 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
                            int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
-__global__ void makeNNlist( int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL);
 
-__global__ void makeNNlistPBC(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
 
                            
-__global__ void makeNNlistLEbc(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);
 
@@ -69,7 +69,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          bool recalc_r0,float ApoVol ,char* d_cell_Apo,float* d_ScaleFactor, int *num_cell_div, int *cell_div_inds);
 
 int printboundingbox(int rank, float *bounding_xyz);
-int initialize_C180s(int Orig_No_of_C180s);
+int initialize_C180s(int Orig_No_of_C180s, int impurityNum);
 int initialize_Vel(int Orig_No_of_C180s);
 int generate_random(int no_of_ran1_vectors);
 int read_fullerene_nn(void);
@@ -86,6 +86,8 @@ int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
+                           float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                            float* d_R0, float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -95,13 +97,15 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
-                           int impurityNum, float f_range);
+                           bool impurity, float f_range);
 
                            
 
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
+                           float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                            float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -111,11 +115,13 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
-                           bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range);
+                           bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
                            
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
+                           float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                            float* d_R0, float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -125,18 +131,17 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float threshDist,  
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
-                           float Pshift , bool useRigidBoxZ,int impurityNum, float f_range);
+                           float Pshift , bool useRigidBoxZ, bool impurity, float f_range);
 
 __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                           float *d_velListX, float *d_velListY, float *d_velListZ,
                           float dt, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
-                          int numCells,
-                          int impurityNum);
+                          int numCells);
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
-                            int numCells, int impurityNum);
+                            int numCells);
 
 
 void rmarin(int ij, int kl);
@@ -148,6 +153,8 @@ void ranmar(float rvec[], int len);
 void write_traj(int t_step, FILE* trajfile);
 void write_vel(int t_step, FILE* velFile,int frameCount);
 void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount);
+void WriteBinaryTrajPin(int t_step, FILE* trajFile, int frameCount);
+void write_trajPin(int t_step, FILE* trajfile);
 
 // read and write restart function
 int writeRestartFile(int t_step, int frameCount);
@@ -174,7 +181,7 @@ inline int num_cells_far();
 
 __global__ void PressureUpdate (float* d_pressList,
                                 float maxPressure, float* d_Growth_rate, int No_of_C180s,
-                                float* d_younds_mod, int impurityNum);
+                                float* d_younds_mod);
 
 __global__ void PressureReset (int* d_resetIndices, float* d_pressList,
                                float minPressure, int numResetCells);
@@ -209,59 +216,65 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fConList, R3Nptrs fRanList,
-                                float dt, long int num_nodes, float m, int impurityNum);
+                                float dt, long int num_nodes, float m );
 
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
-                                R3Nptrs fDisList, float dt, long int num_nodes, float m, int impurityNum);
+                                R3Nptrs fDisList, float dt, long int num_nodes, float m );
 
 __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
+                                   float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                                   float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,  float3 BoxMin,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, int impurityNum, float f_range);
+                                   R3Nptrs d_fDisList, bool impurity, float f_range);
                                    
 
 __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
+                                   float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                                   float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range);
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
                                    
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
+                                   float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                                   float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float f_range);
+                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, bool impurity, float f_range);
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
-                                  R3Nptrs d_fRanList, int impurityNum);
+                                  R3Nptrs d_fRanList);
 
 
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol,int numCells,
-                               bool useRigidBoxZ, bool useRigidBoxY,int impurityNum);
+                               bool useRigidBoxZ, bool useRigidBoxY );
                                
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               float Pshift, float Vshift,bool useRigidBoxZ,int impurityNum);
+                               float Pshift, float Vshift,bool useRigidBoxZ );
                                
 __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
                               float* d_XM,float* d_YM,float* d_ZM,

@@ -191,6 +191,8 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
+                           float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                           
                            float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -200,7 +202,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
-                           int impurityNum, float f_range)
+                           bool impurity, float f_range)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -229,11 +231,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     int rank, atom, nn_rank, nn_atom;
     rank = blockIdx.x;
     atom = threadIdx.x;
-        
-    if ( rank >= impurityNum ){
   
-    	
-
     	//int N1, N2, N3;
     	//float A1, A2, A3;
     	//float B1, B2, B3;
@@ -476,7 +474,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	}
         	
         	
-        	if (impurityNum > 0){
+        	if (impurity){
         	
         		NooflocalNN = 0;
         		
@@ -485,9 +483,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	            		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
                 
                 
-	            		deltaX  = X - d_CMx[nn_rank];
-	            		deltaY  = Y - d_CMy[nn_rank];                
-	            		deltaZ  = Z - d_CMz[nn_rank];
+	            		deltaX  = X - d_CMxPin[nn_rank];
+	            		deltaY  = Y - d_CMyPin[nn_rank];                
+	            		deltaZ  = Z - d_CMzPin[nn_rank];
 
 
                
@@ -517,9 +515,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                			
                			nnAtomInd += nn_atom;
 	
-               			deltaX = X - d_X[nn_rank*192+nn_atom];
-               			deltaY = Y - d_Y[nn_rank*192+nn_atom];
-               			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+               			deltaX = X - d_XPin[nn_rank*192+nn_atom];
+               			deltaY = Y - d_YPin[nn_rank*192+nn_atom];
+               			deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
         
             
                		 	R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
@@ -633,13 +631,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	d_ExtForces.y[atomInd] = FY_ext;
        	d_ExtForces.z[atomInd] = FZ_ext;
    	}
-   }
 }
 
 
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
+                           float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                   
                            float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -649,7 +648,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
-                           bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range)
+                           bool useRigidBoxZ, bool useRigidBoxY,bool impurity, float f_range)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -673,11 +672,6 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
     int rank, atom, nn_rank, nn_atom;
     rank = blockIdx.x;
     atom = threadIdx.x;
-    
-    if ( rank >= impurityNum ){
-        
-   
-    
 
     //int N1, N2, N3;
     //float A1, A2, A3;
@@ -934,7 +928,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         }
 
 
-	if (impurityNum > 0){
+	if (impurity){
 	
 	
 		NooflocalNN = 0;
@@ -944,14 +938,14 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
             		
                 
-            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX  = X - d_CMxPin[nn_rank];
             		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
     
-            		deltaY  = Y - d_CMy[nn_rank];	            
+            		deltaY  = Y - d_CMyPin[nn_rank];	            
             		if (!useRigidBoxY)deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 
                              
-            		deltaZ  = Z - d_CMz[nn_rank];
+            		deltaZ  = Z - d_CMzPin[nn_rank];
             		if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
 	    	
                
@@ -978,14 +972,14 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             		{
                 		nnAtomInd += nn_atom;
 
-                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = X - d_XPin[nn_rank*192+nn_atom];
                 		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
             
-                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                		deltaY = Y - d_YPin[nn_rank*192+nn_atom];
                 		if (!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
               	   
               	     
-                		deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                		deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
                 		if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             	 
             	 
@@ -1085,8 +1079,6 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
     }
 
- }
-
 }
 
 
@@ -1095,6 +1087,8 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
+                           float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                           
                            float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
@@ -1104,7 +1098,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
-                           float Pshift , bool useRigidBoxZ,int impurityNum, float f_range)
+                           float Pshift , bool useRigidBoxZ, bool impurity, float f_range)
 {
     // __shared__ curandState rngState;
     // if (threadIdx.x == 0){
@@ -1129,11 +1123,6 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
     rank = blockIdx.x;
     atom = threadIdx.x;
     
-    if ( rank >= impurityNum ) {    
-    
-    
-    
-
     //int N1, N2, N3;
     //float A1, A2, A3;
     //float B1, B2, B3;
@@ -1439,7 +1428,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         }
         
         
-        if (impurityNum > 0){
+        if (impurity){
 	
 		NooflocalNN = 0;
 		
@@ -1448,21 +1437,21 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
 
                 
-            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX  = X - d_CMxPin[nn_rank];
             		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
     
-            		deltaY  = Y - d_CMy[nn_rank];	
-            		if ( abs(d_CMx[rank] - d_CMx[nn_rank]) > boxMax.x /2){
+            		deltaY  = Y - d_CMyPin[nn_rank];	
+            		if ( abs(d_CMx[rank] - d_CMxPin[nn_rank]) > boxMax.x /2){
             	
 			if(X > boxMax.x - DLp.x ){
 			
-				deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMyPin[nn_rank];
 				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 			}
 			 
 			if(X <  DLp.x){
 				
-				deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMyPin[nn_rank];
 				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 			}
 			  	
@@ -1473,9 +1462,9 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             		}    
               
             		if (useRigidBoxZ){
-            			deltaZ  = Z - d_CMz[nn_rank];
+            			deltaZ  = Z - d_CMzPin[nn_rank];
             		}else{    
-            			deltaZ  = Z - d_CMz[nn_rank];
+            			deltaZ  = Z - d_CMzPin[nn_rank];
             			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
 	    		}	
                
@@ -1502,19 +1491,19 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             		{
                 		nnAtomInd += nn_atom;
 
-                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = X - d_XPin[nn_rank*192+nn_atom];
                 		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
             
-                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
-                		if ( abs(d_CMx[rank] - d_CMx[nn_rank]) > boxMax.x /2){
+                		deltaY = Y - d_YPin[nn_rank*192+nn_atom];
+                		if ( abs(d_CMx[rank] - d_CMxPin[nn_rank]) > boxMax.x /2){
     			
 				if(X > boxMax.x - DLp.x){
-					deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y - d_Y[nn_rank*192+nn_atom];
+					deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y - d_YPin[nn_rank*192+nn_atom];
 					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 				}  
 				if( X < DLp.x ){
 				
-					deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y - d_Y[nn_rank*192+nn_atom];
+					deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y - d_YPin[nn_rank*192+nn_atom];
 					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 				}  
             		
@@ -1525,9 +1514,9 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             			}  
 		     
 				if (useRigidBoxZ){
-		 			deltaZ = Z - d_Z[nn_rank*192+nn_atom];	
+		 			deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];	
 				}else{
-                			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                			deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
                 			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             	 
             	 		}
@@ -1606,29 +1595,25 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         d_forceList.z[atomInd] = FZ;
 
     }
- }
-
 }
 
 
 __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
+                           	    float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           	    float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                                   
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, int impurityNum, float f_range){
+                                   R3Nptrs d_fDisList, bool impurity, float f_range){
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
     
 
-
-	
-    if ( cellInd >= impurityNum ){
-     	
 
     	if (cellInd < No_of_C180s && nodeInd < 180){
 
@@ -1771,7 +1756,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	}
         	
         	
-        	if (impurityNum > 0){
+        	if (impurity){
 	
 			
 			NooflocalNN = 0;
@@ -1780,9 +1765,9 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    		
         	    		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; 
 
-        	    		deltaX  = X - d_CMx[nn_rank];
-        	    		deltaY  = Y - d_CMy[nn_rank];            
-        	    		deltaZ  = Z - d_CMz[nn_rank];
+        	    		deltaX  = X - d_CMxPin[nn_rank];
+        	    		deltaY  = Y - d_CMyPin[nn_rank];            
+        	    		deltaZ  = Z - d_CMzPin[nn_rank];
 
         	    		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
         	        		continue;
@@ -1805,9 +1790,9 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    		{
                 
                 
-        	        		deltaX = X - d_X[nn_rank*192+nn_atom];   
-        	        		deltaY = Y - d_Y[nn_rank*192+nn_atom];
-        	        		deltaZ = Z - d_Z[nn_rank*192+nn_atom];                
+        	        		deltaX = X - d_XPin[nn_rank*192+nn_atom];   
+        	        		deltaY = Y - d_YPin[nn_rank*192+nn_atom];
+        	        		deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];                
                 
 
         	        		R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
@@ -1834,9 +1819,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	d_fDisList.x[globalNodeInd] = force.x; 
         	d_fDisList.y[globalNodeInd] = force.y; 
         	d_fDisList.z[globalNodeInd] = force.z; 
-	}
-    
-    }  
+	} 
 
 }
 
@@ -1844,18 +1827,19 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
+                           	    float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           	    float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                                   
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY,int impurityNum, float f_range){
+                                   R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range){
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
-    
-    if ( cellInd >= impurityNum ){
+
 
     if (cellInd < No_of_C180s && nodeInd < 180){
     
@@ -2016,7 +2000,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 	}
 	
 	
-	if (impurityNum > 0){	
+	if (impurity){	
 		
 		NooflocalNN = 0;
 		
@@ -2024,15 +2008,15 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         	{
             		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; // MAGIC NUMBER!!
 
-            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX  = X - d_CMxPin[nn_rank];
             		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
 
 
-            		deltaY  = Y - d_CMy[nn_rank];	
+            		deltaY  = Y - d_CMyPin[nn_rank];	
             		if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y; 
             
            
-            		deltaZ  = Z - d_CMz[nn_rank];
+            		deltaZ  = Z - d_CMzPin[nn_rank];
             		if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             
             
@@ -2055,15 +2039,15 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
             		for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             		{
-                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = X - d_XPin[nn_rank*192+nn_atom];
                 		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
 
 
-                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
+                		deltaY = Y - d_YPin[nn_rank*192+nn_atom];
                 		if(!useRigidBoxY) deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
                 
                 
-                		deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                		deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
                 		if(!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
                 
 
@@ -2094,25 +2078,27 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         d_fDisList.y[globalNodeInd] = force.y; 
         d_fDisList.z[globalNodeInd] = force.z; 
     }
-  }
+
+
 }
 
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
+                           	    float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           	    float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                                   
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
                                    int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ,int impurityNum, float f_range)
+                                   R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, bool impurity, float f_range)
 {
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
     
-    if ( cellInd >= impurityNum ){
 
     if (  cellInd < No_of_C180s && nodeInd < 180){
     
@@ -2322,7 +2308,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 	}
 	
 	
-	if (impurityNum > 0){	
+	if (impurity){	
 		
 		NooflocalNN = 0;
 		
@@ -2331,19 +2317,19 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; 
             
 
-            		deltaX  = X - d_CMx[nn_rank];
+            		deltaX  = X - d_CMxPin[nn_rank];
             		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
 
             
-            		deltaY  = Y - d_CMy[nn_rank];	
-            		if ( abs(d_CMx[cellInd] - d_CMx[nn_rank]) > boxMax.x /2){
+            		deltaY  = Y - d_CMyPin[nn_rank];	
+            		if ( abs(d_CMx[cellInd] - d_CMxPin[nn_rank]) > boxMax.x /2){
             	
 			if(X > boxMax.x - DLp.x){
-				deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMyPin[nn_rank];
 				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 			} 
 			if(X < DLp.x){
-				deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+				deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMyPin[nn_rank];
 				deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 			}
             
@@ -2355,9 +2341,9 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             
             
             		if(useRigidBoxZ){
-            			deltaZ  = Z - d_CMz[nn_rank];
+            			deltaZ  = Z - d_CMzPin[nn_rank];
             		}else{
-            			deltaZ  = Z - d_CMz[nn_rank];
+            			deltaZ  = Z - d_CMzPin[nn_rank];
             			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
             		}
             
@@ -2380,18 +2366,18 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
             		for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             		{
-                		deltaX = X - d_X[nn_rank*192+nn_atom];
+                		deltaX = X - d_XPin[nn_rank*192+nn_atom];
                 		deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
                    
-                		deltaY = Y - d_Y[nn_rank*192+nn_atom];
-                		if ( abs(d_CMx[cellInd] - d_CMx[nn_rank]) > boxMax.x /2){
+                		deltaY = Y - d_YPin[nn_rank*192+nn_atom];
+                		if ( abs(d_CMx[cellInd] - d_CMxPin[nn_rank]) > boxMax.x /2){
             		
 				if(X > boxMax.x - DLp.x){
-					deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+					deltaY  = (Y - Pshift) - floor(( Y - Pshift) / boxMax.y) * boxMax.y  - d_CMyPin[nn_rank];
 					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;	
 				} 
 				if(X < DLp.x ){	
-					deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMy[nn_rank];
+					deltaY  = (Y + Pshift) - floor(( Y + Pshift) / boxMax.y) * boxMax.y  - d_CMyPin[nn_rank];
 					deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
 				}  	
             			}else{
@@ -2402,11 +2388,11 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             
                 		if(useRigidBoxZ){
                 
-                			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                			deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
                 
                 		}else{  
                 
-                			deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+                			deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
                 			deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;                
                 		}
 
@@ -2418,7 +2404,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 	
 				float3 v_ij = nodeVelocity;
 
-				if ( abs(d_CMx[cellInd] - d_CMx[nn_rank]) > boxMax.x /2){	
+				if ( abs(d_CMx[cellInd] - d_CMxPin[nn_rank]) > boxMax.x /2){	
 					if(X > boxMax.x - DLp.x) v_ij.y = v_ij.y - Vshift;
 					if(X < DLp.x ) v_ij.y = v_ij.y + Vshift;
 				}
@@ -2443,17 +2429,16 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         d_fDisList.y[globalNodeInd] = force.y; 
         d_fDisList.z[globalNodeInd] = force.z; 
     }
-  }
+
 }
 
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
-                                  R3Nptrs d_fRanList, int impurityNum){
+                                  R3Nptrs d_fRanList){
     
     size_t nodeIdx = blockIdx.x*blockDim.x + threadIdx.x;
-    const int cellInd = blockIdx.x;
+    //const int cellInd = blockIdx.x;
     
-    if ( cellInd >= impurityNum){
     
     	if (nodeIdx < No_of_C180s*192){
         	curandState rngState = d_rngStates[nodeIdx];
@@ -2462,7 +2447,6 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
         	d_fRanList.z[nodeIdx] = rand_scale_factor*curand_normal(&rngState);
         	d_rngStates[nodeIdx] = rngState;
     	}
-    }
     
 }
 
@@ -2471,8 +2455,8 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float dt, float m,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
-                          int numCells,
-                          int impurityNum){
+                          int numCells)
+{
     
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
@@ -2480,7 +2464,7 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
 
      
     
-    if ( cellInd >= impurityNum && cellInd < numCells && node < 180){
+    if ( cellInd < numCells && node < 180){
         
         int nodeInd = cellInd*192 + node;
         const float root_dt = sqrtf(dt);
@@ -2505,13 +2489,11 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fConList, R3Nptrs fRanList,
-                                float dt, long int num_nodes, float m, int impurityNum){
+                                float dt, long int num_nodes, float m){
    
-    const int cellInd = blockIdx.x;
+    //const int cellInd = blockIdx.x;
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
-    	
-    if ( cellInd >= impurityNum ){
     
     	if (nodeInd < num_nodes){
         	float root_dt = sqrtf(dt);
@@ -2519,28 +2501,22 @@ __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
         	d_VY[nodeInd] = d_VY[nodeInd] + 0.5*(dt*fConList.y[nodeInd] + root_dt*fRanList.y[nodeInd])/m;
         	d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*(dt*fConList.z[nodeInd] + root_dt*fRanList.z[nodeInd])/m;
     	}
-    }
 
 }
 
 
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
-                                R3Nptrs fDisList, float dt, long int num_nodes, float m , int impurityNum){
+                                R3Nptrs fDisList, float dt, long int num_nodes, float m ){
     
-    const int cellInd = blockIdx.x;
+    //const int cellInd = blockIdx.x;
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
-
-
-    if ( cellInd >= impurityNum ){
     	
     	if (nodeInd < num_nodes){
     	    d_VX[nodeInd] = d_VX[nodeInd] + 0.5*dt*(fDisList.x[nodeInd])/m;
     	    d_VY[nodeInd] = d_VY[nodeInd] + 0.5*dt*(fDisList.y[nodeInd])/m;
     	    d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*dt*(fDisList.z[nodeInd])/m;
     	}
-    }
-
 }
 
 
@@ -2548,11 +2524,10 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z, 
                             int numCells, int impurityNum){
     
-    const int cellInd = blockIdx.x;
+    //const int cellInd = blockIdx.x;
     const int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
     
-    if ( cellInd >= impurityNum ){
-    	if (nodeInd < 192*numCells){
+    if (nodeInd < 192*numCells){
         
         // if (d_XP[nodeInd] != d_XM[nodeInd] ||
         //     d_YP[nodeInd] != d_YM[nodeInd] || 
@@ -2568,7 +2543,6 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
         	d_Y[nodeInd] = d_YP[nodeInd];
         	d_Z[nodeInd] = d_ZP[nodeInd];
     	}
-    }
 }
 
 __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
@@ -2656,14 +2630,12 @@ __global__ void SumForces(R3Nptrs fConList, R3Nptrs fDisList, R3Nptrs fRanList,
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               bool useRigidBoxZ, bool useRigidBoxY,int impurityNum){
+                               bool useRigidBoxZ, bool useRigidBoxY){
 
     
     int cellInd = blockIdx.x;
     int node = threadIdx.x;
     int nodeInd = cellInd*192 + node;
-
-    if ( cellInd >= impurityNum ){
     
     if (cellInd < numCells && node < 180){
     
@@ -2701,23 +2673,19 @@ __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z,
 
     }	
 
-  }
-
 }
 
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
                                float3 boxMax, float divVol, int numCells,
-                               float Pshift, float Vshift, bool useRigidBoxZ,int impurityNum){
+                               float Pshift, float Vshift, bool useRigidBoxZ){
                                
                                    
     int cellInd = blockIdx.x;
     int node = threadIdx.x;
     int nodeInd = cellInd*192 + node;
     
-    
-    if ( cellInd >= impurityNum ){
     	    
     if (cellInd < numCells && node < 180){
 
@@ -2772,5 +2740,4 @@ __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z,
 	}   
                           
      }                         
-   } 
  }

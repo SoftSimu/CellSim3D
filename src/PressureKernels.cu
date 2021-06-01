@@ -3,14 +3,13 @@
 
 __global__ void PressureUpdate (float* d_pressList,
                                 float maxPressure, float* d_Growt_rate, int No_of_C180s,
-                                float* d_youngs_mod,
-                                int impurityNum){
+                                float* d_youngs_mod ){
 
 	
     int cellInd = blockIdx.x*blockDim.x + threadIdx.x;
     float inc = d_Growt_rate[cellInd];
 
-    if (cellInd < No_of_C180s && cellInd >= impurityNum){
+    if (cellInd < No_of_C180s){
          
            if (d_pressList[cellInd] < maxPressure || inc < 0 ){
                     d_pressList[cellInd] += inc;

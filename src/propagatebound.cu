@@ -204,7 +204,7 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 }
 
 
-__global__ void makeNNlist(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL)
 {
@@ -213,7 +213,6 @@ __global__ void makeNNlist(int No_of_C180s, int impurityNum, float *CMx, float *
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
-  if ( fullerene >= impurityNum ){
 
 	if ( fullerene < No_of_C180s )
 	{
@@ -279,13 +278,12 @@ __global__ void makeNNlist(int No_of_C180s, int impurityNum, float *CMx, float *
 		
 	}
 
-   }
 }
 
 
 
 
-__global__ void makeNNlistPBC(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY)
 {
@@ -294,8 +292,6 @@ __global__ void makeNNlistPBC(int No_of_C180s, int impurityNum, float *CMx, floa
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
-
-  if ( fullerene >= impurityNum ){
 
 	if ( fullerene < No_of_C180s )
 	{
@@ -376,12 +372,11 @@ __global__ void makeNNlistPBC(int No_of_C180s, int impurityNum, float *CMx, floa
 		
 	}
 		
-   }
 }
 
 
 
-__global__ void makeNNlistLEbc(int No_of_C180s, int impurityNum, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ)
 {
@@ -390,7 +385,6 @@ __global__ void makeNNlistLEbc(int No_of_C180s, int impurityNum, float *CMx, flo
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
 //  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
-  if ( fullerene >= impurityNum ){
 
 	if ( fullerene < No_of_C180s )
 	{
@@ -512,7 +506,6 @@ __global__ void makeNNlistLEbc(int No_of_C180s, int impurityNum, float *CMx, flo
 		
 	}
 		
-   }
 }
 
 
