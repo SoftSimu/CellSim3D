@@ -20,6 +20,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
     int tid       = threadIdx.x;
 
     if ( tid < 180 ){
+    
         locX[tid] = X[192*fullerene+tid] -CMx[fullerene];
         locY[tid] = Y[192*fullerene+tid] -CMy[fullerene];
         locZ[tid] = Z[192*fullerene+tid] -CMz[fullerene];

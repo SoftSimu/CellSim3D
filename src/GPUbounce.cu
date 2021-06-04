@@ -221,9 +221,15 @@ int *d_NoofNNlist;
 int *d_NNlist;
 int *NoofNNlist;
 int *NNlist;
-
 int *d_NoofNNlistPin;
 int *d_NNlistPin;
+
+float BufferDistance;
+int* d_num_cell_dang; 
+int* d_cell_dang_inds;
+int num_cell_dang; 
+int* cell_dang_inds;
+char* d_cell_dang;
 
 
 bool correct_com = false;
@@ -232,6 +238,8 @@ int reductionblocks;
 
 float *d_CMxPin, *d_CMyPin, *d_CMzPin;
 float *d_CMx, *d_CMy, *d_CMz;
+float *d_CMxNNlist, *d_CMzNNlist, *d_CMyNNlist;
+
 float *CMx, *CMy, *CMz;
 float *d_VCMx, *d_VCMy, *d_VCMz;
 float *VCMx, *VCMy, *VCMz;
@@ -569,13 +577,19 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMx , MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMy , MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CMz , MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_CMxNNlist , MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_CMyNNlist , MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_CMzNNlist , MaxNoofC180s*sizeof(float))) return(-1);  
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div_inds, MaxNoofC180s*sizeof(int))) return(-1);          //JW
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);  
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div_inds, MaxNoofC180s*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_dang ,     MaxNoofC180s*sizeof(char))) return(-1);            
   if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_div,  32*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_dang,  sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_dang_inds, 100*sizeof(int))) return(-1);          
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1); 
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ran2 , 10000*sizeof(float))) return(-1);
@@ -648,9 +662,16 @@ int main(int argc, char *argv[])
   cudaMemset(d_CMx, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_CMy, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+  
   cudaMemset(d_VCMx, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_VCMy, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_VCMz, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+  
+  cudaMemset(d_CMxNNlist, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_CMyNNlist, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_CMzNNlist, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
   cudaMemset(d_R0, 0, 3*192*sizeof(float));
@@ -698,6 +719,16 @@ int main(int argc, char *argv[])
   cudaMemset(d_SysCx, 0, 1024*sizeof(float));
   cudaMemset(d_SysCy, 0, 1024*sizeof(float));
   cudaMemset(d_SysCz, 0, 1024*sizeof(float));
+  CudaErrorCheck();
+
+  cudaMemset(d_num_cell_div, 0, sizeof(int));
+  cudaMemset(d_cell_div_inds, 0, MaxNoofC180s*sizeof(int));  
+  cudaMemset(d_cell_div, 0, MaxNoofC180s*sizeof(char)); 
+  CudaErrorCheck();
+  
+  cudaMemset(d_num_cell_dang, 0, sizeof(int));
+  cudaMemset(d_cell_dang_inds, 0, 100*sizeof(int));
+  cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));
   CudaErrorCheck();
   
   
@@ -984,7 +1015,11 @@ if (Restart == 0) {
     printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
   }
 
-
+  BufferDistance = 0.3;
+  printf(" BufferDistance is: %f \n",BufferDistance);
+  BufferDistance = BufferDistance*BufferDistance;
+  
+  
 
   if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*64*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,    Xdiv*Ydiv*Zdiv*sizeof(int))) return(-1);
@@ -1120,21 +1155,25 @@ if (Restart == 0) {
     } 	
 
 
+  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
+  CudaErrorCheck(); 
+  
+
    if (useRigidSimulationBox){
       	
-      	makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+      	makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
         Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);        
         CudaErrorCheck(); 
    
    }if(usePBCs){
     
-       makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+       makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
         attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);        
         CudaErrorCheck(); 
    
    }if(useLEbc){
     
-       makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
+       makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
         attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);     	
         CudaErrorCheck();
        
@@ -1630,35 +1669,104 @@ if (Restart == 0) {
 
 
 
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-      //DL = divVol; 
-      CudaErrorCheck(); 
-
-      cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
-
-      if (useRigidSimulationBox){
+      	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+      	//DL = divVol; 
+      	CudaErrorCheck(); 
       	
-      		makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
+      	
+      	if ( num_cell_div > 0 || num_cell_Apo > 0){
+				
+				
+      		//printf(" New Cell:	 %d, Apo Cell:	      %d, step:	%d\n", num_cell_div,num_cell_Apo, step);
+      		num_cell_Apo = 0;
+      		
+      		cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
+      		
+      		if (useRigidSimulationBox){
+      	
+      			makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        		Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
         
-        	CudaErrorCheck(); 
-       }
-	if(usePBCs){
+        		CudaErrorCheck(); 
+       	}
+		if(usePBCs){
 	
-       	makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
+       		makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
         
-        	CudaErrorCheck(); 
-       }
-       if(useLEbc){
+        		CudaErrorCheck(); 
+       	}
+       	if(useLEbc){
        
-       	makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
+       		makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
         	
-        	CudaErrorCheck();
+        		CudaErrorCheck();
        
-       }
+       	}
+	
+	}
+      	
+      	
+      
+	if (useRigidSimulationBox){
+	
+		DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+									boxMax);
+	}if(usePBCs){			
+	
+		DangerousParticlesFinderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+									boxMax, useRigidBoxZ, useRigidBoxY);
+	}if(useLEbc){			
 
+		DangerousParticlesFinderLEbc<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+									boxMax, useRigidBoxZ, useRigidBoxY);
+	}
+      
+      
+	cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
+	
+	if ( num_cell_dang > 0){
+		
+		
+		
+		cudaMemset(d_num_cell_dang, 0, sizeof(int));
+		cudaMemset(d_cell_dang_inds, 0, 100*sizeof(int));
+		cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));
+				
+      		//printf(" dang Cell:	 %d, step:	%d\n", num_cell_dang, step);
+      		
+      		
+      		cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
+      		if (useRigidSimulationBox){
+      	
+      			makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        		Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
+        
+        		CudaErrorCheck(); 
+       	}
+		if(usePBCs){
+	
+       		makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
+        
+        		CudaErrorCheck(); 
+       	}
+       	if(useLEbc){
+       
+       		makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
+        	
+        		CudaErrorCheck();
+       
+       	}
+	}
 
 // ---------------------------------------------------------------------------------------------------
 
@@ -1946,6 +2054,7 @@ if (Restart == 0) {
           
         No_of_C180s += num_cell_div;                           
         NewCellInd  += num_cell_div;                           
+        
         
         
         //for (int i = 0 ; i < num_cell_div; i++) cudaStreamDestroy(streams[i]);

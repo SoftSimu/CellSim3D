@@ -37,16 +37,16 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
                            int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
-__global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL);
 
-__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
 
                            
-__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);
 
@@ -281,3 +281,21 @@ __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
                               float* d_velListX,float* d_velListY,float* d_velListZ,
                               float* d_pressList,float* d_Youngs_mod, float* d_Growth_rate,
                               int* d_CellINdex,int No_of_C180s,int Aporank);
+
+
+__global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  float3 boxMax);
+
+                              
+__global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY);
+					  
+                              
+__global__ void DangerousParticlesFinderLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY);                              

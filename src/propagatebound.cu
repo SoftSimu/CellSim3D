@@ -204,7 +204,7 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 }
 
 
-__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL)
 {
@@ -220,7 +220,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 		int posx = 0;
 		int posy = 0;
 		int posz = 0;		
-
+		
 
 	 	posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
 	  	if ( posx < 0 ) posx = 0;
@@ -276,6 +276,13 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 			}
 		}	
 		
+	
+		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
+	
+	
 	}
 
 }
@@ -283,7 +290,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 
 
 
-__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY)
 {
@@ -369,6 +376,10 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 		}	
 
 		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
+		
 		
 	}
 		
@@ -376,7 +387,7 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
 
 
 
-__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+__global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ)
 {
@@ -501,7 +512,10 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 
 		}
 			
-
+		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
 		
 		
 	}
@@ -877,3 +891,149 @@ __global__ void minmaxpost( int No_of_C180s,
 	}
 
 }
+
+
+__global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  float3 boxMax)
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( fullerene < No_of_C180s )
+	{
+		
+		if( cell_dang[fullerene] == 0){
+			
+			float deltaX, deltaY, deltaZ;
+			float R;
+		
+		
+			deltaX = CMxNNlist[fullerene] - CMx[fullerene]; 
+			deltaY = CMyNNlist[fullerene] - CMy[fullerene];
+			deltaZ = CMzNNlist[fullerene] - CMz[fullerene];
+		
+			R  = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+		
+			if (R >= BufferDistance){
+			
+				cell_dang[fullerene] = 1;
+				int index = atomicAdd(&num_cell_dang[0],1);   
+				cell_dang_inds[index] = fullerene;   
+		
+			}
+		}
+
+
+	}
+
+}
+
+
+__global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY)
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( fullerene < No_of_C180s )
+	{
+		
+		if( cell_dang[fullerene] == 0){
+			
+			float deltaX, deltaY, deltaZ;
+			float R;
+		
+		
+			deltaX = CMxNNlist[fullerene] - CMx[fullerene];
+			deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+			 
+			deltaY = CMyNNlist[fullerene] - CMy[fullerene];
+			if (!useRigidBoxY)deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+			
+			deltaZ = CMzNNlist[fullerene] - CMz[fullerene];
+			if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+			
+		
+			R  = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+		
+			
+			if (R >= BufferDistance){
+			
+				cell_dang[fullerene] = 1;
+				int index = atomicAdd(&num_cell_dang[0],1);   
+				cell_dang_inds[index] = fullerene;   
+		
+			}
+		}
+
+
+	}
+
+}
+
+
+__global__ void DangerousParticlesFinderLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
+					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY )
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( fullerene < No_of_C180s )
+	{
+		
+		if( cell_dang[fullerene] == 0){
+			
+			float deltaX, deltaY, deltaZ;
+			float R;
+		
+		
+			deltaX = CMxNNlist[fullerene] - CMx[fullerene];
+			deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
+			
+			deltaZ = CMzNNlist[fullerene] - CMz[fullerene];
+			if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+			 
+			deltaY = CMyNNlist[fullerene] - CMy[fullerene];
+			if ( abs(deltaY) > boxMax.x /2){
+				
+				cell_dang[fullerene] = 1;
+				int index = atomicAdd(&num_cell_dang[0],1);   
+				cell_dang_inds[index] = fullerene; 
+				
+			
+			}else{
+			    			
+            			R  = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+        	
+            			if (R >= BufferDistance){
+					
+					
+					cell_dang[fullerene] = 1;
+					int index = atomicAdd(&num_cell_dang[0],1);   
+					cell_dang_inds[index] = fullerene;   
+		
+				}
+            		
+            		
+            		}
+			
+			
+		}
+
+
+	}
+
+}
+
