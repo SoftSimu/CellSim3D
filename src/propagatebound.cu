@@ -999,32 +999,34 @@ __global__ void DangerousParticlesFinderLEbc(int No_of_C180s, float *CMx, float 
 			float R;
 		
 		
-			deltaX = CMxNNlist[fullerene] - CMx[fullerene];
-			deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
-			
-			deltaZ = CMzNNlist[fullerene] - CMz[fullerene];
-			if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
-			 
-			deltaY = CMyNNlist[fullerene] - CMy[fullerene];
-			if ( abs(deltaY) > boxMax.x /2){
+			if ( abs(CMx[fullerene] - CMxNNlist[fullerene]) > boxMax.x/2 ){
 				
 				cell_dang[fullerene] = 1;
 				int index = atomicAdd(&num_cell_dang[0],1);   
 				cell_dang_inds[index] = fullerene; 
 				
 			
-			}else{
-			    			
-            			R  = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
-        	
-            			if (R >= BufferDistance){
-					
-					
-					cell_dang[fullerene] = 1;
-					int index = atomicAdd(&num_cell_dang[0],1);   
-					cell_dang_inds[index] = fullerene;   
+			} else{
 		
-				}
+			deltaX = CMxNNlist[fullerene] - CMx[fullerene];
+			
+			deltaY = CMyNNlist[fullerene] - CMy[fullerene];
+			deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
+			
+			deltaZ = CMzNNlist[fullerene] - CMz[fullerene];
+			if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
+			 
+						    			
+            		R  = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+        	
+            		if (R >= BufferDistance){
+					
+					
+				cell_dang[fullerene] = 1;
+				int index = atomicAdd(&num_cell_dang[0],1);   
+				cell_dang_inds[index] = fullerene;   
+		
+			}
             		
             		
             		}

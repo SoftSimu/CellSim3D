@@ -1017,7 +1017,7 @@ if (Restart == 0) {
 
   BufferDistance = 0.3;
   printf(" BufferDistance is: %f \n",BufferDistance);
-  BufferDistance = BufferDistance*BufferDistance;
+
   
   
 
@@ -1465,6 +1465,12 @@ if (Restart == 0) {
   int numNodes = No_of_C180s*192;
   NewCellInd = No_of_C180s;
   WithoutApo = true;
+  
+  int StepLEbc = 10000000;
+  if (useLEbc)  StepLEbc = int (BufferDistance/(shear_rate*boxMax.x*delta_t));
+  printf("Step updater:	%d\n",StepLEbc);
+  
+  BufferDistance = BufferDistance*BufferDistance;
   // Simulation loop
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
@@ -1732,7 +1738,7 @@ if (Restart == 0) {
       
 	cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
 	
-	if ( num_cell_dang > 0){
+	if ( num_cell_dang > 0 || (step)%StepLEbc == 0){
 		
 		
 		
