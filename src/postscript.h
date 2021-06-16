@@ -60,13 +60,15 @@ __global__ void VelocityCenterOfMass( int No_of_C180s,
                float *d_VCMx, float *d_VCMy,float *d_VCMz);
                
 
+
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
                          char* cell_div, float* d_DivisionVolume, bool checkSphericity,
-                         float* areaList, 
-                         float stiffness1, bool useDifferentCell, float* d_younds_mod,
-                         bool recalc_r0,float ApoVol ,char* d_cell_Apo,float* d_ScaleFactor, int *num_cell_div, int *cell_div_inds);
+                         float* areaList,
+                         float stiffness1, bool useDifferentCell, float* d_younds_mod, float* d_Growth_rate,
+                         bool recalc_r0, float ApoVol, float* d_ScaleFactor,
+                         int *num_cell_div, int *cell_div_inds, char* d_cell_Apo, int* d_num_cell_Apo, int *d_cell_Apo_inds);
 
 int printboundingbox(int rank, float *bounding_xyz);
 int initialize_C180s(int Orig_No_of_C180s, int impurityNum);
@@ -114,7 +116,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
                            bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
                            
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -298,4 +300,30 @@ __global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *
 __global__ void DangerousParticlesFinderLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
 					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
-					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY);                              
+					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY); 
+
+__global__ void UpdateNNlistDivision(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz,
+					float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           		int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           		int *d_NoofNNlist, int *d_NNlist, float DL); 
+
+                           	
+__global__ void UpdateNNlistDivisionPBC(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           		 int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           		 int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY);
+
+
+__global__ void UpdateNNlistDivisionLEbc(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           		   int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           		   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);   
+
+__global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter,
+				float *d_X,  float *d_Y,  float *d_Z,
+                               float* d_velListX, float* d_velListY, float* d_velListZ, 
+                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_gamma_env, float* d_viscotic_damp,float* d_pressList, int* d_CellINdex,
+                               float* Apo_rate, float* squeeze_rate,
+				int* d_cell_Apo_inds, char* cell_Apo);
+
+__global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, float* d_Apo_rate,
+ 				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell);                        	                            

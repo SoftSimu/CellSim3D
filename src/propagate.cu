@@ -647,7 +647,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            bool useRigidBoxZ, bool useRigidBoxY,bool impurity, float f_range)
 {
     // __shared__ curandState rngState;
@@ -745,6 +745,9 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         float FX = 0.f;
         float FY = 0.f;
         float FZ = 0.f;
+        float FX_ext = 0.f;
+        float FY_ext = 0.f;
+        float FZ_ext = 0.f;
 
         int nnAtomInd;
         
@@ -1017,6 +1020,11 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         FX += contactForce.x;
         FY += contactForce.y;
         FZ += contactForce.z; 
+        
+        FX_ext += contactForce.x;
+        FY_ext += contactForce.y;
+        FZ_ext += contactForce.z; 
+
 
 #ifdef FORCE_DEBUG
 
@@ -1048,10 +1056,12 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
             if (gap1 < threshDist){
                 FZ += -100*Youngs_mod*(gap1 - threshDist);
+                FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
             }
 
             if (gap2 < threshDist){
                 FZ += 100*Youngs_mod*(gap2 - threshDist);
+                FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
             }
 
         }
@@ -1065,10 +1075,13 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
             if (gap1 < threshDist){
                 FY += -100*Youngs_mod*(gap1 - threshDist);
+                FY_ext += -100*Youngs_mod*(gap1 - threshDist);
+                
             }
 
             if (gap2 < threshDist){
                 FY += 100*Youngs_mod*(gap2 - threshDist);
+                FY_ext += 100*Youngs_mod*(gap2 - threshDist);
             }
 
         }
@@ -1076,6 +1089,10 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         d_forceList.x[atomInd] = FX;
         d_forceList.y[atomInd] = FY;
         d_forceList.z[atomInd] = FZ;
+        
+        d_ExtForces.x[atomInd] = FX_ext;
+        d_ExtForces.y[atomInd] = FY_ext;
+        d_ExtForces.z[atomInd] = FZ_ext;
 
     }
 

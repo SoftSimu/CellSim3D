@@ -1,14 +1,16 @@
 #include <cuda.h>
 #include <stdio.h>
 #include "VectorFunctions.hpp"
+#include<curand_kernel.h>
 
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
                          float *CMx , float *CMy, float *CMz, float *vol,
                          char* cell_div, float* d_DivisionVolume, bool checkSphericity,
                          float* areaList,
-                         float stiffness1, bool useDifferentCell, float* d_younds_mod,
-                         bool recalc_r0, float ApoVol, char* cell_Apo, float* d_ScaleFactor, int *num_cell_div, int *cell_div_inds){
+                         float stiffness1, bool useDifferentCell, float* d_younds_mod, float* d_Growth_rate,
+                         bool recalc_r0, float ApoVol, float* d_ScaleFactor,
+                         int *num_cell_div, int *cell_div_inds, char* d_cell_Apo, int* d_num_cell_Apo, int *d_cell_Apo_inds){
                          
     __shared__ float locX[192];
     __shared__ float locY[192];
@@ -121,11 +123,15 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         }
 	
 
-	if (volume < ApoVol){    	
-	    cell_Apo[fullerene] = 1;	
-	} else {
-	    cell_Apo[fullerene] = 0;	
-	}
+	if ( volume < ApoVol ){
+	    	
+	    	if (d_Growth_rate[fullerene] < 0){
+	    		
+	    		int index = atomicAdd(&d_num_cell_Apo[0],1);
+	    		d_cell_Apo_inds[index] = fullerene;
+	    		d_cell_Apo[fullerene] = 1;
+	    	}	
+	} 
 
 
         if (checkSphericity){
@@ -309,4 +315,99 @@ __global__ void  cell_division(
     
     
 }
+   
+   
+__global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter,
+				float *d_X,  float *d_Y,  float *d_Z,
+                               float* d_velListX, float* d_velListY, float* d_velListZ, 
+                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               float* d_Apo_rate, float* d_squeeze_rate,
+				int* d_cell_Apo_inds, char* cell_Apo){
+
+	
+	
+	int dead_cell = d_cell_Apo_inds[blockIdx.x];
+		
+	if( dead_cell < No_of_C180s - num_cell_Apo ) {
+	 
+	 	__shared__ int moving_Cell;
+		
+		int tid = threadIdx.x;
+		
+		if (tid == 0){
+
+			int index = atomicAdd(d_counter,1);
+			moving_Cell = No_of_C180s - index - 1;			
+		
+			while ( cell_Apo[moving_Cell] == 1 ){
+				
+				index = atomicAdd(d_counter,1);
+				moving_Cell = No_of_C180s - index - 1;
+			}
+	
+			//printf("dead_cell:	%d,moving_Cell :	%d\n", dead_cell, moving_Cell);
+		}
+	
+		__syncthreads();
+	
+	
+		d_X[dead_cell*192 + tid] = d_X[192*moving_Cell + tid];
+		d_Y[dead_cell*192 + tid] = d_Y[192*moving_Cell + tid];
+		d_Z[dead_cell*192 + tid] = d_Z[192*moving_Cell + tid];
+	
+	
+		d_velListX[dead_cell*192 + tid] = d_velListX[192*moving_Cell + tid];
+		d_velListY[dead_cell*192 + tid] = d_velListY[192*moving_Cell + tid];
+		d_velListZ[dead_cell*192 + tid] = d_velListZ[192*moving_Cell + tid]; 
+	
+	
+		if(tid == 0){
+		
+			d_pressList[dead_cell] = d_pressList[moving_Cell];
+			d_Growth_rate[dead_cell] = d_Growth_rate[moving_Cell];
+			d_Youngs_mod[dead_cell]  = d_Youngs_mod[moving_Cell];
+			d_ScaleFactor[dead_cell] = d_ScaleFactor[moving_Cell];
+			d_DivisionVolume[dead_cell] = d_DivisionVolume[moving_Cell];
+			d_gamma_env[dead_cell] = d_gamma_env[moving_Cell];
+			d_viscotic_damp[dead_cell] = d_viscotic_damp[moving_Cell];
+			d_CellINdex[dead_cell] = d_CellINdex[moving_Cell];
+			d_Apo_rate[dead_cell] = d_Apo_rate[moving_Cell];
+			d_squeeze_rate[dead_cell] = d_squeeze_rate[moving_Cell];
+	
+		}
+	
+	}
+	
+	
+}  
+
+__global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, float* d_Apo_rate,
+ 				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell){
+                                  
+        size_t cell = blockIdx.x*blockDim.x + threadIdx.x;
     
+    
+    	if ( cell < No_of_C180s){
+
+        	curandState rngState = d_rngStatesApo[cell];
+      			       			
+      		if (d_Growth_rate[cell] > 0) {
+        	        
+        	        float rand = curand_uniform(&rngState);
+        	        
+        	        if ( rand < d_Apo_rate[cell] ){
+        	        
+        	        	d_Growth_rate[cell] = d_squeeze_rate[cell];
+        	        	atomicAdd(&d_Num_shrink_Cell[0],1);
+        	        	
+        	        }
+      			
+      		}
+             
+
+		d_rngStatesApo[cell] = rngState;
+	}
+
+}
+  

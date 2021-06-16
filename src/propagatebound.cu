@@ -204,6 +204,66 @@ __global__ void minmaxpre( int No_of_C180s, float *d_bounding_xyz,
 }
 
 
+
+__global__ void minmaxpost( int No_of_C180s,
+							float *Minx, float *Maxx, float *Miny, float *Maxy,  float *Minz, float *Maxz)
+{
+
+  __shared__ float  minx[1024];
+  __shared__ float  maxx[1024];
+  __shared__ float  miny[1024];
+  __shared__ float  maxy[1024];
+  __shared__ float  minz[1024];
+  __shared__ float  maxz[1024];
+
+  int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+  int tid       = threadIdx.x;
+
+  minx[tid] = +1.0E8f;
+  maxx[tid] = -1.0E8f;
+  miny[tid] = +1.0E8f;
+  maxy[tid] = -1.0E8f;
+  minz[tid] = +1.0E8f;
+  maxz[tid] = -1.0E8f;
+
+  if ( fullerene < No_of_C180s )
+    {
+	  minx[tid] = Minx[fullerene];
+	  maxx[tid] = Maxx[fullerene];
+	  miny[tid] = Miny[fullerene];
+	  maxy[tid] = Maxy[fullerene];
+	  minz[tid] = Minz[fullerene];
+	  maxz[tid] = Maxz[fullerene];
+    }
+
+  __syncthreads();
+
+  for ( int s = blockDim.x/2; s > 0; s>>=1)
+	{
+	  if ( tid < s )
+		{
+		  minx[tid] = fminf(minx[tid],minx[tid+s]);
+		  maxx[tid] = fmaxf(maxx[tid],maxx[tid+s]);
+		  miny[tid] = fminf(miny[tid],miny[tid+s]);
+		  maxy[tid] = fmaxf(maxy[tid],maxy[tid+s]);
+		  minz[tid] = fminf(minz[tid],minz[tid+s]);
+		  maxz[tid] = fmaxf(maxz[tid],maxz[tid+s]);
+		}
+	  __syncthreads();
+	}
+
+  if ( tid == 0 )
+	{
+	  Minx[blockIdx.x+0]  = minx[0];
+	  Minx[blockIdx.x+1]  = maxx[0];
+	  Minx[blockIdx.x+2]  = miny[0];
+	  Minx[blockIdx.x+3]  = maxy[0];
+	  Minx[blockIdx.x+4]  = minz[0];
+	  Minx[blockIdx.x+5]  = maxz[0];
+	}
+
+}
+
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL)
@@ -829,70 +889,6 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
 }
 
 
-
-
-
-
-__global__ void minmaxpost( int No_of_C180s,
-							float *Minx, float *Maxx, float *Miny, float *Maxy,  float *Minz, float *Maxz)
-{
-
-  __shared__ float  minx[1024];
-  __shared__ float  maxx[1024];
-  __shared__ float  miny[1024];
-  __shared__ float  maxy[1024];
-  __shared__ float  minz[1024];
-  __shared__ float  maxz[1024];
-
-  int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
-  int tid       = threadIdx.x;
-
-  minx[tid] = +1.0E8f;
-  maxx[tid] = -1.0E8f;
-  miny[tid] = +1.0E8f;
-  maxy[tid] = -1.0E8f;
-  minz[tid] = +1.0E8f;
-  maxz[tid] = -1.0E8f;
-
-  if ( fullerene < No_of_C180s )
-    {
-	  minx[tid] = Minx[fullerene];
-	  maxx[tid] = Maxx[fullerene];
-	  miny[tid] = Miny[fullerene];
-	  maxy[tid] = Maxy[fullerene];
-	  minz[tid] = Minz[fullerene];
-	  maxz[tid] = Maxz[fullerene];
-    }
-
-  __syncthreads();
-
-  for ( int s = blockDim.x/2; s > 0; s>>=1)
-	{
-	  if ( tid < s )
-		{
-		  minx[tid] = fminf(minx[tid],minx[tid+s]);
-		  maxx[tid] = fmaxf(maxx[tid],maxx[tid+s]);
-		  miny[tid] = fminf(miny[tid],miny[tid+s]);
-		  maxy[tid] = fmaxf(maxy[tid],maxy[tid+s]);
-		  minz[tid] = fminf(minz[tid],minz[tid+s]);
-		  maxz[tid] = fmaxf(maxz[tid],maxz[tid+s]);
-		}
-	  __syncthreads();
-	}
-
-  if ( tid == 0 )
-	{
-	  Minx[blockIdx.x+0]  = minx[0];
-	  Minx[blockIdx.x+1]  = maxx[0];
-	  Minx[blockIdx.x+2]  = miny[0];
-	  Minx[blockIdx.x+3]  = maxy[0];
-	  Minx[blockIdx.x+4]  = minz[0];
-	  Minx[blockIdx.x+5]  = maxz[0];
-	}
-
-}
-
-
 __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
 					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
@@ -969,7 +965,8 @@ __global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *
 			
 				cell_dang[fullerene] = 1;
 				int index = atomicAdd(&num_cell_dang[0],1);   
-				cell_dang_inds[index] = fullerene;   
+				cell_dang_inds[index] = fullerene; 
+				//printf("cell %d\n",fullerene);  
 		
 			}
 		}
@@ -1038,4 +1035,301 @@ __global__ void DangerousParticlesFinderLEbc(int No_of_C180s, float *CMx, float 
 	}
 
 }
+
+
+
+__global__ void UpdateNNlistDivision(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           		int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           		int *d_NoofNNlist, int *d_NNlist, float DL)
+{
+
+
+    	int fullerene  = non_divided_cells + blockIdx.x*blockDim.x+threadIdx.x;
+
+	if ( fullerene < No_of_C180s )
+	{  
+		
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+		
+
+		posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
+		if ( posx < 0 ) posx = 0;
+		if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
+	  	
+
+	 	posy = (int)((CMy[fullerene]-BoxMin.y)/DL);
+	 	if ( posy < 0 ) posy = 0;
+	 	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
+
+	 	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
+	 	if ( posz < 0 ) posz = 0;
+	 	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
+	  	
+	 
+	 	int j1 = 0;
+	 	int j2 = 0;
+	 	int j3 = 0;
+	 
+	 	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if(j1 < 0 || j1 > Xdiv-1) continue;
+			
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv-1) continue;
+				
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+					j3 = posz + k;
+					if(j3 < 0 || j3 > Zdiv-1) continue;
+		
+
+			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > 64 )
+					{
+					        printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+               	                   	// for ( int k = 0; k < 32; ++k )
+               	                   	//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+               	                  	// printf("\n");
+						 continue;
+					}
+#endif
+				  	d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}	
+		
+	
+		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
+	
+	}
+
+}
+
+__global__ void UpdateNNlistDivisionPBC(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           		 int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           		int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY)
+{
+
+
+    	int fullerene  = non_divided_cells + blockIdx.x*blockDim.x+threadIdx.x;
+    	
+	if ( fullerene < No_of_C180s )
+	{ 
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+
+	  	
+		posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DLp.x); 	
+ 		posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DLp.y); 	
+		posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxMax.z) * boxMax.z )/DLp.z); 		
+	 
+		int j1 = 0;
+		int j2 = 0;
+		int j3 = 0;
+	 
+		for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			j1 = j1 - floor((float)j1/(float)Xdiv) * Xdiv;	 
+
+			for (  int j = -1; j < 2; ++j ){ 
+
+
+				j2 = posy + j;
+						
+				if(useRigidBoxY){
+						
+					if(j2 < 0 || j2 > Ydiv-1) continue;
+					
+				}else{	
+					
+					j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
+					
+				}
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+			
+					j3 = posz + k;
+						
+					if(useRigidBoxZ){
+					
+						if(j3 < 0 || j3 > Zdiv-1) continue;
+					
+					}else{	
+					
+						j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+					
+					}
+
+				  	int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+				  	if ( index > 64 )
+					{
+               	          		printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+               	                   	// for ( int k = 0; k < 32; ++k )
+               	                   	// printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
+               	                   	// printf("\n");
+						continue;
+					}
+#endif
+				  	d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}	
+
+		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
+	
+	}
+		
+}
+
+__global__ void UpdateNNlistDivisionLEbc(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           		   int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           		   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ)
+{
+
+
+    	int fullerene  = non_divided_cells + blockIdx.x*blockDim.x+threadIdx.x;
+	
+	if ( fullerene < No_of_C180s )
+	{ 	  
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+
+	  	
+	  	posx = (int)(( CMx[fullerene] - floor( CMx[fullerene] / boxMax.x) * boxMax.x )/DLp.x); 	
+ 	  	posy = (int)(( CMy[fullerene] - floor( CMy[fullerene] / boxMax.y) * boxMax.y )/DLp.y); 	
+	  	posz = (int)(( CMz[fullerene] - floor( CMz[fullerene] / boxMax.z) * boxMax.z )/DLp.z); 		
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	  	int j3 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if (j1 >= Xdiv || j1 <= -1) continue; 
+				 
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;	 
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+			
+					j3 = posz + k;
+					
+					if(useRigidBoxZ){
+					
+						if(j3 < 0 || j3 > Zdiv-1) continue;
+					
+					}else{	
+					
+						j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+					
+					}
+
+			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > 64 )
+					{
+                         			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+                                  		// for ( int k = 0; k < 32; ++k )
+                                  		// printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]);
+                                  		// printf("\n");
+						continue;
+					}
+#endif
+			  		d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}
+		
+				
+		if(posx == Xdiv-1 ){
+			
+			posy = (int)(( (CMy[fullerene] - Pshift) - floor((CMy[fullerene] - Pshift) / boxMax.y) * boxMax.y )/DLp.y);	
+			
+			j1 = 0;
+			j3 = posz;
+			if(useRigidBoxZ){
+				if ( posz < 0 ) posz = 0;
+	  			if ( posz > Zdiv - 1 ) posz = Zdiv - 1;	
+			}else{						
+				j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+			}
+				 
+			for (  int i = -1; i < 2 ; ++i ){
+				
+				j2 = posy + i;
+				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;
+		
+				int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1);
+				d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+		
+			}
+		}
+			
+			
+			
+			
+		if (posx == 0){
+			
+			posy = (int)(( (CMy[fullerene] + Pshift) - floor( (CMy[fullerene] + Pshift) / boxMax.y) * boxMax.y )/DLp.y);	
+			
+			j1 = Xdiv - 1;
+			j3 = posz;
+			if(useRigidBoxZ){
+				if ( posz < 0 ) posz = 0;
+	  			if ( posz > Zdiv - 1 ) posz = Zdiv - 1;	
+			}else{						
+				j3 = j3 - floor((float)j3/(float)Zdiv) * Zdiv;	 
+			}
+				
+			for (  int i = -1; i < 2 ; ++i ){
+				
+				j2 = posy + i;
+				j2 = j2 - floor((float)j2/(float)Ydiv) * Ydiv;
+		
+				int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1);
+				d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+		
+			}	
+			
+				
+
+		}
+			
+		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
+	}	
+}
+
 
