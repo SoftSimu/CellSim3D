@@ -390,10 +390,11 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
     
     	if ( cell < No_of_C180s){
 
-        	curandState rngState = d_rngStatesApo[cell];
-      			       			
+        	
+      		curandState rngState;	       			
       		if (d_Growth_rate[cell] > 0) {
         	        
+        	        rngState = d_rngStatesApo[cell];
         	        float rand = curand_uniform(&rngState);
         	        
         	        if ( rand < d_Apo_rate[cell] ){

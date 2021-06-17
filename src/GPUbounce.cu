@@ -393,7 +393,7 @@ int main(int argc, char *argv[])
 
   if ( read_json_params(inpFile)          != 0 ) return(-1);
 
-  printf("%d\n", MaxNoofC180s); 
+  printf("   Maximum number of C180s = %d\n", MaxNoofC180s); 
   
   Vshift = shear_rate*boxMax.x;
   Pshift = 0;
@@ -912,7 +912,8 @@ if (Restart == 0) {
       curandSetPseudoRandomGeneratorSeed(gen, time(&secs_since_1970));
       CudaErrorCheck();
 
-      if ( rand_seed <= 0 ) printf("   rand_seed = %lu\n",(unsigned long)secs_since_1970);
+
+      if ( rand_seed <= 0 ) printf("   rand_seed for dynamics  = %lu\n",(unsigned long)secs_since_1970);
 
       if (rand_seed > 0){
           curandSetPseudoRandomGeneratorSeed(gen, rand_seed);
@@ -954,7 +955,7 @@ if (Restart == 0) {
       	curandSetPseudoRandomGeneratorSeed(genApo, time(&secs_since_1970));
       	CudaErrorCheck();
 
-      	if ( rand_seed <= 0 ) printf("   rand_seed = %lu\n",(unsigned long)secs_since_1970);
+      	if ( rand_seed <= 0 ) printf("   rand_seed for apoptosis = %lu\n",(unsigned long)secs_since_1970+1111UL); 
 
       	if (rand_seed > 0){
       	
@@ -1051,15 +1052,13 @@ if (Restart == 0) {
       
       
       Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
-      printf (" %d \n",Xdiv);
       Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
-      printf (" %d \n",Ydiv);
       Zdiv = ceil((boxMax.z - BoxMin.z)/DL);
-      printf (" %d \n",Zdiv); 
+ 
 
-      printf("   Done!\n");
-      printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", BoxMin.x, BoxMin.y, BoxMin.z);
-      printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
+      printf ("   Number of subdivisions: Xdiv = %d, Ydiv = %d, Zdiv = %d\n",Xdiv, Ydiv, Zdiv);
+      printf("   Simulation box minima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", BoxMin.x, BoxMin.y, BoxMin.z); 
+      printf("   Simulation box maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", boxMax.x, boxMax.y, boxMax.z); 
   }
 
 
@@ -1085,25 +1084,22 @@ if (Restart == 0) {
     
     Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
     DLp.x = (boxMax.x - BoxMin.x)/Xdiv;
-    printf (" %d \n",Xdiv);
+
     Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
     DLp.y = (boxMax.y - BoxMin.y)/Ydiv;
-    printf (" %d \n",Ydiv);
+
     Zdiv = ceil((boxMax.z - BoxMin.y)/DL);
     DLp.z = (boxMax.z - BoxMin.y)/Zdiv;
-    printf (" %d \n",Zdiv);  
-    
-    printf (" %f \n",DLp.x);
-    printf (" %f \n",DLp.y);
-    printf (" %f \n",DLp.z);
 
-    printf("   Done!\n");
-    printf("   Simulation box minima:\n   X: %f, Y: %f, Z: %f\n", BoxMin.x, BoxMin.y, BoxMin.z);
-    printf("   Simulation box maximum:\n   X: %f, Y: %f, Z: %f\n", boxMax.x, boxMax.y, boxMax.z);
+    printf ("   Number of subdivisions: Xdiv = %d, Ydiv = %d, Zdiv = %d\n",Xdiv, Ydiv, Zdiv); 
+    printf ("   Subdivision lengths: %f x %f x %f\n",DLp.x,DLp.y,DLp.z);
+    printf("   Simulation box minima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", BoxMin.x, BoxMin.y, BoxMin.z); 
+    printf("   Simulation box maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", boxMax.x, boxMax.y, boxMax.z); 
+    
   }
 
   BufferDistance = 0.25;
-  printf(" BufferDistance is: %f \n",BufferDistance);
+  printf("   BufferDistance is: %f \n",BufferDistance);
 
   
   
@@ -2446,7 +2442,8 @@ if (Restart == 0) {
       fwrite(&t, sizeof(int), 1, trajfile);
   }
   
-  printf("Xdiv = %d, Ydiv = %d, Zdiv = %d\n", Xdiv, Ydiv, Zdiv );
+  
+  printf("   Simulation done!\n");
 
   FILE* MitIndFile;
   std::fstream MitIndFile2;
@@ -2590,7 +2587,7 @@ int initialize_C180s(int Orig_No_of_C180s, int impurityNum)
   }
 
   float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
-  printf("Check radius = %f\n", rCheck);
+  printf("   Check radius = %f\n", rCheck);
   float3 allCMs[Orig_No_of_C180s];
   float3 allCMsPin[impurityNum];
   
@@ -2607,7 +2604,7 @@ int initialize_C180s(int Orig_No_of_C180s, int impurityNum)
       return 27;
   }
 
-  printf("Can fit upto %d cells\n", k);
+  printf("   Can fit up to %d cells\n", k);
 
   int c = 0;
   float rands[3];
@@ -3060,8 +3057,9 @@ int initialize_C180s(int Orig_No_of_C180s, int impurityNum)
               Y[i] > boxMax.y || Y[i] < BoxMin.y ||
               Z[i] > boxMax.z || Z[i] < BoxMin.z ){
 
-              printf("shit is in the fan\n");
-              printf("%f %f %f\n", X[i], Y[i], Z[i]);
+              printf("   Unable to place initial cell: ");
+              printf("   %f %f %f,", X[i], Y[i], Z[i]);
+              printf(" try increasing the simulation box\n");
               //exit(4); 
           }
                                
@@ -3563,7 +3561,7 @@ int generate_random(int no_of_ran1_vectors)
   
   rmarin(ij,kl);
 
-  printf("RNG seeds: %d, %d\n", ij, kl); 
+  printf("   RNG seeds: %d, %d\n", ij, kl);
   return(0);
 }
 
@@ -3645,7 +3643,7 @@ int read_fullerene_nn(void)
 
   fclose(infil);
 
-  printf("Calculating equilibrium bond lengths\n");
+  printf("   Calculating equilibrium bond lengths\n");
 
   float initX[181], initY[181], initZ[181];
 
