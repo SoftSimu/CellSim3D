@@ -10,16 +10,17 @@ cudaDeviceProp getDevice(void);
 
 
 
-__global__ void  cell_division(
-                               float *d_X,  float *d_Y,  float *d_Z,
+__global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
                                int No_of_C180s, float repulsion_range, float* d_asym,
                                bool useDifferentCell, bool daughtSame,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+                               float squeeze_rate1, float Apo_rate1,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_squeeze_rate, float* d_Apo_rate,
                                float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
-                               R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure);
+				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure);
 
 
 

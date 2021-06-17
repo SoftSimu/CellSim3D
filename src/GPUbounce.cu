@@ -147,6 +147,7 @@ int* d_num_cell_Apo;
 int* cell_Apo_inds;
 int* d_cell_Apo_inds;
 int* d_counter;
+int counter;
 
 
 
@@ -952,7 +953,7 @@ if (Restart == 0) {
       	curandCreateGenerator(&genApo, CURAND_RNG_PSEUDO_MT19937);
       	CudaErrorCheck();
 
-      	curandSetPseudoRandomGeneratorSeed(genApo, time(&secs_since_1970));
+      	curandSetPseudoRandomGeneratorSeed(genApo, time(&secs_since_1970)+1111UL);
       	CudaErrorCheck();
 
       	if ( rand_seed <= 0 ) printf("   rand_seed for apoptosis = %lu\n",(unsigned long)secs_since_1970+1111UL); 
@@ -1597,8 +1598,6 @@ if (Restart == 0) {
             		CellApoptosis<<<No_of_C180s/512 + 1, 512>>>(No_of_C180s, d_rngStatesApo, d_Apo_rate,
  					d_Growth_rate, d_squeeze_rate, d_Num_shrink_Cell);
             		
-            		    	        
-        	        
 			
 			cudaMemcpy(&num_cell_Apo,d_num_cell_Apo,sizeof(int),cudaMemcpyDeviceToHost);
 			
@@ -2008,8 +2007,10 @@ if (Restart == 0) {
                	                    d_velListX, d_velListY, d_velListZ,
                	                    No_of_C180s, repulsion_range, d_asym,    
                	                    useDifferentCell, daughtSame,  
-               	                    No_of_C180s, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,  
+               	                    No_of_C180s, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
+               	                    squeeze_rate1, Apo_rate1,  
                	                    d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+               	                    d_squeeze_rate, d_Apo_rate,
                	                    d_gamma_env, d_viscotic_damp, d_CellINdex,
                	                    d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, minPressure);       
                                    

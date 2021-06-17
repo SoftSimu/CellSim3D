@@ -197,7 +197,9 @@ __global__ void  cell_division(
                                int No_of_C180s, float repulsion_range, float* d_asym,
                                bool useDifferentCell, bool daughtSame,
                                int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+                               float squeeze_rate1, float Apo_rate1,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               float* d_squeeze_rate, float* d_Apo_rate,
                                float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
 				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure){ 
    
@@ -289,6 +291,8 @@ __global__ void  cell_division(
         	d_DivisionVolume[newrank] = d_DivisionVolume[rank];      
        	d_gamma_env[newrank] = d_gamma_env[rank];
        	d_viscotic_damp[newrank] = d_viscotic_damp[rank];
+       	d_squeeze_rate[newrank] = d_squeeze_rate[rank];
+          	d_Apo_rate[newrank] = d_Apo_rate[rank];
        	
        	if( d_CellINdex[rank] < 0 ){
        		d_CellINdex[newrank] = - NewCellInd;
@@ -305,6 +309,10 @@ __global__ void  cell_division(
           	d_gamma_env[newrank] = gamma_visc;
           	d_viscotic_damp[newrank] = viscotic_damping;
           	d_CellINdex[newrank] = newrank;
+          	d_squeeze_rate[newrank] = squeeze_rate1;
+          	d_Apo_rate[newrank] = Apo_rate1;
+          	
+          	
           	  	
         }
         
@@ -391,10 +399,10 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
     	if ( cell < No_of_C180s){
 
         	
-      		curandState rngState;	       			
+      			       			
       		if (d_Growth_rate[cell] > 0) {
         	        
-        	        rngState = d_rngStatesApo[cell];
+        	        curandState rngState = d_rngStatesApo[cell];
         	        float rand = curand_uniform(&rngState);
         	        
         	        if ( rand < d_Apo_rate[cell] ){
@@ -402,12 +410,12 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
         	        	d_Growth_rate[cell] = d_squeeze_rate[cell];
         	        	atomicAdd(&d_Num_shrink_Cell[0],1);
         	        	
+        	        	
         	        }
       			
+      			d_rngStatesApo[cell] = rngState;
       		}
-             
-
-		d_rngStatesApo[cell] = rngState;
+		
 	}
 
 }
