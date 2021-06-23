@@ -308,7 +308,7 @@ __global__ void  cell_division(
           	d_DivisionVolume[newrank] = divVol;
           	d_gamma_env[newrank] = gamma_visc;
           	d_viscotic_damp[newrank] = viscotic_damping;
-          	d_CellINdex[newrank] = newrank;
+          	d_CellINdex[newrank] = NewCellInd;
           	d_squeeze_rate[newrank] = squeeze_rate1;
           	d_Apo_rate[newrank] = Apo_rate1;
           	

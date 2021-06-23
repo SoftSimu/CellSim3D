@@ -251,7 +251,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
     	int NooflocalNN;
-    	int localNNs[10];
+    	int localNNs[4];
     	float deltaX, deltaY, deltaZ;
     	float R;
     	int N1;
@@ -691,7 +691,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
     
     
     int NooflocalNN;
-    int localNNs[10];
+    int localNNs[4];
     float deltaX, deltaY, deltaZ;
     float R;
     int N1;
@@ -1158,7 +1158,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
     {
 
     int NooflocalNN;
-    int localNNs[10];
+    int localNNs[4];
     float deltaX, deltaY, deltaZ;
     float R;
     int N1;
@@ -1691,7 +1691,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	//int nnAtomInd = 0;
         
         	int NooflocalNN = 0;
-        	int localNNs[10];
+        	int localNNs[4];
         	float range = f_range;
         	
 
@@ -1913,7 +1913,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
-        int localNNs[10];
+        int localNNs[4];
         float range = f_range;
         
 
@@ -2172,7 +2172,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
-        int localNNs[10];
+        int localNNs[4];
         float range = f_range;
         
 

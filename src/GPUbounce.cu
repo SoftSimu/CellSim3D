@@ -1633,7 +1633,7 @@ if (Restart == 0) {
       	CudaErrorCheck(); 
       	
       	
-      	if ( num_cell_Apo > 0){
+      	if ( num_cell_Apo > 0 || num_cell_div > 0){
 				
 				
       		//printf(" New Cell:	 %d, Apo Cell:	      %d, step:	%d\n", num_cell_div,num_cell_Apo, step);
@@ -1664,69 +1664,71 @@ if (Restart == 0) {
        
        	}
 	
-	}
+	} else {
       	
       	
       
-	if (useRigidSimulationBox){
+		if (useRigidSimulationBox){
 	
-		DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
-									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
-									boxMax);
-	}if(usePBCs){			
+			DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+										d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+										BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+										boxMax);
+		}if(usePBCs){			
 	
-		DangerousParticlesFinderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
-									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
-									boxMax, useRigidBoxZ, useRigidBoxY);
-	}if(useLEbc){			
+			DangerousParticlesFinderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+										d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+										BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+										boxMax, useRigidBoxZ, useRigidBoxY);
+		}if(useLEbc){			
 
-		DangerousParticlesFinderLEbc<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
-									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
-									boxMax, useRigidBoxZ, useRigidBoxY);
-	}
+			DangerousParticlesFinderLEbc<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+										d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+										BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+										boxMax, useRigidBoxZ, useRigidBoxY);
+		}
       
       
-	cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
+		cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
 	
-	if ( num_cell_dang > 0 || (step)%StepLEbc == 0){
+		if ( num_cell_dang > 0 || (step)%StepLEbc == 0){
 		
 		
 		
-		cudaMemset(d_num_cell_dang, 0, sizeof(int));
-		cudaMemset(d_cell_dang_inds, 0, 100*sizeof(int));
-		cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));
+			cudaMemset(d_num_cell_dang, 0, sizeof(int));
+			cudaMemset(d_cell_dang_inds, 0, 100*sizeof(int));
+			cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));
 				
-      		//printf(" dang Cell:	 %d, step:	%d\n", num_cell_dang, step);
+      			//printf(" dang Cell:	 %d, step:	%d\n", num_cell_dang, step);
       		
       		
-      		cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
-      		if (useRigidSimulationBox){
+      			cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
+      			if (useRigidSimulationBox){
       	
-      			makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-        		Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
-        
-        		CudaErrorCheck(); 
-       	}
-		if(usePBCs){
-	
-       		makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
-        
-        		CudaErrorCheck(); 
-       	}
-       	if(useLEbc){
-       
-       		makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
+      				makeNNlist<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        			Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlist, d_NNlist, DL);
         	
-        		CudaErrorCheck();
+        			CudaErrorCheck(); 
+       		}
+			if(usePBCs){
+	
+       			makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        			attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
+        	
+        			CudaErrorCheck(); 
+       		}
+       		if(useLEbc){
        
-       	}
-	}
+       			makeNNlistLEbc<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        			attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
+        		
+        			CudaErrorCheck();
+       
+       		}
+		}
 
+
+	}
 // ---------------------------------------------------------------------------------------------------
 
 
@@ -2027,33 +2029,33 @@ if (Restart == 0) {
                CudaErrorCheck();
         	
         	
-        	non_divided_cells = No_of_C180s - num_cell_div;
+        	//non_divided_cells = No_of_C180s - num_cell_div;
         	
-        	if (useRigidSimulationBox){
+        	//if (useRigidSimulationBox){
 			
-			UpdateNNlistDivision<<<num_cell_div/512+1,512>>>(No_of_C180s, non_divided_cells, d_CMx, d_CMy, d_CMz,
-									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-               	            					Xdiv, Ydiv, Zdiv, BoxMin,
-               	            					d_NoofNNlist, d_NNlist, DL);  
-        		CudaErrorCheck();
+		//	UpdateNNlistDivision<<<num_cell_div/512+1,512>>>(No_of_C180s, non_divided_cells, d_CMx, d_CMy, d_CMz,
+		//							d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+               //	            					Xdiv, Ydiv, Zdiv, BoxMin,
+               //	            					d_NoofNNlist, d_NNlist, DL);  
+        	//	CudaErrorCheck();
         	
-        	}else if(usePBCs){
+        	//}else if(usePBCs){
         	
-        		UpdateNNlistDivisionPBC<<<num_cell_div/512+1,512>>>(No_of_C180s, non_divided_cells, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-                       	    					 Xdiv, Ydiv, Zdiv, boxMax,
-                       	    					 d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ, useRigidBoxY);
+        	//	UpdateNNlistDivisionPBC<<<num_cell_div/512+1,512>>>(No_of_C180s, non_divided_cells, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+               //        	    					 Xdiv, Ydiv, Zdiv, boxMax,
+               //        	    					 d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ, useRigidBoxY);
                       
-			CudaErrorCheck();        	
-        	} else{
+		//	CudaErrorCheck();        	
+        	//} else{
         	
-			UpdateNNlistDivisionLEbc<<<num_cell_div/512+1,512>>>(No_of_C180s, non_divided_cells, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-                           		   				Xdiv, Ydiv, Zdiv, boxMax,
-                           		   				d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
+		//	UpdateNNlistDivisionLEbc<<<num_cell_div/512+1,512>>>(No_of_C180s, non_divided_cells, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+               //            		   				Xdiv, Ydiv, Zdiv, boxMax,
+               //            		   				d_NoofNNlist, d_NNlist, DLp, Pshift, useRigidBoxZ);
                            		   				   		   				
-                       CudaErrorCheck();
+               //        CudaErrorCheck();
         	
         	
-        	}
+        //	}
         }
         
         //for (int i = 0 ; i < num_cell_div; i++) cudaStreamDestroy(streams[i]);
@@ -2355,10 +2357,18 @@ if (Restart == 0) {
                                                                  d_sysVCM,
                                                                  No_of_C180s*192);
           
-        CudaErrorCheck(); 
+        //CudaErrorCheck();
         
-        //h_SVCM = d_SVCM;
-        //printf("sysVCMx = 	%f, sysVCMy = 		%f, sysVCmz = 		%f\n", h_SVCM[0].x, h_SVCM[0].y, h_SVCM[0].z);
+        //if(step%1000 == 0){
+        
+        //	cudaMemcpy(h_sysVCM.x, d_sysVCM.x, sizeof(float), cudaMemcpyDeviceToHost);
+      	//	cudaMemcpy(h_sysVCM.y, d_sysVCM.y, sizeof(float), cudaMemcpyDeviceToHost);
+      	//	cudaMemcpy(h_sysVCM.z, d_sysVCM.z, sizeof(float), cudaMemcpyDeviceToHost);   
+        //	CudaErrorCheck(); 
+        
+       // 	printf("sysVCMx = 	%f, sysVCMy = 		%f, sysVCMz = 		%f\n", *h_sysVCM.x, *h_sysVCM.y, *h_sysVCM.z);
+       //}
+        
         
  
     }

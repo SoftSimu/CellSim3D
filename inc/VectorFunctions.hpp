@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <thrust/device_vector.h>
 #include <thrust/fill.h>
-#define MAX_NN 1024
+#define MAX_NN 4
 
 struct angles3{
     float aij, ajk, aik;
