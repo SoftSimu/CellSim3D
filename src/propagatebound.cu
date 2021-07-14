@@ -264,9 +264,9 @@ __global__ void minmaxpost( int No_of_C180s,
 
 }
 
-__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
-                           int *d_NoofNNlist, int *d_NNlist, float DL)
+__global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc, int* d_Ghost_Cells_ind)
 {
 
 
@@ -282,7 +282,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 		int posz = 0;		
 		
 
-	 	posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
+	 	posx = (int)((CMx[fullerene] - Subdivision_minX)/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
@@ -295,6 +295,30 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
 	  	
+	 
+	 
+	 	if (rank==0){
+	 	
+	 		if(posx == Xdiv -1){
+	 		
+	 			int index = atomicAdd(d_counter_gc,1);
+	 			d_Ghost_Cells_ind[index] = fullerene;
+	 			
+	 		}
+	 	
+	 	
+	 	} else if (rank==1){
+	 	
+	 		if(posx == 0){
+	 			
+	 			int index = atomicAdd(d_counter_gc,1);
+	 			d_Ghost_Cells_ind[index] = fullerene;
+	 		
+	 		
+	 		}
+	 	
+	 	
+	 	} 
 	 
 		int j1 = 0;
 	  	int j2 = 0;
@@ -1295,9 +1319,7 @@ __global__ void UpdateNNlistDivisionLEbc(int No_of_C180s, int non_divided_cells,
 			}
 		}
 			
-			
-			
-			
+						
 		if (posx == 0){
 			
 			posy = (int)(( (CMy[fullerene] + Pshift) - floor( (CMy[fullerene] + Pshift) / boxMax.y) * boxMax.y )/DLp.y);	
@@ -1332,4 +1354,101 @@ __global__ void UpdateNNlistDivisionLEbc(int No_of_C180s, int non_divided_cells,
 	}	
 }
 
+
+
+__global__ void Ghost_Cells_finder(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
+				float *d_X,  float *d_Y,  float *d_Z,
+                               float* d_velListX, float* d_velListY, float* d_velListZ,
+                               float* d_CMx, float* d_CMy, float* d_CMz,
+				float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
+                              float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
+                              float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer){
+
+	
+	
+	int ghost_cell = d_Ghost_Cells_ind[blockIdx.x];
+	
+	int tid = threadIdx.x;	
+	int cell = blockIdx.x;	
+	if( cell < No_of_Ghost_cells_buffer ) {
+		
+
+		d_X_gc_buffer[cell*192 + tid] = d_X[192*ghost_cell + tid];
+		d_Y_gc_buffer[cell*192 + tid] = d_Y[192*ghost_cell + tid];
+		d_Z_gc_buffer[cell*192 + tid] = d_Z[192*ghost_cell + tid];
+	
+	
+		d_velListX_gc_buffer[cell*192 + tid] = d_velListX[192*ghost_cell + tid];
+		d_velListY_gc_buffer[cell*192 + tid] = d_velListY[192*ghost_cell + tid];
+		d_velListZ_gc_buffer[cell*192 + tid] = d_velListZ[192*ghost_cell + tid]; 
+		
+		
+		if(tid == 0){
+			
+			d_CMx_gc_buffer[cell] = d_CMx[ghost_cell];
+			d_CMy_gc_buffer[cell] = d_CMy[ghost_cell];
+			d_CMz_gc_buffer[cell] = d_CMz[ghost_cell];
+		
+		
+		}
+
+	}
+	
+	
+	
+}  
+
+__global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
+                           int *d_NoofNNlist, int *d_NNlist, float DL){
+                           
+	
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x + No_of_C180s;
+
+
+	if ( fullerene < No_of_C180s +  No_of_Ghost_cells)
+	{
+		
+	  
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+		
+
+	 	posx = (int)((d_CMx_gc[fullerene] - Subdivision_minX)/DL);
+	  	if ( posx < 0 ) posx = 0;
+	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
+	  	
+
+	  	posy = (int)((d_CMy_gc[fullerene]-BoxMin.y)/DL);
+	  	if ( posy < 0 ) posy = 0;
+	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
+
+	   	posz = (int)((d_CMz_gc[fullerene]-BoxMin.z)/DL);
+	  	if ( posz < 0 ) posz = 0;
+	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
+
+
+		
+
+		int index = atomicAdd( &d_NoofNNlist[posz*Xdiv*Ydiv+posy*Xdiv+posx] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+		if ( index > 64 )
+		{
+                	printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+                       // for ( int k = 0; k < 32; ++k )
+                       //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                       // printf("\n");
+			continue;
+		}
+#endif
+		d_NNlist[ 64*(posz*Xdiv*Ydiv+posy*Xdiv+posx)+index] = fullerene;
+
+	
+	}
+                           
+
+
+                           
+}
 

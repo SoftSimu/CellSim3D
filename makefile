@@ -1,7 +1,7 @@
 compiler = $(shell which nvcc)
 debug = -g -G -lineinfo
 arch = -arch=sm_70
-oflags = $(arch) -Xptxas="-v" -I inc -dc 
+oflags = $(arch) -Xptxas="-v" -I inc -dc -lmpi
 objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
@@ -49,7 +49,7 @@ $(objDir)BondKernels.o : src/BondKernels.cu
 	$(compiler) $(oflags) -c src/BondKernels.cu -o $(objDir)BondKernels.o
 
 $(objDir)GPUbounce.o : src/GPUbounce.cu src/postscript.h
-	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
+	$(compiler) $(oflags) -c src/GPUbounce.cu -lmpi -o $(objDir)GPUbounce.o
 
 CellDiv: $(linkObjects)
 	$(compiler) $(eflags)

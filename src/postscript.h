@@ -6,7 +6,7 @@
 
 //__constant__ float d_dt;
 
-cudaDeviceProp getDevice(void);
+cudaDeviceProp getDevice(int idev);
 
 
 
@@ -38,9 +38,9 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
                            int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
-__global__ void makeNNlist( int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
-                           int *d_NoofNNlist, int *d_NNlist, float DL);
+__global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,  float Subdivision_minX,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc, int* d_Ghost_Cells_ind);
 
 __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
@@ -155,7 +155,7 @@ void ranmar(float rvec[], int len);
 // Function to write the trajectory
 void write_traj(int t_step, FILE* trajfile);
 void write_vel(int t_step, FILE* velFile,int frameCount);
-void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount);
+void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount,int rank);
 void WriteBinaryTrajPin(int t_step, FILE* trajFile, int frameCount);
 void write_trajPin(int t_step, FILE* trajfile);
 
@@ -327,4 +327,19 @@ __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter
 				int* d_cell_Apo_inds, char* cell_Apo);
 
 __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, float* d_Apo_rate,
- 				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell);                        	                            
+ 				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell);
+ 				
+
+__global__ void Ghost_Cells_finder(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
+				float *d_X,  float *d_Y,  float *d_Z,
+                               float* d_velListX, float* d_velListY, float* d_velListZ,
+                               float* d_CMx, float* d_CMy, float* d_CMz,
+				float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
+                              float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
+                              float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
+                              
+__global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
+                           int *d_NoofNNlist, int *d_NNlist, float DL);                              
+                              
+void SetDeviceBeforeInit();                        	                            

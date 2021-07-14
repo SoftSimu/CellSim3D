@@ -113,32 +113,35 @@ int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271])
 
 
 
-cudaDeviceProp getDevice(void)
+cudaDeviceProp getDevice( int idev)
 {
 
-  int deviceCount;
-  cudaGetDeviceCount(&deviceCount);
+  //int deviceCount;
+  //cudaGetDeviceCount(&deviceCount);
+  
   int device;
   cudaDeviceProp deviceProp;
-  for (device = 0; device < deviceCount; ++device) {
-       cudaGetDeviceProperties(&deviceProp, device);
-       printf("   Device %s\n", deviceProp.name);
-       printf("      compute capability           =    %d.%d\n", deviceProp.major, deviceProp.minor);
-       printf("      totalGlobalMemory            =    %.2lf GB\n", deviceProp.totalGlobalMem/1000000000.0);
-       printf("      l2CacheSize                  =    %8d\n", deviceProp.l2CacheSize);
-       printf("      regsPerBlock                 =    %8d\n", deviceProp.regsPerBlock);
-       printf("      multiProcessorCount          =    %8d\n", deviceProp.multiProcessorCount);
-       printf("      maxThreadsPerMultiprocessor  =    %8d\n", deviceProp.maxThreadsPerMultiProcessor);
-       printf("      sharedMemPerBlock            =    %8d B\n", (int)deviceProp.sharedMemPerBlock);
-       printf("      warpSize                     =    %8d\n", deviceProp.warpSize);
-       printf("      clockRate                    =    %8.2lf MHz\n", deviceProp.clockRate/1000.0);
-       printf("      maxThreadsPerBlock           =    %8d\n", deviceProp.maxThreadsPerBlock);
-       printf("      asyncEngineCount             =    %8d\n", deviceProp.asyncEngineCount);
-       printf("      concurrentKernels            =    ");
-       if(deviceProp.concurrentKernels==1) printf("   yes\n"); else printf("   no\n");
+  
+  device = idev;
+  //for (device = 0; device < deviceCount; ++device) {
+  cudaGetDeviceProperties(&deviceProp, device);
+  printf("   Device %s\n", deviceProp.name);
+  printf("      compute capability           =    %d.%d\n", deviceProp.major, deviceProp.minor);
+  printf("      totalGlobalMemory            =    %.2lf GB\n", deviceProp.totalGlobalMem/1000000000.0);
+  printf("      l2CacheSize                  =    %8d\n", deviceProp.l2CacheSize);
+  printf("      regsPerBlock                 =    %8d\n", deviceProp.regsPerBlock);
+  printf("      multiProcessorCount          =    %8d\n", deviceProp.multiProcessorCount);
+  printf("      maxThreadsPerMultiprocessor  =    %8d\n", deviceProp.maxThreadsPerMultiProcessor);
+  printf("      sharedMemPerBlock            =    %8d B\n", (int)deviceProp.sharedMemPerBlock);
+  printf("      warpSize                     =    %8d\n", deviceProp.warpSize);
+  printf("      clockRate                    =    %8.2lf MHz\n", deviceProp.clockRate/1000.0);
+  printf("      maxThreadsPerBlock           =    %8d\n", deviceProp.maxThreadsPerBlock);
+  printf("      asyncEngineCount             =    %8d\n", deviceProp.asyncEngineCount);
+  printf("      concurrentKernels            =    ");
+  if(deviceProp.concurrentKernels==1) printf("   yes\n"); else printf("   no\n");
 
-       printf("      ComputeMode                  =    %8d\n", deviceProp.computeMode);
-       }
+  printf("      ComputeMode                  =    %8d\n", deviceProp.computeMode);
+  //}
 
   return deviceProp; 
 }
