@@ -3602,6 +3602,13 @@ if (Restart == 0) {
   fclose(timeFile);
   fclose(errFile);
 #endif
+
+
+  if ( MPI_Finalize() != MPI_SUCCESS) {
+    printf("Error in MPI_Finalize!\n");
+    exit(1);
+  }
+
   return(0);
 }
 
@@ -3716,7 +3723,7 @@ int initialize_C180s(int Orig_No_of_C180s, int impurityNum)
               
               
               for (int nInd = 0; nInd < c; ++nInd){
-                  if (mag(allCMs[nInd] - CM) < 1.8*rCheck*shapeLim){
+                  if (mag(allCMs[nInd] - CM) < 2.0*rCheck*shapeLim){
                       //(ScaleFactor[nInd]+ScaleFactor[c])
                       farEnough = false;
                       break;
