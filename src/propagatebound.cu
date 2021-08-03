@@ -265,7 +265,7 @@ __global__ void minmaxpost( int No_of_C180s,
 }
 
 __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX, float Subdivision_maxX,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc, int* d_Ghost_Cells_ind)
 {
 
@@ -281,8 +281,9 @@ __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,flo
 		int posy = 0;
 		int posz = 0;		
 		
+		float Xpos = CMx[fullerene] - Subdivision_minX;
 
-	 	posx = (int)((CMx[fullerene] - Subdivision_minX)/DL);
+	 	posx = (int)(Xpos/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
@@ -294,31 +295,66 @@ __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,flo
 	   	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
-	  	
+	  	 
 	 
 	 
 	 	if (rank==0){
-	 	
-	 		if(posx == Xdiv -1){
 	 		
+	 		
+	 		if( Xpos >=  Subdivision_maxX - 2.0 ){
+	 			
+	 			//printf("posx:	%d, Xpos:	%f, Subdivision_maxX:	%f,DL:	%f\n",posx,Xpos,Subdivision_maxX,DL);
 	 			int index = atomicAdd(d_counter_gc,1);
 	 			d_Ghost_Cells_ind[index] = fullerene;
-	 			
-	 		}
-	 	
-	 	
-	 	} else if (rank==1){
-	 	
-	 		if(posx == 0){
-	 			
-	 			int index = atomicAdd(d_counter_gc,1);
-	 			d_Ghost_Cells_ind[index] = fullerene;
-	 		
-	 		
+	 				 			
 	 		}
 	 	
 	 	
 	 	} 
+	 	
+	 	if (rank==1){
+	 	
+	 		if( Xpos <=  2.0 ){
+	 			
+	 			int index = atomicAdd(d_counter_gc,1);
+	 			d_Ghost_Cells_ind[index] = fullerene;
+	 		
+	 		
+	 		}
+	 	
+	 	
+	 	}
+	 	
+	 	
+	 	
+	 
+	 	//if (rank==0){
+	 	
+	 	//	if( posx >= Xdiv - 2 ){
+	 		
+	 	//		int index = atomicAdd(d_counter_gc,1);
+	 	//		d_Ghost_Cells_ind[index] = fullerene;
+	 				 			
+	 	//	}
+	 	
+	 	
+	 	//} 
+	 	
+	 	//if (rank==1){
+	 	
+	 	//	if( posx <= 1 ){
+	 			
+	 	//		int index = atomicAdd(d_counter_gc,1);
+	 	//		d_Ghost_Cells_ind[index] = fullerene;
+	 		
+	 		
+	 	//	}
+	 	
+	 	
+	       //}
+	 
+	 
+	 
 	 
 		int j1 = 0;
 	  	int j2 = 0;
@@ -359,8 +395,7 @@ __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,flo
 	
 			}
 		}	
-		
-	
+			
 		
 		CMxNNlist[fullerene] = CMx[fullerene];
 		CMyNNlist[fullerene] = CMy[fullerene];
@@ -842,6 +877,7 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
 						continue;
 					}
 #endif
+			  		
 			  		d_NNlistPin[ 32*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
@@ -1356,7 +1392,7 @@ __global__ void UpdateNNlistDivisionLEbc(int No_of_C180s, int non_divided_cells,
 
 
 
-__global__ void Ghost_Cells_finder(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
+__global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
 				float *d_X,  float *d_Y,  float *d_Z,
                                float* d_velListX, float* d_velListY, float* d_velListZ,
                                float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1398,57 +1434,282 @@ __global__ void Ghost_Cells_finder(int No_of_Ghost_cells_buffer, int* d_Ghost_Ce
 	
 }  
 
-__global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
+__global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cells, float *d_CMx, float *d_CMy,float *d_CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
                            int *d_NoofNNlist, int *d_NNlist, float DL){
                            
 	
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x + No_of_C180s;
 
-
-	if ( fullerene < No_of_C180s +  No_of_Ghost_cells)
+	
+	if ( fullerene < No_of_C180s +  No_of_Ghost_cells )
 	{
 		
-	  
+		//printf("fullerene:	%d\n",fullerene);
+		  
 		int posx = 0;
 		int posy = 0;
 		int posz = 0;		
 		
 
-	 	posx = (int)((d_CMx_gc[fullerene] - Subdivision_minX)/DL);
+	 	posx = (int)((d_CMx[fullerene] - Subdivision_minX)/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
 
-	  	posy = (int)((d_CMy_gc[fullerene]-BoxMin.y)/DL);
+	  	posy = (int)((d_CMy[fullerene]-BoxMin.y)/DL);
 	  	if ( posy < 0 ) posy = 0;
 	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
 
-	   	posz = (int)((d_CMz_gc[fullerene]-BoxMin.z)/DL);
+	   	posz = (int)((d_CMz[fullerene]-BoxMin.z)/DL);
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
 
+		
+		int j1 = 0;
+		int j2 = 0;
+		int j3 = 0;
+		
+		for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if (j1 >= Xdiv || j1 <= -1) continue; 
 
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv-1) continue;
+				
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+					j3 = posz + k;
+					if(j3 < 0 || j3 > Zdiv-1) continue;
 		
 
-		int index = atomicAdd( &d_NoofNNlist[posz*Xdiv*Ydiv+posy*Xdiv+posx] , 1); //returns old
+					int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+			  		
 #ifdef PRINT_TOO_SHORT_ERROR
-		if ( index > 64 )
-		{
-                	printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
-                       // for ( int k = 0; k < 32; ++k )
-                       //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
-                       // printf("\n");
-			continue;
-		}
+					if ( index > 64 )
+					{
+                				printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+                      				 // for ( int k = 0; k < 32; ++k )
+                      				 //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                      				 // printf("\n");
+						continue;
+					}
 #endif
-		d_NNlist[ 64*(posz*Xdiv*Ydiv+posy*Xdiv+posx)+index] = fullerene;
-
-	
+					d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+				}
+			}
+		}
 	}
-                           
-
-
                            
 }
 
+
+
+__global__ void migrated_cells_finder(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, 
+                         		float Subdivision_maxX, float Subdivision_minX,
+                         		int* d_counter_mc, int* d_migrated_cells_ind, char* d_cell_mig){
+ 
+	
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( fullerene < No_of_C180s )
+	{
+	      
+      
+      		float posx = CMx[fullerene] - Subdivision_minX;
+      		
+      		if (rank==1){	
+      			
+      			if ( posx < - 0.1 ) {
+	
+	  			int index = atomicAdd(d_counter_mc,1);
+	 			d_migrated_cells_ind[index] = fullerene;
+	 			d_cell_mig[fullerene] = 1;
+	  		
+	  		}
+	  			  	
+	  	}
+	  	
+	  	if (rank==0){
+	  		
+	  		if ( posx > Subdivision_maxX + 0.1) {
+	  		
+	  			int index = atomicAdd(d_counter_mc,1);
+	 			d_migrated_cells_ind[index] = fullerene;
+	 			d_cell_mig[fullerene] = 1;
+	  		
+	  		}
+	  	
+		}                  		 
+                         		 
+	}
+                       		 
+}
+
+
+
+__global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+					 	int* d_migrated_cells_ind, char* d_cell_mig,
+   						float *d_X,  float *d_Y,  float *d_Z,
+                               		float* d_velListX, float* d_velListY, float* d_velListZ,
+                               		float* d_CMx, float* d_CMy, float* d_CMz,
+                               		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               		float* d_Apo_rate, float* d_squeeze_rate,
+						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
+                               		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
+                               		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
+                               		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
+                               		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer){
+
+	
+	
+	int migrated_cell = d_migrated_cells_ind[blockIdx.x];
+	
+	int tid = threadIdx.x;	
+	int cell = blockIdx.x;	
+	
+	if( cell < No_of_migration_cells_buffer ) {
+
+		if( migrated_cell < No_of_C180s - No_of_migration_cells_buffer ){
+		
+			
+			__shared__ int moving_Cell;
+		
+			if (tid == 0){
+
+				int index = atomicAdd(d_counter,1);
+				moving_Cell = No_of_C180s - index - 1;			
+		
+				while ( d_cell_mig[moving_Cell] == 1 ){
+				
+					index = atomicAdd(d_counter,1);
+					moving_Cell = No_of_C180s - index - 1;
+				}
+	
+			}
+	
+			
+			__syncthreads();
+			
+			
+			
+			d_X_mc_buffer[cell*192 + tid] = d_X[192*migrated_cell + tid];
+			d_X[migrated_cell*192 + tid] = d_X[192*moving_Cell + tid];
+			
+			d_Y_mc_buffer[cell*192 + tid] = d_Y[192*migrated_cell + tid];
+			d_Y[migrated_cell*192 + tid] = d_Y[192*moving_Cell + tid];
+			
+			
+			d_Z_mc_buffer[cell*192 + tid] = d_Z[192*migrated_cell + tid];
+			d_Z[migrated_cell*192 + tid] = d_Z[192*moving_Cell + tid];
+			
+
+			d_velListX_mc_buffer[cell*192 + tid] = d_velListX[192*migrated_cell + tid];
+			d_velListX[migrated_cell*192 + tid] = d_velListX[192*moving_Cell + tid];
+			
+			d_velListY_mc_buffer[cell*192 + tid] = d_velListY[192*migrated_cell + tid];
+			d_velListY[migrated_cell*192 + tid] = d_velListY[192*moving_Cell + tid];
+			
+			
+			d_velListZ_mc_buffer[cell*192 + tid] = d_velListZ[192*migrated_cell + tid]; 
+			d_velListZ[migrated_cell*192 + tid] = d_velListZ[192*moving_Cell + tid];
+			
+			
+			
+			if(tid == 0){
+			
+				d_CMx_mc_buffer[cell] = d_CMx[migrated_cell];
+				d_CMx[migrated_cell] = d_CMx[moving_Cell];
+				
+				d_CMy_mc_buffer[cell] = d_CMy[migrated_cell];
+				d_CMy[migrated_cell] = d_CMy[moving_Cell];
+				
+				d_CMz_mc_buffer[cell] = d_CMz[migrated_cell];
+				d_CMz[migrated_cell] = d_CMz[moving_Cell];
+				
+				d_pressList_mc_buffer[cell] = d_pressList[migrated_cell];
+				d_pressList[migrated_cell] = d_pressList[moving_Cell];
+				
+				d_Growth_rate_mc_buffer[cell] = d_Growth_rate[migrated_cell];
+				d_Growth_rate[migrated_cell] = d_Growth_rate[moving_Cell];
+				
+				d_Youngs_mod_mc_buffer[cell]  = d_Youngs_mod[migrated_cell];
+				d_Youngs_mod[migrated_cell]  = d_Youngs_mod[moving_Cell];
+				
+				d_ScaleFactor_mc_buffer[cell] = d_ScaleFactor[migrated_cell];
+				d_ScaleFactor[migrated_cell] = d_ScaleFactor[moving_Cell];
+				
+				d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
+				d_DivisionVolume[migrated_cell] = d_DivisionVolume[moving_Cell];
+				
+				d_gamma_env_mc_buffer[cell] = d_gamma_env[migrated_cell];
+				d_gamma_env[migrated_cell] = d_gamma_env[moving_Cell];
+				
+				d_viscotic_damp_mc_buffer[cell] = d_viscotic_damp[migrated_cell];
+				d_viscotic_damp[migrated_cell] = d_viscotic_damp[moving_Cell];
+				
+				d_CellINdex_mc_buffer[cell] = d_CellINdex[migrated_cell];
+				d_CellINdex[migrated_cell] = d_CellINdex[moving_Cell];
+				
+				d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
+				d_Apo_rate[migrated_cell] = d_Apo_rate[moving_Cell];
+				
+				d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+				d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
+		
+		
+			}		
+		
+		
+		
+		
+		
+		} else {
+
+			
+			d_X_mc_buffer[cell*192 + tid] = d_X[192*migrated_cell + tid];
+			d_Y_mc_buffer[cell*192 + tid] = d_Y[192*migrated_cell + tid];
+			d_Z_mc_buffer[cell*192 + tid] = d_Z[192*migrated_cell + tid];
+	
+	
+			d_velListX_mc_buffer[cell*192 + tid] = d_velListX[192*migrated_cell + tid];
+			d_velListY_mc_buffer[cell*192 + tid] = d_velListY[192*migrated_cell + tid];
+			d_velListZ_mc_buffer[cell*192 + tid] = d_velListZ[192*migrated_cell + tid]; 
+		
+		
+			if(tid == 0){
+			
+				d_CMx_mc_buffer[cell] = d_CMx[migrated_cell];
+				d_CMy_mc_buffer[cell] = d_CMy[migrated_cell];
+				d_CMz_mc_buffer[cell] = d_CMz[migrated_cell];
+				d_pressList_mc_buffer[cell] = d_pressList[migrated_cell];
+				d_Growth_rate_mc_buffer[cell] = d_Growth_rate[migrated_cell];
+				d_Youngs_mod_mc_buffer[cell]  = d_Youngs_mod[migrated_cell];
+				d_ScaleFactor_mc_buffer[cell] = d_ScaleFactor[migrated_cell];
+				d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
+				d_gamma_env_mc_buffer[cell] = d_gamma_env[migrated_cell];
+				d_viscotic_damp_mc_buffer[cell] = d_viscotic_damp[migrated_cell];
+				d_CellINdex_mc_buffer[cell] = d_CellINdex[migrated_cell];
+				d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
+				d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+		
+		
+			}			
+
+
+	
+		}
+	
+	
+	}
+	
+	
+	
+}  

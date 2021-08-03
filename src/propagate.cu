@@ -197,10 +197,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv,float3 boxMax, 
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float Youngs_mod, 
+                           float3 BoxMin, float Subdivision_minX, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            bool impurity, float f_range)
 {
@@ -375,7 +375,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	// interfullerene attraction and repulsion
         
         	NooflocalNN = 0;
-        	float range = f_range;
         	
         
         	int posX = 0;    
@@ -384,7 +383,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
 
 
-        	posX = (int)((X - BoxMin.x)/DL);
+        	posX = (int)((X - Subdivision_minX)/DL);
         	if ( posX < 0 ) posX = 0;
         	if ( posX > Xdiv-1 ) posX = Xdiv-1;
 
@@ -418,8 +417,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	            deltaZ  = Z - d_CMz[nn_rank];
 
 
-               
-	            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+                    
+	            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
 	                continue;
 
 	            ++NooflocalNN;
@@ -428,6 +427,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	            if ( NooflocalNN > MAX_NN ){
 	                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+	                //printf("posX:	%d, posy:	%d, posz:	%d\n", posX, posY,posZ);
 	                continue;
 	            }
 
@@ -489,7 +489,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
                
-	            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+	            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
 	                		continue;
 
 	            		++NooflocalNN;
@@ -1623,7 +1623,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                                   int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool impurity, float f_range){
@@ -1692,16 +1692,14 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	int NooflocalNN = 0;
         	int localNNs[4];
-        	float range = f_range;
-        	
 
         
         	int posX = 0;    
         	int posY = 0;
         	int posZ = 0;
 
-
-        	posX = (int)((X - BoxMin.x)/DL);
+		
+        	posX = (int)((X - Subdivision_minX)/DL);
         	if ( posX < 0 ) posX = 0;
         	if ( posX > Xdiv-1 ) posX = Xdiv-1;
        
@@ -1726,13 +1724,15 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    deltaY  = Y - d_CMy[nn_rank];            
         	    deltaZ  = Z - d_CMz[nn_rank];
 
-        	    if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+        	    if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
         	        continue;
 
         	    ++NooflocalNN;
 
         	    if ( NooflocalNN > MAX_NN ){
-        	        printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+        	    
+        	        printf("Recoverable error: NooflocalNN = %d, should be < 4\n",NooflocalNN);
+        	        
         	        continue;
         	    }
         	    localNNs[NooflocalNN-1] = nn_rank;
@@ -1786,7 +1786,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    		deltaY  = Y - d_CMyPin[nn_rank];            
         	    		deltaZ  = Z - d_CMzPin[nn_rank];
 
-        	    		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range )
+        	    		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
         	        		continue;
 
         	    		++NooflocalNN;

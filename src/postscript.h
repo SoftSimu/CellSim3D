@@ -39,7 +39,7 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
 
 
 __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,  float Subdivision_minX,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX, float Subdivision_maxX,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc, int* d_Ghost_Cells_ind);
 
 __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
@@ -98,7 +98,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin,  float DL, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float Youngs_mod, 
+                           float3 BoxMin, float Subdivision_minX, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
                            bool impurity, float f_range);
 
@@ -232,7 +232,7 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv,  float3 BoxMin,
+                                   int Xdiv, int Ydiv, int Zdiv,  float3 BoxMin, float Subdivision_minX,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool impurity, float f_range);
@@ -330,7 +330,11 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
  				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell);
  				
 
-__global__ void Ghost_Cells_finder(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
+__global__ void ghost_cells_finder(int rank, int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, 
+                         		float Subdivision_maxX, float Subdivision_minX,
+                         		int* d_counter_gc, int* d_Ghost_Cells_ind);
+
+__global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
 				float *d_X,  float *d_Y,  float *d_Z,
                                float* d_velListX, float* d_velListY, float* d_velListZ,
                                float* d_CMx, float* d_CMy, float* d_CMz,
@@ -340,6 +344,27 @@ __global__ void Ghost_Cells_finder(int No_of_Ghost_cells_buffer, int* d_Ghost_Ce
                               
 __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
-                           int *d_NoofNNlist, int *d_NNlist, float DL);                              
+                           int *d_NoofNNlist, int *d_NNlist, float DL); 
+                           
+
+__global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+					 	int* d_migrated_cells_ind, char* d_cell_mig,
+   						float *d_X,  float *d_Y,  float *d_Z,
+                               		float* d_velListX, float* d_velListY, float* d_velListZ,
+                               		float* d_CMx, float* d_CMy, float* d_CMz,
+                               		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               		float* d_Apo_rate, float* d_squeeze_rate,
+						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
+                               		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
+                               		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
+                               		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
+                               		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer);
+      
+
+__global__ void migrated_cells_finder(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, 
+                         		 float Subdivision_maxX, float Subdivision_minX,
+                         		int* d_counter_mc, int* d_migrated_cells_ind, char* d_cell_mig);                            
                               
 void SetDeviceBeforeInit();                        	                            

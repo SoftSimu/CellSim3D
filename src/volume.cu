@@ -221,6 +221,7 @@ __global__ void  cell_division(
         CMx = AllCMx[rank];
         CMy = AllCMy[rank];
         CMz = AllCMz[rank];
+        
     }
 
     __syncthreads();
@@ -253,7 +254,12 @@ __global__ void  cell_division(
         float X = d_X[rank*192+atom]; 
         float Y = d_Y[rank*192+atom]; 
         float Z = d_Z[rank*192+atom]; 
-         
+        
+        
+        //if (tid == 0) printf("half gap:	%f\n",(1-asym)*repulsion_range);
+        
+
+        
         CalcAndUpdateDaughtPos(rank, atom, (1-asym)*repulsion_range,
                                CMx, CMy, CMz,
                                X, Y, Z, 
@@ -354,7 +360,6 @@ __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter
 				moving_Cell = No_of_C180s - index - 1;
 			}
 	
-			//printf("dead_cell:	%d,moving_Cell :	%d\n", dead_cell, moving_Cell);
 		}
 	
 		__syncthreads();
