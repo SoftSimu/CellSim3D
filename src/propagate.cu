@@ -200,7 +200,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            int Xdiv, int Ydiv, int Zdiv,float3 boxMax, 
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float Subdivision_minX, float Youngs_mod, 
+                           float3 BoxMin, float3 Subdivision_min, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            bool impurity, float f_range)
 {
@@ -376,6 +376,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	NooflocalNN = 0;
         	
+        	
         
         	int posX = 0;    
         	int posY = 0;
@@ -383,17 +384,17 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
 
 
-        	posX = (int)((X - Subdivision_minX)/DL);
+        	posX = (int)((X - Subdivision_min.x)/DL);
         	if ( posX < 0 ) posX = 0;
         	if ( posX > Xdiv-1 ) posX = Xdiv-1;
 
 
-		posY = (int)((Y - BoxMin.y)/DL);
+		posY = (int)((Y - Subdivision_min.y)/DL);
         	if ( posY < 0 ) posY = 0;
         	if ( posY > Ydiv-1 ) posY = Ydiv-1;
          
          
-        	posZ = (int)((Z- - BoxMin.z)/DL);
+        	posZ = (int)((Z - Subdivision_min.z)/DL);
         	if ( posZ < 0 ) posZ = 0;
         	if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
         
@@ -426,7 +427,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	            //printf("NooflocalNN %d\n", NooflocalNN);
 
 	            if ( NooflocalNN > MAX_NN ){
-	                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+	                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
 	                //printf("posX:	%d, posy:	%d, posz:	%d\n", posX, posY,posZ);
 	                continue;
 	            }
@@ -497,7 +498,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	           		//printf("NooflocalNN %d\n", NooflocalNN);
 
 	            		if ( NooflocalNN > MAX_NN ){
-	                		printf("Recoverable error: NooflocalNNPin = %d, should be < 8\n",NooflocalNN);
+	                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
 	                		continue;
 	            		}
 
@@ -878,7 +879,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             //printf("NooflocalNN %d\n", NooflocalNN);
 
             if ( NooflocalNN > MAX_NN ){
-                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 continue;
             }
 
@@ -959,7 +960,7 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
 
             		if ( NooflocalNN > MAX_NN ){
-                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
             		    		continue;
             		}
 
@@ -1373,7 +1374,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             //printf("NooflocalNN %d\n", NooflocalNN);
 
             if ( NooflocalNN > MAX_NN ){
-                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 continue;
             }
 
@@ -1492,7 +1493,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
 
 
             		if ( NooflocalNN > MAX_NN ){
-                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 		continue;
             		}
 
@@ -1623,7 +1624,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
+                                   int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool impurity, float f_range){
@@ -1699,15 +1700,15 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	int posZ = 0;
 
 		
-        	posX = (int)((X - Subdivision_minX)/DL);
+        	posX = (int)((X - Subdivision_min.x)/DL);
         	if ( posX < 0 ) posX = 0;
         	if ( posX > Xdiv-1 ) posX = Xdiv-1;
        
-        	posY = (int)((Y - BoxMin.y)/DL);
+        	posY = (int)((Y - Subdivision_min.y)/DL);
         	if ( posY < 0 ) posY = 0;
         	if ( posY > Ydiv-1 ) posY = Ydiv-1;
         
-        	posZ = (int)((Z - BoxMin.z)/DL);
+        	posZ = (int)((Z - Subdivision_min.z)/DL);
         	if ( posZ < 0 ) posZ = 0;
         	if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
         
@@ -1731,7 +1732,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	    if ( NooflocalNN > MAX_NN ){
         	    
-        	        printf("Recoverable error: NooflocalNN = %d, should be < 4\n",NooflocalNN);
+        	        printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
         	        
         	        continue;
         	    }
@@ -1792,7 +1793,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    		++NooflocalNN;
 
         	    		if ( NooflocalNN > MAX_NN ){
-        	        		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+        	        		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
         	        		continue;
         	    		}
         	    		localNNs[NooflocalNN-1] = nn_rank;
@@ -1972,7 +1973,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             ++NooflocalNN;
 
             if ( NooflocalNN > MAX_NN ){
-                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 continue;
             }
             localNNs[NooflocalNN-1] = nn_rank;
@@ -2043,7 +2044,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
             		++NooflocalNN;
 
             		if ( NooflocalNN > MAX_NN ){
-                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 		continue;
             		}
             			
@@ -2256,7 +2257,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             ++NooflocalNN;
 
             if ( NooflocalNN > MAX_NN ){
-                printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 continue;
             }
             localNNs[NooflocalNN-1] = nn_rank;
@@ -2370,7 +2371,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
             		++NooflocalNN;
 
             		if ( NooflocalNN > MAX_NN ){
-                		printf("Recoverable error: NooflocalNN = %d, should be < 8\n",NooflocalNN);
+                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
                 		continue;
             		}
             		

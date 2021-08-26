@@ -264,9 +264,12 @@ __global__ void minmaxpost( int No_of_C180s,
 
 }
 
-__global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX, float Subdivision_maxX,
-                           int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc, int* d_Ghost_Cells_ind)
+__global__ void makeNNlist( int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
+                           int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
+                           int* d_Ghost_Cells_ind_EAST, int* d_Ghost_Cells_ind_WEST, int* d_Ghost_Cells_ind_NORTH, int* d_Ghost_Cells_ind_SOUTH,
+                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN )
 {
 
 
@@ -275,86 +278,88 @@ __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,flo
 
 
 	if ( fullerene < No_of_C180s )
-	{
-	  
-		int posx = 0;
-		int posy = 0;
-		int posz = 0;		
+	{	
 		
-		float Xpos = CMx[fullerene] - Subdivision_minX;
-
-	 	posx = (int)(Xpos/DL);
+		
+		float Cx = d_CMx[fullerene];
+		float Cy = d_CMy[fullerene];
+		float Cz = d_CMz[fullerene];
+		
+	 	int posx = (int)((Cx - Subdivision_min.x)/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
 
-	  	posy = (int)((CMy[fullerene]-BoxMin.y)/DL);
+	  	int posy = (int)((Cy - Subdivision_min.y)/DL);
 	  	if ( posy < 0 ) posy = 0;
 	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
 
-	   	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
+	   	int posz = (int)((Cz - Subdivision_min.z)/DL);
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
 	  	 
 	 
 	 
-	 	if (rank==0){
 	 		
+	 	//if (Subdivision_max.x < boxMax.x) {	
 	 		
-	 		if( Xpos >=  Subdivision_maxX - 2.0 ){
+	 	if( Cx >=  Subdivision_max.x - 2.0){
 	 			
-	 			//printf("posx:	%d, Xpos:	%f, Subdivision_maxX:	%f,DL:	%f\n",posx,Xpos,Subdivision_maxX,DL);
-	 			int index = atomicAdd(d_counter_gc,1);
-	 			d_Ghost_Cells_ind[index] = fullerene;
-	 				 			
-	 		}
-	 	
-	 	
-	 	} 
-	 	
-	 	if (rank==1){
-	 	
-	 		if( Xpos <=  2.0 ){
-	 			
-	 			int index = atomicAdd(d_counter_gc,1);
-	 			d_Ghost_Cells_ind[index] = fullerene;
-	 		
-	 		
-	 		}
-	 	
-	 	
+	 		int index = atomicAdd(d_counter_gc_e,1);
+	 		d_Ghost_Cells_ind_EAST[index] = fullerene;	 			
 	 	}
 	 	
+	 	//}
 	 	
+	 	//if ( BoxMin.x < Subdivision_min.x){
 	 	
-	 
-	 	//if (rank==0){
-	 	
-	 	//	if( posx >= Xdiv - 2 ){
-	 		
-	 	//		int index = atomicAdd(d_counter_gc,1);
-	 	//		d_Ghost_Cells_ind[index] = fullerene;
-	 				 			
-	 	//	}
-	 	
-	 	
-	 	//} 
-	 	
-	 	//if (rank==1){
-	 	
-	 	//	if( posx <= 1 ){
+	 	if( Cx <=  Subdivision_min.x + 2.0 ){
 	 			
-	 	//		int index = atomicAdd(d_counter_gc,1);
-	 	//		d_Ghost_Cells_ind[index] = fullerene;
+	 		int index = atomicAdd(d_counter_gc_w,1);
+	 		d_Ghost_Cells_ind_WEST[index] = fullerene;
+	 			//if (rank == 1) printf("Xpos is:	%f\n", Cx);
+	 	}
+	 	
+	 	//}
+	 	
+	 	//if (Subdivision_max.y < boxMax.y) {	
 	 		
-	 		
-	 	//	}
+	 	if( Cy >=  Subdivision_max.y - 2.0 ){
+	 			
+	 		int index = atomicAdd(d_counter_gc_n,1);
+	 		d_Ghost_Cells_ind_NORTH[index] = fullerene;	 			
+	 	}
+	 	//}
 	 	
 	 	
-	       //}
-	 
-	 
-	 
+	 	//if ( BoxMin.y < Subdivision_min.y){
+	 		
+	 	if( Cy <=  Subdivision_min.y + 2.0 ){
+	 			
+	 		int index = atomicAdd(d_counter_gc_s,1);
+	 		d_Ghost_Cells_ind_SOUTH[index] = fullerene;
+	 	}
+	 	//}
+	 	
+	 	//if (Subdivision_max.z < boxMax.z) {	
+	 		
+	 	if( Cz >=  Subdivision_max.z - 2.0 ){
+	 			
+	 		int index = atomicAdd(d_counter_gc_u,1);
+	 		d_Ghost_Cells_ind_UP[index] = fullerene;
+	 				 			
+	 	}
+	 	//}
+	 	
+	 	//if ( BoxMin.z < Subdivision_min.z){
+	 	if( Cz <= Subdivision_min.z + 2.0 ){
+	 			
+	 		int index = atomicAdd(d_counter_gc_d,1);
+	 		d_Ghost_Cells_ind_DOWN[index] = fullerene;
+	 	}	
+	 	//}
+	 	
+	 	
 	 
 		int j1 = 0;
 	  	int j2 = 0;
@@ -397,9 +402,9 @@ __global__ void makeNNlist(int rank, int No_of_C180s, float *CMx, float *CMy,flo
 		}	
 			
 		
-		CMxNNlist[fullerene] = CMx[fullerene];
-		CMyNNlist[fullerene] = CMy[fullerene];
-		CMzNNlist[fullerene] = CMz[fullerene];
+		CMxNNlist[fullerene] = d_CMx[fullerene];
+		CMyNNlist[fullerene] = d_CMy[fullerene];
+		CMzNNlist[fullerene] = d_CMz[fullerene];
 	
 	
 	}
@@ -1434,17 +1439,19 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
 	
 }  
 
-__global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cells, float *d_CMx, float *d_CMy,float *d_CMz,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin, float Subdivision_minX,
+__global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float *d_CMx, float *d_CMy,float *d_CMz,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                            int *d_NoofNNlist, int *d_NNlist, float DL){
                            
 	
-	int fullerene = blockIdx.x*blockDim.x+threadIdx.x + No_of_C180s;
+	int atom = blockIdx.x*blockDim.x+threadIdx.x;
+	
 
 	
-	if ( fullerene < No_of_C180s +  No_of_Ghost_cells )
+	if ( atom < All_Cells )
 	{
-		
+	
+		int fullerene = atom + No_of_C180s;	
 		//printf("fullerene:	%d\n",fullerene);
 		  
 		int posx = 0;
@@ -1452,16 +1459,16 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cell
 		int posz = 0;		
 		
 
-	 	posx = (int)((d_CMx[fullerene] - Subdivision_minX)/DL);
+	 	posx = (int)((d_CMx[fullerene] - Subdivision_min.x)/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
 
-	  	posy = (int)((d_CMy[fullerene]-BoxMin.y)/DL);
+	  	posy = (int)((d_CMy[fullerene] - Subdivision_min.y)/DL);
 	  	if ( posy < 0 ) posy = 0;
 	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
 
-	   	posz = (int)((d_CMz[fullerene]-BoxMin.z)/DL);
+	   	posz = (int)((d_CMz[fullerene] - Subdivision_min.z)/DL);
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
 
@@ -1469,6 +1476,9 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cell
 		int j1 = 0;
 		int j2 = 0;
 		int j3 = 0;
+		
+		
+		//printf(" my min x is %f, and posx:	%d, posy:	%d, posz:	%d\n",Subdivision_min.x, posx,posy,posz);
 		
 		for (  int i = -1; i < 2 ; ++i ){
 				
@@ -1509,9 +1519,11 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int No_of_Ghost_cell
 
 
 
-__global__ void migrated_cells_finder(int rank, int No_of_C180s, float *CMx, float *CMy,float *CMz, 
-                         		float Subdivision_maxX, float Subdivision_minX,
-                         		int* d_counter_mc, int* d_migrated_cells_ind, char* d_cell_mig){
+__global__ void migrated_cells_finder(int No_of_C180s, float *d_CM,
+                         		float Sub_max, float Sub_min, float BMin, float BMax,
+                         		int* d_counter_mc_r, int* d_counter_mc_l,
+                         		int* d_migrated_cells_ind_R, int* d_migrated_cells_ind_L,
+                         		char* d_cell_mig){
  
 	
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
@@ -1520,37 +1532,59 @@ __global__ void migrated_cells_finder(int rank, int No_of_C180s, float *CMx, flo
 	if ( fullerene < No_of_C180s )
 	{
 	      
-      
-      		float posx = CMx[fullerene] - Subdivision_minX;
+      		float C = d_CM[fullerene];
       		
-      		if (rank==1){	
       			
-      			if ( posx < - 0.1 ) {
+      		if ( BMin < Sub_min) {	
+      			
+      			if ( C < Sub_min - 0.1 ) {
 	
-	  			int index = atomicAdd(d_counter_mc,1);
-	 			d_migrated_cells_ind[index] = fullerene;
+	  			int index = atomicAdd(d_counter_mc_l,1);
+	 			d_migrated_cells_ind_L[index] = fullerene;
 	 			d_cell_mig[fullerene] = 1;
 	  		
 	  		}
-	  			  	
+	  	
+	  	}		  	
+	  	if (Sub_max < BMax){
+	  		
+	  		if ( C > Sub_max + 0.1) {
+	  		
+	  			int index = atomicAdd(d_counter_mc_r,1);
+	 			d_migrated_cells_ind_R[index] = fullerene;
+	 			d_cell_mig[fullerene] = 1;
+	  		
+	  		}
 	  	}
-	  	
-	  	if (rank==0){
-	  		
-	  		if ( posx > Subdivision_maxX + 0.1) {
-	  		
-	  			int index = atomicAdd(d_counter_mc,1);
-	 			d_migrated_cells_ind[index] = fullerene;
-	 			d_cell_mig[fullerene] = 1;
-	  		
-	  		}
-	  	
-		}                  		 
-                         		 
+		          		 
 	}
                        		 
 }
 
+
+
+__global__ void ghost_cells_finder_WEST(int No_of_C180s, int All_Cells, float *d_CMx , float3 Subdivision_min, 
+                         		int* d_counter_gc_w, int* d_Ghost_Cells_ind_WEST){
+ 
+	
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x + No_of_C180s;
+
+
+	if ( fullerene < All_Cells )
+	{
+	 	
+	 	float Xpos = d_CMx[fullerene] - Subdivision_min.x;
+
+	 	if( Xpos <= Subdivision_min.x + 2.0 ){
+	 			
+	 		int index = atomicAdd(d_counter_gc_w,1);
+	 		d_Ghost_Cells_ind_WEST[index] = fullerene;
+	 	}
+	
+	}
+ 
+                         		 
+}
 
 
 __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
