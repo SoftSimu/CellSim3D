@@ -295,9 +295,9 @@ __global__ void  cell_division(
           	d_Apo_rate[newrank] = d_Apo_rate[rank];
        	
        	if( d_CellINdex[rank] < 0 ){
-       		d_CellINdex[newrank] = - NewCellInd;
+       		d_CellINdex[newrank] = - (NewCellInd + bid);
        	} else {
-       		d_CellINdex[newrank] = NewCellInd;
+       		d_CellINdex[newrank] = NewCellInd + bid;
        	}
         
         } else {
@@ -308,7 +308,7 @@ __global__ void  cell_division(
           	d_DivisionVolume[newrank] = divVol;
           	d_gamma_env[newrank] = gamma_visc;
           	d_viscotic_damp[newrank] = viscotic_damping;
-          	d_CellINdex[newrank] = NewCellInd;
+          	d_CellINdex[newrank] = NewCellInd + bid;
           	d_squeeze_rate[newrank] = squeeze_rate1;
           	d_Apo_rate[newrank] = Apo_rate1;
           	
