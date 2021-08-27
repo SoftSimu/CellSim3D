@@ -76,7 +76,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          int *num_cell_div, int *cell_div_inds, char* d_cell_Apo, int* d_num_cell_Apo, int *d_cell_Apo_inds);
 
 int printboundingbox(int rank, float *bounding_xyz);
-int initialize_C180s(int Orig_No_of_C180s, int impurityNum);
+int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum);
 int initialize_Vel(int Orig_No_of_C180s);
 int generate_random(int no_of_ran1_vectors);
 int read_fullerene_nn(void);

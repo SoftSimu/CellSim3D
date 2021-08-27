@@ -612,7 +612,7 @@ int main(int argc, char *argv[])
       Zdiv = ceil((Subdivision_max.z - Subdivision_min.z)/DL);
  
 
-      printf ("   Number of subdivisions: Xdiv = %d, Ydiv = %d, Zdiv = %d\n",Xdiv, Ydiv, Zdiv);
+      printf("   Number of subdivisions: Xdiv = %d, Ydiv = %d, Zdiv = %d\n",Xdiv, Ydiv, Zdiv);
       printf("   Simulation Subdivision minima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", Subdivision_min.x, Subdivision_min.y, Subdivision_min.z); 
       printf("   Simulation Subdivision maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", Subdivision_max.x, Subdivision_max.y, Subdivision_max.z); 
   }
@@ -707,12 +707,10 @@ int main(int argc, char *argv[])
   }
 
   if (!impurity) impurityNum = 0;	
-  No_of_C180s      = No_of_threads/nprocs;
-  Orig_No_of_C180s = No_of_threads/nprocs;
+  No_of_C180s      = No_of_threads;
+  Orig_No_of_C180s = No_of_threads;
   GPUMemory = 0L;
-  CPUMemory = 0L;
-
-  //printf("   initial number of C180s = %d,	rank:	%d\n", Orig_No_of_C180s,rank); 
+  CPUMemory = 0L; 
   
   if(rank == 0) numberofCells_InGPUs = (int *)calloc(nprocs , sizeof(int));
   
@@ -886,10 +884,13 @@ int main(int argc, char *argv[])
   if (Restart == 1 ) if( ReadRestartFile() != 0 ) return(-1); 
   if (generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if (DispersityFunc(Orig_No_of_C180s) != 0 ) return(-1);
-  if (Restart == 0 ) if ( initialize_C180s(Orig_No_of_C180s, impurityNum) != 0 ) return(-1);
+  if (Restart == 0 ) if ( initialize_C180s( &Orig_No_of_C180s, &impurityNum) != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   
- 
+  No_of_C180s = Orig_No_of_C180s;
+  printf("   initial number of C180s = %d,	rank:	%d\n", Orig_No_of_C180s,rank);
+  MPI_Barrier(cart_comm);
+  
   // empty the psfil from previous results
   outfile = fopen("psfil","w");
   if ( outfile == NULL ) {printf("Unable to open file psfil\n");return(-1);}
@@ -3427,550 +3428,669 @@ if (Restart == 0) {
 
 
 
-int initialize_C180s(int Orig_No_of_C180s, int impurityNum)
+int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 {
-  int cell;
-  int atom;
-  float initx[181], inity[181], initz[181];
-  FILE *infil;
-
-  printf("      Initializing positions for %d fullerenes...\n", Orig_No_of_C180s);
-
-
-  //CPUMemory += 3L*192L*MaxNoofC180s*sizeof(float);
-  //CPUMemory += MaxNoofC180s*6L*sizeof(float);
-
-  infil = fopen("C180","r");
-  if ( infil == NULL ) {printf("Unable to open file C180\n");return(-1);}
-  for ( atom = 0 ; atom < 180 ; ++atom)
-  {
-      if ( fscanf(infil,"%f %f %f",&initx[atom], &inity[atom], &initz[atom]) != 3 )
-      {
-          printf("   Unable to read file C180 on line %d\n",atom+1);
-          fclose(infil);
-          return(-1);
-      }
-  }
-  fclose(infil);
-
-  // first correct for the cells com
-
-  float sumx = 0; 
-  float sumy = 0; 
-  float sumz = 0;
-      
-  for (int i =0; i < 180; ++i){
-      sumx += initx[i]; 
-      sumy += inity[i]; 
-      sumz += initz[i]; 
-  }
-
-  sumx /= 180.0; 
-  sumy /= 180.0; 
-  sumz /= 180.0;
-
-  // calculate initial cell volume
-
-  
-      
-  for (int i =0; i < 180; ++i){
-      initx[i] -= sumx; 
-      inity[i] -= sumy; 
-      initz[i] -= sumz; 
-  }
-
-  float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
-  printf("   Check radius = %f\n", rCheck);
-  float3 allCMs[Orig_No_of_C180s];
-  float3 allCMsPin[impurityNum];
-  
-
-  float vol = 0;
-  int k = 0;
-      
-  vol = (Subdivision_max.x - Subdivision_min.x)*(Subdivision_max.y - Subdivision_min.y)*(Subdivision_max.z - Subdivision_min.z);
-  k = floor(vol/0.786);
-      
-  if (k < Orig_No_of_C180s){
-      fprintf(stderr, "ERROR: Simulation Subdivision is too small\n");
-      fprintf(stderr, "       Big enough for %d\n", k);
-      return 27;
-  }
-
-  printf("   Can fit up to %d cells\n", k);
-
-  int c = 0;
-  float rands[3];
-  float3 center = 0.5*boxMax;	
-  float3 CM;
-  float yoffset;
-  yoffset = BoxMin.y + 1;
-  if (LineCenter == 1) {
-	yoffset = center.y; 
-  }
-
-  if (colloidal_dynamics){
-  
   	
-  	ShapeScaler (initx,inity,initz);
-  
-  	while (true){
+  	int Orig_Cells, Imp_Cells;
   	
-              ranmar(rands, 3);
-              CM = make_float3(rands[0]*((Subdivision_max.x - Subdivision_min.x) - 1.f)  + Subdivision_min.x + 1.f,
-                                      rands[1]*((Subdivision_max.y - Subdivision_min.y) - 1.f)  + Subdivision_min.y + 1.f,
-                                      0.f);
-              if (flatbox == 1){
-                  CM.z = (Subdivision_max.z - Subdivision_min.z)/2;
-              } else {
-                  CM.z = rands[2]*((Subdivision_max.z - Subdivision_min.z) - 1.f)  + Subdivision_min.z + 1.f;
-              }
+  	Orig_Cells = *Orig_No_of_C180s;
+  	Imp_Cells = *impurityNum;
+  	int cell;
+  	int atom;
+  	float initx[181], inity[181], initz[181];
+  	FILE *infil;
 
-	      	
-              bool farEnough = true;
-              
-              
-              farEnough = !(CM.x + ScaleFactor[c]*rCheck*shapeLim > Subdivision_max.x || CM.x-ScaleFactor[c]*rCheck*shapeLim < Subdivision_min.x ||
-                            CM.y + ScaleFactor[c]*rCheck*shapeLim > Subdivision_max.y || CM.y-ScaleFactor[c]*rCheck*shapeLim < Subdivision_min.y ||
-                            CM.z + ScaleFactor[c]*rCheck*shapeLim > Subdivision_max.z || CM.z-ScaleFactor[c]*rCheck*shapeLim < Subdivision_min.z );
-              
-              
-              for (int nInd = 0; nInd < c; ++nInd){
-                  if (mag(allCMs[nInd] - CM) < 2.0*rCheck*shapeLim){
-                      //(ScaleFactor[nInd]+ScaleFactor[c])
-                      farEnough = false;
-                      break;
-                  }
-              }
-          
- 
-              if (farEnough){
+  	if (rank == 0) printf("      Initializing positions for %d fullerenes...\n", Orig_Cells);
 
-                  allCMs[c] = CM; 
-                  c++;
-              }
-          
-              if (c == Orig_No_of_C180s){
-		break;
-              }
-          }
+  	infil = fopen("C180","r");
+  	if ( infil == NULL ) {printf("Unable to open file C180, rank %d\n", rank);return(-1);}
+  	for ( atom = 0 ; atom < 180 ; ++atom)
+  	{
+      		if ( fscanf(infil,"%f %f %f",&initx[atom], &inity[atom], &initz[atom]) != 3 )
+      		{
+          		printf("   Unable to read file C180 on line %d, rank %d\n",atom+1, rank);
+          		fclose(infil);
+          		return(-1);
+      		}
+  	}
+  	fclose(infil);
+
+  	// first correct for the cells com
+
+  	float sumx = 0; 
+  	float sumy = 0; 
+  	float sumz = 0;
+      
+  	for (int i =0; i < 180; ++i){
+      		sumx += initx[i]; 
+      		sumy += inity[i]; 
+      		sumz += initz[i]; 
+  	}
+
+  	sumx /= 180.0; 
+  	sumy /= 180.0; 
+  	sumz /= 180.0;
+
+  	// calculate initial cell volume
+
   
-  	  if(RandInitDir){	
-  	  
-  	  	float axis[3];
-	  	float RMat[9];
-	  	float theta[1];
-	  	float tempS[3];
-	  	float tempR[3];
-	  	
-  	  	for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
-  	  
-  	  		axis[0] = 0; 
-          		axis[1] = 1; 
-          		axis[2] = 0;	 	  
-  	  		GetRandomVector(axis);	  
-  	  
-  	  		ranmar(theta,1);
-  	  		theta[0] = theta[0]*2*3.14159265;
-  	  
-  	  		RotationMatrix(RMat,axis,theta);
-  	     
-  	        	for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-                  		
-                  		tempS[0] = ScaleFactor[cellInd]*initx[nodeInd];
-                  		tempS[1] = ScaleFactor[cellInd]*inity[nodeInd];
-                  		tempS[2] = ScaleFactor[cellInd]*initz[nodeInd];
-                  		
-                  		tempR[0] = RMat[0]*tempS[0] + RMat[1]*tempS[1] + RMat[2]*tempS[2];
-                  		tempR[1] = RMat[3]*tempS[0] + RMat[4]*tempS[1] + RMat[5]*tempS[2];
-                  		tempR[2] = RMat[6]*tempS[0] + RMat[7]*tempS[1] + RMat[8]*tempS[2];
-                  		                  		
-                		X[cellInd*192 + nodeInd] = tempR[0] + allCMs[cellInd].x;
-                  		Y[cellInd*192 + nodeInd] = tempR[1] + allCMs[cellInd].y;
-                  		Z[cellInd*192 + nodeInd] = tempR[2] + allCMs[cellInd].z;
-  	     		}
-  	   
-  	   
-  	   	}
-  	  
-  
-  	 } else{
-  	 
-  	 	for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
-  	     
-  	     		for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-                  
-                  		X[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*initx[nodeInd] + allCMs[cellInd].x;
-                  		Y[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*inity[nodeInd] + allCMs[cellInd].y;
-                  		Z[cellInd*192 + nodeInd] = ScaleFactor[cellInd]*initz[nodeInd] + allCMs[cellInd].z;
-  	     
-  	     		}
-  	   
-  	   	}
-  
+      
+  	for (int i =0; i < 180; ++i){
+      		initx[i] -= sumx; 
+      		inity[i] -= sumy; 
+      		initz[i] -= sumz; 
   	}
 
 
-  } else {
+  	float3 allCMs[Orig_Cells];
+  	float AllCMsX[Orig_Cells];
+  	float AllCMsY[Orig_Cells];
+  	float AllCMsZ[Orig_Cells];
+  	
+  	float3 allCMsPin[Imp_Cells];
+  	float AllCMsPinX[Imp_Cells];
+  	float AllCMsPinY[Imp_Cells];
+  	float AllCMsPinZ[Imp_Cells];
+  	
+  	
+	if (colloidal_dynamics) ShapeScaler(initx,inity,initz);
+
+  	float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
+  	if( rank == 0) printf("   Check radius = %f\n", rCheck);
+  
+  	if( rank == 0){
+
+  		
+  		float vol = 0;
+  		int k = 0;
+      
+  		vol = (boxMax.x - BoxMin.x)*(boxMax.y - BoxMin.y)*(boxMax.z - BoxMin.z);
+  		k = floor(vol/0.786);
+      
+  		if (k < Orig_Cells){
+      		
+      			fprintf(stderr, "ERROR: Simulation Subdivision is too small\n");
+      			fprintf(stderr, "       Big enough for %d\n", k);
+      			return 27;
+  		}
+
+  		printf("   Can fit up to %d cells\n", k);
+
+  		int c = 0;
+  		float rands[3];
+  		float3 center = 0.5*boxMax;	
+  		float3 CM;
+  		float yoffset;
+  		yoffset = BoxMin.y + 1;
+ 		if (LineCenter == 1) yoffset = center.y; 
 
 
-  	if (rand_pos){
-          
-		while (true){
-        	      ranmar(rands, 3);
-        	      CM = make_float3(rands[0]*((Subdivision_max.x - Subdivision_min.x) - 1.f)  + Subdivision_min.x + 1.f,
-                                      rands[1]*((Subdivision_max.y - Subdivision_min.y) - 1.f)  + Subdivision_min.y + 1.f,
-                                      0.f);
-        	      if (flatbox == 1){
-        	          CM.z = (Subdivision_max.z - Subdivision_min.z)/2;
-        	      } else {
-        	          CM.z = rands[2]*((Subdivision_max.z - Subdivision_min.z) - 1.f)  + Subdivision_min.z + 1.f;
-        	      }
+
+  		if (colloidal_dynamics){
+  
+  	
+  			while (true){
+  	
+              			ranmar(rands, 3);
+              			CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+               	                       rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
+               	                       0.f);
+              			if (flatbox == 1){
+                  			CM.z = (boxMax.z - BoxMin.z)/2;
+              			} else {
+                  			CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+              			}
 
 	      	
-        	      bool farEnough = true;
+              			bool farEnough = true;
               
               
-        	      farEnough = !(CM.x+rCheck > Subdivision_max.x || CM.x-rCheck < Subdivision_min.x ||
-        	                    CM.y+rCheck > Subdivision_max.y || CM.y-rCheck < Subdivision_min.y ||
-        	                    CM.z+rCheck > Subdivision_max.z || CM.z-rCheck < Subdivision_min.z);
+              			farEnough = !(CM.x + ScaleFactor[c]*rCheck*shapeLim > boxMax.x || CM.x-ScaleFactor[c]*rCheck*shapeLim < BoxMin.x ||
+                       		     CM.y + ScaleFactor[c]*rCheck*shapeLim > boxMax.y || CM.y-ScaleFactor[c]*rCheck*shapeLim < BoxMin.y ||
+                       		     CM.z + ScaleFactor[c]*rCheck*shapeLim > boxMax.z || CM.z-ScaleFactor[c]*rCheck*shapeLim < BoxMin.z );
               
               
-        	      for (int nInd = 0; nInd < c; ++nInd){
-        	          if (mag(allCMs[nInd] - CM) < 2*rCheck){
-        	              farEnough = false;
-        	              break;
-        	          }
-        	      }
-          
- 
-        	      if (farEnough){
-	
-        	          allCMs[c] = CM; 
-        	          c++;
-        	          //printf("CMx is:	%f\n",CM.x);
-        	      }
-          
-        	      if (c == Orig_No_of_C180s){
-			break;
-        	      }
-        	
-        	}
-
-        	if (impurity){
-        	   	
-        	   	c = 0;
-        	   	while (true){
-        		      
-				ranmar(rands, 3);
-        	      		CM = make_float3(rands[0]*((Subdivision_max.x - Subdivision_min.x) - 1.f)  + Subdivision_min.x + 1.f,
-        	       	                 rands[1]*((Subdivision_max.y - Subdivision_min.y) - 1.f)  + Subdivision_min.y + 1.f,
-        	       	                 0.f);
-        	      		if (flatbox == 1){
-        	       		CM.z = (Subdivision_max.z - Subdivision_min.z)/2;
-        	      		}else {
-        	       	   	CM.z = rands[2]*((Subdivision_max.z - Subdivision_min.z) - 1.f)  + Subdivision_min.z + 1.f;
-        	      		}
-
-	      		
-        			bool farEnough = true;
-        	      
-        			farEnough = !(CM.x+rCheck > Subdivision_max.x || CM.x-rCheck < Subdivision_min.x ||
-        			      	    CM.y+rCheck > Subdivision_max.y || CM.y-rCheck < Subdivision_min.y ||
-        			            CM.z+rCheck > Subdivision_max.z || CM.z-rCheck < Subdivision_min.z );
-              	
-        			for (int nInd = 0; nInd < Orig_No_of_C180s; ++nInd){
-        			          if (mag(allCMs[nInd] - CM) < 2*rCheck){
-        			              	farEnough = false;
-        			              	break;
-        			          }
-        			}
-          
-                  		      
               			for (int nInd = 0; nInd < c; ++nInd){
-                  			if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
-                      				farEnough = false;
-                      				break;
+                  			if (mag(allCMs[nInd] - CM) < 2.0*rCheck*shapeLim){
+                      			//(ScaleFactor[nInd]+ScaleFactor[c])
+                      			farEnough = false;
+                      			break;
                   			}
               			}
           
  
               			if (farEnough){
-
-                  			allCMsPin[c] = CM; 
+	
+                  			allCMs[c] = CM; 
                   			c++;
               			}
           
-              			if (c == impurityNum){
+              			if (c == Orig_Cells){
 					break;
               			}
-        	       }
-				
-		}
+          		}
+
+
+  		} else {
+
+  		
+  			if (rand_pos){
+          	
+          			while (true){
+        	      
+        	      			ranmar(rands, 3);
+        	      			CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+                       		               rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
+                       	               	0.f);
+        	      			if (flatbox == 1){
+        	         			 CM.z = (boxMax.z - BoxMin.z)/2;
+        	      			} else {
+        	          			CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+        	      			}
+
+	      	
+        	      			bool farEnough = true;
+              
+              
+        	      			farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+        	      		        	      CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+        	      		        	      CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z);
+              
+              
+        	      			for (int nInd = 0; nInd < c; ++nInd){
+        	          			if (mag(allCMs[nInd] - CM) < 2*rCheck){
+        	              				farEnough = false;
+        	              			break;
+        	          			}
+        	      			}
+          
+ 
+        	      			if (farEnough){
 	
-  	} else if ( line ){
+        	          			allCMs[c] = CM; 
+        	          			c++;
+        	          			//printf("CMx is:	%f\n",CM.x);
+        	      			}
+          
+        	      			if (c == Orig_Cells){
+						break;
+        	      			}
+        	
+        			}
+
+        			if (impurity){
+        	   	
+        	   			c = 0;
+        	   			while (true){
+        		      
+						ranmar(rands, 3);
+        	      				CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+        	       	        		         rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
+        	       	        		         0.f);
+        	      			
+        	      				if (flatbox == 1){
+        	       				CM.z = (boxMax.z - BoxMin.z)/2;
+        	      				}else {
+        	       	   			CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+        	      				}
+
+        					bool farEnough = true;
+        	      
+        					farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+        			      			    	CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+        			            			CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+              	
+        					for (int nInd = 0; nInd < Orig_Cells; ++nInd){
+        			        		  if (mag(allCMs[nInd] - CM) < 2*rCheck){
+        			        		      	farEnough = false;
+        			        		      	break;
+        			        		  }
+        					}
+          
+                  		      
+              					for (int nInd = 0; nInd < c; ++nInd){
+                  					if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
+                      						farEnough = false;
+                      						break;
+                  					}
+              					}
+          
+ 
+              					if (farEnough){
+
+                  					allCMsPin[c] = CM; 
+                  					c++;
+              					}
+          
+              					if (c == Imp_Cells){
+							break;
+              					}
+        	       		}
 				
-			for ( cell = 0; cell < Orig_No_of_C180s ; cell++ )
-        	        {
+				}
+	
+  			} else if ( line ){
+				
+				for ( cell = 0; cell < Orig_Cells ; cell++ )
+        	        	{
         	                         
-        	   	        CM.x = L*cell + 0.5*L + Subdivision_min.x;
-        	    	      	CM.y = yoffset;
-        	    	      	CM.z = center.z;
-				allCMs[cell] = CM; 
-
-        	   	}
+        	   			CM.x = L*cell + 0.5*L + BoxMin.x;
+        	    		      	CM.y = yoffset;
+        	  		      	CM.z = center.z;
+					allCMs[cell] = CM; 
+	
+        	   		}
            	
-        	   	if (impurity){
+        	   		if (impurity){
         	   	
-        	   		c = 0;
-        	   		while (true){
+        	   			c = 0;
+        	   			while (true){
         		      
-				      	ranmar(rands, 3);
-        	      		      	CM = make_float3(rands[0]*((Subdivision_max.x - Subdivision_min.x) - 1.f)  + Subdivision_min.x + 1.f,
-        	       	                       rands[1]*((Subdivision_max.y - Subdivision_min.y) - 1.f)  + Subdivision_min.y + 1.f,
-        	       	                       0.f);
-        	      			if (flatbox == 1){
-        	       		   CM.z = (Subdivision_max.z - Subdivision_min.z)/2;
-        	      			}else {
-        	       	   		CM.z = rands[2]*((Subdivision_max.z - Subdivision_min.z) - 1.f)  + Subdivision_min.z + 1.f;
-        	      			}
+					      	ranmar(rands, 3);
+        	      			      	CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+        	       		        	         rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
+        	      	        		                 0.f);
+        	      				
+        	      				if (flatbox == 1){
+        	       				CM.z = (boxMax.z - BoxMin.z)/2;
+        	      				}else {
+        	       		   		CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+        	      				}
 
 	      		
-        			      	bool farEnough = true;
+        			      		bool farEnough = true;
         	      
-        			      	farEnough = !(CM.x+rCheck > Subdivision_max.x || CM.x-rCheck < Subdivision_min.x ||
-        			      	              CM.y+rCheck > Subdivision_max.y || CM.y-rCheck < Subdivision_min.y ||
-        			                      CM.z+rCheck > Subdivision_max.z || CM.z-rCheck < Subdivision_min.z );
+        			      		farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+        			      	        	      CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+        			               	       CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
               	
-        			     	for (int nInd = 0; nInd < Orig_No_of_C180s; ++nInd){
-        			          	if (mag(allCMs[nInd] - CM) < 2*rCheck){
-        			              		farEnough = false;
-        			              		break;
-        			          	}
-        			      	}
+        			     		for (int nInd = 0; nInd < Orig_Cells; ++nInd){
+        			          		if (mag(allCMs[nInd] - CM) < 2*rCheck){
+        			              			farEnough = false;
+        			              			break;
+        			          		}
+        			      		}
           
                   		      
-              				for (int nInd = 0; nInd < c; ++nInd){
-                  				if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
-                      					farEnough = false;
-                      					break;
-                  				}
-              				}
+              					for (int nInd = 0; nInd < c; ++nInd){
+                  					if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
+                      						farEnough = false;
+                      						break;
+                  					}
+              					}
           
  
-              				if (farEnough){
+              					if (farEnough){
 
-                  				allCMsPin[c] = CM; 
-                  				c++;
-              				}
+                  					allCMsPin[c] = CM; 
+                  					c++;
+              					}
           
-              				if (c == impurityNum){
-						break;
-              				}
-        	       	}
+              					if (c == Imp_Cells){
+							break;
+              					}
+        	       		}
 				
-			}
+				}
   	
-  	} else if (plane) {
+  		   	} else if (plane) {
   
-  			rCheck *= 1.2;
-  			float l = 2.0;
-			int Side = int (((Subdivision_max.x - Subdivision_min.x) / l) + 0.1 );
-			int SideY = int (((Subdivision_max.y - Subdivision_min.y) / l) + 0.1 );
+  				rCheck *= 1.2;
+  				float l = 2.0;
+				int Side = int (((boxMax.x - BoxMin.x) / l) + 0.1 );
+				int SideY = int (((boxMax.y - BoxMin.y) / l) + 0.1 );
 			
-			printf(" Max number of initial cells:  %d\n", Side*SideY);
+				printf(" Max number of initial cells:  %d\n", Side*SideY);
 			
-			if(Orig_No_of_C180s > Side*SideY){
+				if(Orig_Cells > Side*SideY){
 				
-				printf(" Max number of initial cells should be less than %d.\n", Side*SideY);
-				return 12517;
-			}
+					printf(" Max number of initial cells should be less than %d.\n", Side*SideY);
+					return 12517;
+				}
 			
-			for ( cell = 0; cell < Orig_No_of_C180s ; cell++ )
-        	        {
+				for ( cell = 0; cell < Orig_Cells ; cell++ )
+        	        	{
                         
-        	               ey=cell/Side;
-        			ex=cell%Side;         
-        	          	CM.x = l*ex + 0.5*l + Subdivision_min.x;
-        	          	CM.y = l*ey + 0.5*l + Subdivision_min.y;
-        	    	      	CM.z = Subdivision_min.z + 1 ;
-				allCMs[cell] = CM; 
-        	   	}
+        	               	ey=cell/Side;
+        				ex=cell%Side;         
+        	          		CM.x = l*ex + 0.5*l + BoxMin.x;
+        	          		CM.y = l*ey + 0.5*l + BoxMin.y;
+        	    	      		CM.z = BoxMin.z + 1 ;
+					allCMs[cell] = CM; 
+        	   		}
+
+        			if (impurity){
         	   	
-        	   	
-        	   	if (impurity){
-        	   		
-        	   		c = 0;
-        	   		while (true){
+        	   			c = 0;
+        	   			while (true){
         		      
-				      	ranmar(rands, 3);
-        	      		      	CM = make_float3(rands[0]*((Subdivision_max.x - Subdivision_min.x) - 1.f)  + Subdivision_min.x + 1.f,
-        	       	                       rands[1]*((Subdivision_max.y - Subdivision_min.y) - 1.f)  + Subdivision_min.y + 1.f,
-        	       	                       0.f);
-        	      			if (flatbox == 1){
-        	       		   CM.z = (Subdivision_max.z - Subdivision_min.z)/2;
-        	      			}else {
-        	       	   		CM.z = rands[2]*((Subdivision_max.z - Subdivision_min.z) - 1.f)  + Subdivision_min.z + 1.f;
-        	      			}
+						ranmar(rands, 3);
+        	      				CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+        	       		        	         rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
+        	       		        	         0.f);
+        	      			
+        	      				if (flatbox == 1){
+        	       				CM.z = (boxMax.z - BoxMin.z)/2;
+        	      				}else {
+        	       		   		CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+        	      				}
 
 	      		
-        			      	bool farEnough = true;
+        					bool farEnough = true;
         	      
-        			      	farEnough = !(CM.x+rCheck > Subdivision_max.x || CM.x-rCheck < Subdivision_min.x ||
-        			      	              CM.y+rCheck > Subdivision_max.y || CM.y-rCheck < Subdivision_min.y ||
-        			                      CM.z+rCheck > Subdivision_max.z || CM.z-rCheck < Subdivision_min.z );
+        					farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+        			      			    	CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+        			            			CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
               	
-        			     	for (int nInd = 0; nInd < Orig_No_of_C180s; ++nInd){
-        			          	if (mag(allCMs[nInd] - CM) < 2*rCheck){
-        			              		farEnough = false;
-        			              		break;
-        			          	}
-        			      	}
+        					for (int nInd = 0; nInd < Orig_Cells; ++nInd){
+        			        		  if (mag(allCMs[nInd] - CM) < 2*rCheck){
+        			        		      	farEnough = false;
+        			        		      	break;
+        			        		  }
+        					}	
           
                   		      
-              				for (int nInd = 0; nInd < c; ++nInd){
-                  				if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
-                      					farEnough = false;
-                      					break;
-                  				}
-              				}
+              					for (int nInd = 0; nInd < c; ++nInd){
+                  					if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
+                      						farEnough = false;
+                      						break;
+                  					}
+              					}
           
  
-              				if (farEnough){
-
-                  				allCMsPin[c] = CM; 
-                  				c++;
-              				}
+              					if (farEnough){
+	
+                  					allCMsPin[c] = CM; 
+                  					c++;
+              					}
           
-              				if (c == impurityNum){
-						break;
-              				}
-        	       	}
-        	   		
-        	   		
-
+              					if (c == Imp_Cells){
+							break;
+              					}
+        	       		}
 				
-			}
-  
-  
-  
-  	} else {			
-	
-			rCheck *= 1.2;
-			c = Orig_No_of_C180s-1;
-		
-        	 	for ( cell = 0; cell < Orig_No_of_C180s; ++cell )
-        	 	{
-        	 		 ey=cell%Side_length;
-        			 ex=cell/Side_length;
-        	          	 CM.x = L1*ex + 0.5*L1 + center.x;
-        	          	 CM.y = L1*ey + 0.5*L1 + center.y;
-        	          	 CM.z = center.z;
-        	          	 allCMs[cell] = CM;
+				}
 
-        	  	}  
+  
+  		  	} else {			
 	
-			if (impurity){	
+				rCheck *= 1.2;
+				c = Orig_Cells-1;
+		
+        	 		for ( cell = 0; cell < Orig_Cells; ++cell )
+        	 		{
+        	 			 ey=cell%Side_length;
+        				 ex=cell/Side_length;
+        	          		 CM.x = L1*ex + 0.5*L1 + center.x;
+        	          		 CM.y = L1*ey + 0.5*L1 + center.y;
+        	          		 CM.z = center.z;
+        	          		 allCMs[cell] = CM;
+
+        	  		}  
+	
+				if (impurity){	
         	   		
-        	   		c = 0;
-        	   		while (true){
+        	   			c = 0;
+        	   			while (true){
         		      
-				      	ranmar(rands, 3);
-        	      		      	CM = make_float3(rands[0]*((Subdivision_max.x - Subdivision_min.x) - 1.f)  + Subdivision_min.x + 1.f,
-        	       	                       rands[1]*((Subdivision_max.y - Subdivision_min.y) - 1.f)  + Subdivision_min.y + 1.f,
+					      	ranmar(rands, 3);
+        	      			      	CM = make_float3(rands[0]*((boxMax.x - BoxMin.x) - 1.f)  + BoxMin.x + 1.f,
+        	       	                       rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
         	       	                       0.f);
-        	      			if (flatbox == 1){
-        	       		   CM.z = (Subdivision_max.z - Subdivision_min.z)/2;
-        	      			}else {
-        	       	   		CM.z = rands[2]*((Subdivision_max.z - Subdivision_min.z) - 1.f)  + Subdivision_min.z + 1.f;
-        	      			}
+        	      				if (flatbox == 1){
+        	       		  		CM.z = (boxMax.z - BoxMin.z)/2;
+        	      				}else {
+        	       	   			CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
+        	      				}
 
 	      		
-        			      	bool farEnough = true;
+        			      		bool farEnough = true;
         	      
-        			      	farEnough = !(CM.x+rCheck > Subdivision_max.x || CM.x-rCheck < Subdivision_min.x ||
-        			      	            CM.y+rCheck > Subdivision_max.y || CM.y-rCheck < Subdivision_min.y ||
-        			                    CM.z+rCheck > Subdivision_max.z || CM.z-rCheck < Subdivision_min.z );
+        			      		farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
+        			      	        	    CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
+        			               	     CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
               	
-        			     	for (int nInd = 0; nInd < Orig_No_of_C180s; ++nInd){
-        			          	if (mag(allCMs[nInd] - CM) < 2*rCheck){
-        			              		farEnough = false;
-        			              		break;
-        			          	}
-        			      	}
+        			     		for (int nInd = 0; nInd < Orig_Cells; ++nInd){
+        			          		if (mag(allCMs[nInd] - CM) < 2*rCheck){
+        			              			farEnough = false;
+        			              			break;
+        			          		}
+        			      		}
           
                   		      
-              				for (int nInd = 0; nInd < c; ++nInd){
-                  				if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
-                      					farEnough = false;
-                      					break;
-                  				}
-              				}
+              					for (int nInd = 0; nInd < c; ++nInd){
+                  					if (mag(allCMsPin[nInd] - CM) < 2*rCheck){
+                      						farEnough = false;
+                      						break;
+                  					}
+              					}
           
  
-              				if (farEnough){
+              					if (farEnough){
 
-                  				allCMsPin[c] = CM; 
-                  				c++;
-              				}
+                  					allCMsPin[c] = CM; 
+                  					c++;
+              					}
           
-              				if (c == impurityNum){
-						break;
-              				}
-        	       	}
+              					if (c == Imp_Cells){
+							break;
+              					}
+        	       		}
 	  	 
-	  	 	}
+	  	 		}
    	
-   	}
+   			}
+		}
+		
+		
 
-			 
+		for (int i = 0; i < Orig_Cells; i++) {
+			
+			AllCMsX[i] = allCMs[i].x;		
+			AllCMsY[i] = allCMs[i].y;
+			AllCMsZ[i] = allCMs[i].z;
+			
+		}
 
-
-   	for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++){
-       	for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-               	   X[cellInd*192 + nodeInd] = initx[nodeInd] + allCMs[cellInd].x;
-               	   Y[cellInd*192 + nodeInd] = inity[nodeInd] + allCMs[cellInd].y;
-               	   Z[cellInd*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
-               	   
-       	}
-   	}
-   	
-   	
-   	for (int cellInd = 0; cellInd < impurityNum; cellInd++){
-       	for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-               	   XPin[cellInd*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
-               	   YPin[cellInd*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
-               	   ZPin[cellInd*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
-       	}
-   	}
-   	
-   }	
-       
-      // check all the fucking positions...
-      for (int i = 0; i < Orig_No_of_C180s*192; ++i){
-      	   
-      	  if(X[i] == 0 && Y[i] ==0 && Z[i] ==0) continue;
-          
-          if (X[i] > Subdivision_max.x || X[i] < Subdivision_min.x ||
-              Y[i] > Subdivision_max.y || Y[i] < Subdivision_min.y ||
-              Z[i] > Subdivision_max.z || Z[i] < Subdivision_min.z ){
-
-              printf("   Unable to place initial cell: ");
-              printf("   %f %f %f,", X[i], Y[i], Z[i]);
-              printf(" try increasing the simulation box, i:	%d\n",i);
-              //exit(4); 
-          }
-                               
-      }
+		for (int i = 0; i < Imp_Cells; i++) {
+			
+			AllCMsPinX[i] = allCMsPin[i].x;		
+			AllCMsPinY[i] = allCMsPin[i].y;
+			AllCMsPinZ[i] = allCMsPin[i].z;
+			
+		}
 
 
-	for (int cellInd = 0; cellInd < Orig_No_of_C180s; cellInd++)
-	{
-		CellINdex[cellInd] = cellInd;
+	}
+
+	MPI_Bcast(AllCMsX, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(AllCMsY, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(AllCMsZ, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+	
+	if ( Imp_Cells > 0){
+	
+		MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
+		MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
+		MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
+	
 	}
 
 
-  return(0);
+	if (rank != 0){
+		
+		for (int i = 0; i < Orig_Cells; i++) {
+			
+			allCMs[i].x = AllCMsX[i];		
+			allCMs[i].y = AllCMsY[i];
+			allCMs[i].z = AllCMsZ[i];
+			
+		}
+
+		for (int i = 0; i < Imp_Cells; i++) {
+			
+			allCMsPin[i].x = AllCMsPinX[i];		
+			allCMsPin[i].y = AllCMsPinY[i];
+			allCMsPin[i].z = AllCMsPinZ[i];
+			
+		}
+	
+	}	
+	
+	if (colloidal_dynamics){
+	
+  	  	if(RandInitDir){	
+  	  
+  	  		float axis[3];
+	  		float RMat[9];
+	  		float theta[1];
+	  		float tempS[3];
+	  		float tempR[3];
+	  		
+	  		int c = 0;
+  	  		for (int cellInd = 0; cellInd < Orig_Cells; cellInd++){
+  	  
+  	  			
+  	  			if ( allCMs[cellInd].x >= Subdivision_min.x  && allCMs[cellInd].x < Subdivision_max.x ){
+       				if ( allCMs[cellInd].y >= Subdivision_min.y  && allCMs[cellInd].y < Subdivision_max.y ){
+       					if ( allCMs[cellInd].z >= Subdivision_min.z  && allCMs[cellInd].z < Subdivision_max.z ){
+  	  			
+  	  						axis[0] = 0; 
+          						axis[1] = 1; 
+          						axis[2] = 0;	 	  
+  	  						GetRandomVector(axis);	  
+  	  
+  	  						ranmar(theta,1);
+  	  						theta[0] = theta[0]*2*3.14159265;
+  	  
+  	  						RotationMatrix(RMat,axis,theta);
+  	  					
+  	  						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+                  		
+                  						tempS[0] = ScaleFactor[c]*initx[nodeInd];
+                  						tempS[1] = ScaleFactor[c]*inity[nodeInd];
+                  						tempS[2] = ScaleFactor[c]*initz[nodeInd];
+                  		
+                  						tempR[0] = RMat[0]*tempS[0] + RMat[1]*tempS[1] + RMat[2]*tempS[2];
+                  						tempR[1] = RMat[3]*tempS[0] + RMat[4]*tempS[1] + RMat[5]*tempS[2];
+                  						tempR[2] = RMat[6]*tempS[0] + RMat[7]*tempS[1] + RMat[8]*tempS[2];
+                  		                  		
+                						X[c*192 + nodeInd] = tempR[0] + allCMs[cellInd].x;
+                  						Y[c*192 + nodeInd] = tempR[1] + allCMs[cellInd].y;
+                  						Z[c*192 + nodeInd] = tempR[2] + allCMs[cellInd].z;
+  	     						}
+  	     						
+  	     						c++;
+  	  					}
+  	  				}
+  	  			}
+  	   		
+  	   			*Orig_No_of_C180s = c;
+  	   		}
+  	  
+  
+  	 	} else{
+  	 	
+  	 		int c=0;
+  	 		for (int cellInd = 0; cellInd < Orig_Cells; cellInd++){
+  	     			
+  	     			if ( allCMs[cellInd].x >= Subdivision_min.x  && allCMs[cellInd].x < Subdivision_max.x ){
+       				if ( allCMs[cellInd].y >= Subdivision_min.y  && allCMs[cellInd].y < Subdivision_max.y ){
+       					if ( allCMs[cellInd].z >= Subdivision_min.z  && allCMs[cellInd].z < Subdivision_max.z ){
+  	     					
+  	     						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+                  
+               	   					X[c*192 + nodeInd] = ScaleFactor[cellInd]*initx[nodeInd] + allCMs[cellInd].x;
+               	   					Y[c*192 + nodeInd] = ScaleFactor[cellInd]*inity[nodeInd] + allCMs[cellInd].y;
+               	   					Z[c*192 + nodeInd] = ScaleFactor[cellInd]*initz[nodeInd] + allCMs[cellInd].z;
+  	     
+  	     						}
+  	     						
+  	     						c++;  	     					
+  	     					}
+  	     				}
+  	     			}
+  	   			
+  	   			*Orig_No_of_C180s = c;
+  	   		
+  	   		}
+  
+  		}
+
+
+	} else {
+		
+		int c = 0;
+   		for (int cellInd = 0; cellInd < Orig_Cells; cellInd++){
+       		
+       		if ( allCMs[cellInd].x >= Subdivision_min.x  && allCMs[cellInd].x < Subdivision_max.x ){
+       			if ( allCMs[cellInd].y >= Subdivision_min.y  && allCMs[cellInd].y < Subdivision_max.y ){
+       				if ( allCMs[cellInd].z >= Subdivision_min.z  && allCMs[cellInd].z < Subdivision_max.z ){
+       					
+       					
+       					for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               		   			
+               		   			X[c*192 + nodeInd] = initx[nodeInd] + allCMs[cellInd].x;
+               		   			Y[c*192 + nodeInd] = inity[nodeInd] + allCMs[cellInd].y;
+               		   			Z[c*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
+               		   
+       					}
+       					
+       					c++;
+       				
+       				}
+       			}
+       		}
+       		
+       		*Orig_No_of_C180s = c;
+       		
+   		}
+   	
+   		int k = 0;
+   		for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
+       		
+       		if ( allCMsPin[cellInd].x >= Subdivision_min.x  && allCMsPin[cellInd].x < Subdivision_max.x ){
+       			if ( allCMsPin[cellInd].y >= Subdivision_min.y  && allCMsPin[cellInd].y < Subdivision_max.y ){
+       				if ( allCMsPin[cellInd].z >= Subdivision_min.z  && allCMsPin[cellInd].z < Subdivision_max.z ){
+						
+       					for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               		   			XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
+               		   			YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
+               		   			ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
+       					}
+       					
+       					k++; 
+   					}
+   				}
+       		}
+       		
+       		*impurityNum = k;
+       		
+      		}
+      		// check all the positions...
+      	
+      	}
+      	
+      	
+      	for (int i = 0; i < *Orig_No_of_C180s*192; ++i){
+      	   
+      	  	if(X[i] == 0 && Y[i] ==0 && Z[i] ==0) continue;
+          
+          	if (X[i] > boxMax.x || X[i] < BoxMin.x ||
+              	    Y[i] > boxMax.y || Y[i] < BoxMin.y ||
+              	    Z[i] > boxMax.z || Z[i] < BoxMin.z ){
+
+              		printf("   Unable to place initial cell: ");
+              		printf("   %f %f %f,", X[i], Y[i], Z[i]);
+              		printf(" try increasing the simulation box, i:	%d\n",i);
+              		//exit(4); 
+          	}
+                               
+      	}
+
+
+	for (int cellInd = 0; cellInd < *Orig_No_of_C180s; cellInd++) CellINdex[cellInd] = cellInd;
+
+  	return(0);
 }
 
 
