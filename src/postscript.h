@@ -334,9 +334,10 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
  				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell);
  				
 
-__global__ void ghost_cells_finder(int rank, int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, 
-                         		float3 Subdivision_max, float3 Subdivision_min,
-                         		int* d_counter_gc, int* d_Ghost_Cells_ind);
+__global__ void ghost_cells_finder_Auxiliary(int No_of_C180s, int All_Cells, float *d_CM , 
+						float Sub_max, float Sub_min,
+						int* d_counter_gc_r, int* d_counter_gc_l,
+                         			int* d_Ghost_Cells_ind_R, int* d_Ghost_Cells_ind_L);
 
 __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
 				float *d_X,  float *d_Y,  float *d_Z,

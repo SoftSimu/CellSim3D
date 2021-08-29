@@ -1411,6 +1411,7 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
 	
 	int tid = threadIdx.x;	
 	int cell = blockIdx.x;	
+	
 	if( cell < No_of_Ghost_cells_buffer ) {
 		
 
@@ -1563,23 +1564,31 @@ __global__ void migrated_cells_finder(int No_of_C180s, float *d_CM,
 
 
 
-__global__ void ghost_cells_finder_WEST(int No_of_C180s, int All_Cells, float *d_CMx , float3 Subdivision_min, 
-                         		int* d_counter_gc_w, int* d_Ghost_Cells_ind_WEST){
+__global__ void ghost_cells_finder_Auxiliary(int No_of_C180s, int All_Cells, float *d_CM , 
+						float Sub_max, float Sub_min,
+						int* d_counter_gc_r, int* d_counter_gc_l,
+                         			int* d_Ghost_Cells_ind_R, int* d_Ghost_Cells_ind_L)
+{
  
+	int atom = blockIdx.x*blockDim.x+threadIdx.x;
 	
-	int fullerene = blockIdx.x*blockDim.x+threadIdx.x + No_of_C180s;
-
-
-	if ( fullerene < All_Cells )
-	{
+	if ( atom < All_Cells )
+	{	
+		int fullerene = atom + No_of_C180s;
 	 	
-	 	float Xpos = d_CMx[fullerene] - Subdivision_min.x;
-
-	 	if( Xpos <= Subdivision_min.x + 2.0 ){
+	 	float pos = d_CM[fullerene];
+	 	
+	 	if( pos <=  Sub_min + 2.0 ){
 	 			
-	 		int index = atomicAdd(d_counter_gc_w,1);
-	 		d_Ghost_Cells_ind_WEST[index] = fullerene;
+	 		int index = atomicAdd(d_counter_gc_l,1);
+	 		d_Ghost_Cells_ind_L[index] = fullerene;
+	 	
+	 	} else if( pos >=  Sub_max - 2.0 ){
+	 			
+	 		int index = atomicAdd(d_counter_gc_r,1);
+	 		d_Ghost_Cells_ind_R[index] = fullerene;	 			
 	 	}
+	 	
 	
 	}
  
