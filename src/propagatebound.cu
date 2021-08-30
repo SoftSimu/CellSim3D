@@ -264,7 +264,92 @@ __global__ void minmaxpost( int No_of_C180s,
 
 }
 
-__global__ void makeNNlist( int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+
+
+__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           int *d_NoofNNlist, int *d_NNlist, float DL)
+{
+
+
+	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
+//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
+
+
+	if ( fullerene < No_of_C180s )
+	{
+	  
+		int posx = 0;
+		int posy = 0;
+		int posz = 0;		
+		
+
+	 	posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
+	  	if ( posx < 0 ) posx = 0;
+	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
+	  	
+
+	  	posy = (int)((CMy[fullerene]-BoxMin.y)/DL);
+	  	if ( posy < 0 ) posy = 0;
+	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
+
+	   	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
+	  	if ( posz < 0 ) posz = 0;
+	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
+	  	
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	  	int j3 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if(j1 < 0 || j1 > Xdiv-1) continue;
+			
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv-1) continue;
+				
+	
+				for (  int k = -1 ; k < 2; ++k ){
+			
+					j3 = posz + k;
+					if(j3 < 0 || j3 > Zdiv-1) continue;
+		
+
+			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > 64 )
+					{
+                         			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+                                  			// for ( int k = 0; k < 32; ++k )
+                                  			//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                                 			// printf("\n");
+						 continue;
+					}
+#endif
+			  		d_NNlist[ 64*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					
+				}
+	
+			}
+		}	
+		
+	
+		
+		CMxNNlist[fullerene] = CMx[fullerene];
+		CMyNNlist[fullerene] = CMy[fullerene];
+		CMzNNlist[fullerene] = CMz[fullerene];
+	
+	
+	}
+
+}
+
+__global__ void makeNNlistMultiGpu( int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,

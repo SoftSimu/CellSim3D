@@ -24,6 +24,9 @@ __global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
 				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure);
 
 
+__global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           int *d_NoofNNlist, int *d_NNlist, float DL);
 
 __global__ void makeNNlistPin( int impurityNum, float *CMx, float *CMy,float *CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
@@ -39,7 +42,7 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
                            int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
-__global__ void makeNNlist(int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+__global__ void makeNNlistMultiGpu(int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
