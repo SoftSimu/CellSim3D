@@ -78,7 +78,7 @@ float squeeze_rate1;
 int Restart;
 int Laststep = 0;
 int Lastframe = 0;
-int   Time_steps;
+int Time_steps = 0;
 int   trajWriteInt; // trajectory write interval
 
 float delta_t;
@@ -378,7 +378,9 @@ int *CellINdex_OtherGPU;
 float *X_OtherGPU, *Y_OtherGPU, *Z_OtherGPU;
 float *XPin_OtherGPU, *YPin_OtherGPU, *ZPin_OtherGPU;
 float *velListX_OtherGPU, *velListY_OtherGPU, *velListZ_OtherGPU;
-
+float *area_OtherGPU, *volume_OtherGPU, *pressList_OtherGPU; 
+R3Nptrs h_contactForces_OtherGPU;
+R3Nptrs h_ExtForces_OtherGPU;
 
 
 
@@ -529,15 +531,14 @@ int main(int argc, char *argv[])
   if (nprocs > 1) MPI_Barrier(cart_comm);
 
   int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
-  printf("local rank=%d\n", local_rank);
-  
   idev = local_rank;
     
-   printf("local rank=%d: and idev %d\n", local_rank, idev);
-   cudaSetDevice(idev);
-   cudaDeviceProp deviceProp = getDevice(idev);  
+   //idev = rank%4; 
+  printf("local rank=%d: and idev %d\n", local_rank, idev);
+  cudaSetDevice(idev);
+  cudaDeviceProp deviceProp = getDevice(idev);  
  
-   if (nprocs > 1) MPI_Barrier(cart_comm);
+  if (nprocs > 1) MPI_Barrier(cart_comm);
    
   
   for (int i = 0; i < 6 ; i++){
@@ -559,7 +560,14 @@ int main(int argc, char *argv[])
   
   FILE *outfile;
   FILE *trajfile; // pointer to xyz file 
+  
+  FILE* forceFile;
+  FILE* velFile;
+  
   cudaError_t myError;
+
+
+
 
   int* dividingCells; //Cells that are about to divide
   int* totalCells; // No. of cells at every Dividing_steps
@@ -725,7 +733,9 @@ int main(int argc, char *argv[])
       return(0);
   }
 
-  if (!impurity) impurityNum = 0;	
+  if (!impurity) impurityNum = 0;
+
+  	
   No_of_C180s      = No_of_threads;
   Orig_No_of_C180s = No_of_threads;
   GPUMemory = 0L;
@@ -1498,6 +1508,8 @@ if (Restart == 0) {
 
 
   // open trajectory file
+  if (rank == 0){
+  
   	if (Restart == 0){
   		trajfile = fopen (trajFileName, "w");
   	}else{
@@ -1510,26 +1522,20 @@ if (Restart == 0) {
       		return -1;
   	}
   	
-  	FILE *trajPin;
-  	if (Restart == 0) trajPin = fopen ("inpPin.xyz", "w");
-
-
-
-  	FILE* forceFile;
+  	
   	if (Restart == 0){
     		 forceFile = fopen(forces_file, "w");
   	}else{
    	 	forceFile = fopen(forces_file, "a");
   	}
-  
-
-  	FILE* velFile;
+  	
   	if (Restart == 0){
     		 velFile = fopen("velocity.xyz", "w");
   	}else{
    		 velFile = fopen("velocity.xyz", "a+");
   	}	
-
+   
+   }
 #ifdef OUTPUT_ADP_ERROR
   FILE* timeFile = fopen("times", "w");
   FILE* errFile = fopen("errors", "w"); 
@@ -1580,111 +1586,112 @@ if (Restart == 0) {
   printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/(1024*1024.0));
   
   
-  
-  if (correct_com == true && !Restart){
-  
-      CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        d_X, d_Y, d_Z,
-                                        d_CMx, d_CMy, d_CMz);
-
-      CudaErrorCheck();
-     
-     
-      reductionblocks = (No_of_C180s-1)/1024+1;
-      SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
-			   		      d_SysCx, d_SysCy, d_SysCz);
-      CudaErrorCheck(); 
-
-
-      SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
-        		    d_SysCx, d_SysCy, d_SysCz,
-			    d_sysCM);
-      
-         
-      CudaErrorCheck();
-      
-      CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
-                                                             d_sysCM,BoxCen,
-                                                             No_of_C180s*192);
-      CudaErrorCheck();
-      
-
-      
-  }
-  
-
-  if ( correct_Vcom == true && !Restart){
-  
-     
-      VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                        	  d_velListX, d_velListY, d_velListZ,
-                                        	  d_VCMx, d_VCMy, d_VCMz);
-      CudaErrorCheck();
-      
-      reductionblocks = (No_of_C180s-1)/1024+1;
-      SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
-			   			d_SysCx, d_SysCy, d_SysCz);
-      CudaErrorCheck(); 
-
-
-      SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
-        		    d_SysCx, d_SysCy, d_SysCz,
-			    d_sysVCM);
-      
-     CudaErrorCheck();
-      
-      
-      CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
-                                                               d_sysVCM,
-                                                               No_of_C180s*192);
-          
-      CudaErrorCheck(); 
-  }  
-  
-
-
-  CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
-  CudaErrorCheck(); 
-  
-
   if(impurity){	
   
   	CenterOfMass<<<impurityNum,256>>>(impurityNum, d_XPin, d_YPin, d_ZPin, d_CMxPin, d_CMyPin, d_CMzPin);
   	CudaErrorCheck();
   
   }
-
- // Precalculate random plane
+  
+  // Precalculate random plane
   initialize_Plane(MaxNoofC180s);
+  
+  if (No_of_C180s > 0 ){
+  	
+  	if (correct_com == true && !Restart){
+  
+      		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               	                         d_X, d_Y, d_Z,
+               	                         d_CMx, d_CMy, d_CMz);
+
+     		 CudaErrorCheck();
+     
+     
+      		reductionblocks = (No_of_C180s-1)/1024+1;
+      		SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+			   		      d_SysCx, d_SysCy, d_SysCz);
+      		CudaErrorCheck(); 
 
 
-   if(usePBCs ){
-        
-       CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-                                                          d_CMx, d_CMy, d_CMz,
-                                                          boxMax, divVol, No_of_C180s,
-                                                          useRigidBoxZ, useRigidBoxY);
+      		SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        			    d_SysCx, d_SysCy, d_SysCz,
+				    d_sysCM);
+      
+         
+      		CudaErrorCheck();
+      
+      		CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
+               	                                              d_sysCM,BoxCen,
+               	                                              No_of_C180s*192);
+      		CudaErrorCheck();
+      
+
+      
+  	}
+  
+
+  	if ( correct_Vcom == true && !Restart){
+  
+     
+      		VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                	  d_velListX, d_velListY, d_velListZ,
+        	                                	  d_VCMx, d_VCMy, d_VCMz);
+      		CudaErrorCheck();
+      
+      		reductionblocks = (No_of_C180s-1)/1024+1;
+      		SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
+				   			d_SysCx, d_SysCy, d_SysCz);
+      		CudaErrorCheck(); 
+
+
+      		SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        			    d_SysCx, d_SysCy, d_SysCz,
+				    d_sysVCM);
+      
+     		CudaErrorCheck();
+      
+      
+      		CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
+               	                                                d_sysVCM,
+               	                                                No_of_C180s*192);
+          
+     		 CudaErrorCheck(); 
+  	}  
+  
+
+  
+  	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
+  	CudaErrorCheck(); 
   
 
 
-       CudaErrorCheck();
-   }
-   if(useLEbc){
+   	if(usePBCs ){
         
-       UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-                       				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                       				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
+       	CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+               	                                           d_CMx, d_CMy, d_CMz,
+               	                                           boxMax, divVol, No_of_C180s,
+               	                                           useRigidBoxZ, useRigidBoxY);
+  
+
+
+       	CudaErrorCheck();
+   	}
+   	if(useLEbc){
+        
+       	UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+               	        				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
+               	        				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
                         
-        CudaErrorCheck();	
+        	CudaErrorCheck();	
 	
-    } 	
+    	} 	
 
 
-   CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
+   	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
    
-   CudaErrorCheck(); 
+   	CudaErrorCheck(); 
   
-
+   }
    	
    if (useRigidSimulationBox){
 
@@ -2049,7 +2056,6 @@ if (Restart == 0) {
 
   if (constrainAngles){
 
-
       d_theta0V = h_theta0; 
       CudaErrorCheck(); 
   }
@@ -2063,128 +2069,129 @@ if (Restart == 0) {
 
   // cudaMemcpy(d_X, X, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
 
-  if (useRigidSimulationBox){	
+  
+  if (No_of_C180s > 0 ){
   	
-  	CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     	d_X,  d_Y,  d_Z,
-                                                     	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,
-                                                     	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
-                                                     	attraction_strength, attraction_range,
-                                                     	repulsion_strength, repulsion_range,
-                                                     	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
-                                                     	threshDist,
-								BoxMin, Subdivision_min, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_ExtForces,
-                                                     	impurity,f_range); 
+  	if (useRigidSimulationBox){	
+  	
+  		CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
+        		                                             	d_X,  d_Y,  d_Z,
+        		                                             	d_CMx, d_CMy, d_CMz,
+        		                                             	d_XPin,  d_YPin,  d_ZPin,
+        		                                             	d_CMxPin, d_CMyPin, d_CMzPin,
+                                                     		d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
+                                                     		attraction_strength, attraction_range,
+                                                     		repulsion_strength, repulsion_range,
+                                                     		d_viscotic_damp,
+                                                     		Xdiv, Ydiv, Zdiv, boxMax,
+                                                     		d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                                                     		threshDist,
+									BoxMin, Subdivision_min, Youngs_mod,
+                                                     		constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                                                     		impurity,f_range); 
                                                      	
-       CudaErrorCheck();
+       	CudaErrorCheck();
                                                      	
-      CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                        	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv, Subdivision_min,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList,impurity,f_range);
+      		CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+        	                                                	d_X, d_Y, d_Z,
+        	                                                	d_CMx, d_CMy, d_CMz,
+        		                                             	d_XPin,  d_YPin,  d_ZPin,
+        		                                             	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
+        	                                                	internal_damping,
+        	                                                	attraction_range,
+        	                                                	d_viscotic_damp,
+        	                                                	Xdiv, Ydiv, Zdiv, Subdivision_min,
+        	                                                	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+        	                                                	d_velListX, d_velListY, d_velListZ,
+        	                                                	d_fDisList,impurity,f_range);
                                                         
                                                         
-       CudaErrorCheck();                                                  
-  }
+       	CudaErrorCheck();                                                  
+  	}
   
-  if(usePBCs){
+  	if(usePBCs){
   
-    	CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     	d_X,  d_Y,  d_Z,
-                                                     	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
-                                                     	attraction_strength, attraction_range,
-                                                     	repulsion_strength, repulsion_range,
-                                                     	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                     	threshDist,
-                                                     	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_ExtForces,
-                                                     	useRigidBoxZ,useRigidBoxY,impurity,f_range);
+    		CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+        		                                             	d_X,  d_Y,  d_Z,
+        		                                             	d_CMx, d_CMy, d_CMz,
+                       	                              	d_XPin,  d_YPin,  d_ZPin,
+                       	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+                       	                              	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
+                       	                              	attraction_strength, attraction_range,
+                       	                              	repulsion_strength, repulsion_range,
+                       	                              	d_viscotic_damp,
+                       	                              	Xdiv, Ydiv, Zdiv, boxMax,
+                       	                              	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                       	                              	threshDist,
+                       	                              	BoxMin, Youngs_mod,
+                       	                              	constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                       	                              	useRigidBoxZ,useRigidBoxY,impurity,f_range);
                                                      	
-       CudaErrorCheck();                                             	
+       	CudaErrorCheck();                                             	
   	
   	                                                     	
-      CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                        	d_XPin,  d_YPin,  d_ZPin,
-                                                        	d_CMxPin, d_CMyPin, d_CMzPin,
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                        	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv, boxMax,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
-    CudaErrorCheck();	
+      		CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+                	                                        	d_X, d_Y, d_Z,
+                       	                                 	d_CMx, d_CMy, d_CMz,
+                                	                        	d_XPin,  d_YPin,  d_ZPin,
+                                	                        	d_CMxPin, d_CMyPin, d_CMzPin,
+                                	                        	internal_damping,
+                                	                        	attraction_range,
+                                	                        	d_viscotic_damp,
+                                	                        	Xdiv, Ydiv, Zdiv, boxMax,
+                                	                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                                	                        	d_velListX, d_velListY, d_velListZ,
+                                	                        	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
+    		CudaErrorCheck();			
   
-  }
-  if(useLEbc){
+  	}
+  	if(useLEbc){
   
-  	CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     	d_X,  d_Y,  d_Z,
-                                                     	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
-                                                     	attraction_strength, attraction_range,
-                                                     	repulsion_strength, repulsion_range,
-                                                     	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                     	threshDist,
-                                                     	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList,
-                                                     	Pshift,useRigidBoxZ,impurity,f_range);
+  		CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign,
+        		                                             	d_X,  d_Y,  d_Z,
+        	                       	                      	d_CMx, d_CMy, d_CMz,
+                             		                        	d_XPin,  d_YPin,  d_ZPin,
+                                      	               	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+                                      	               	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
+                                      	               	attraction_strength, attraction_range,
+                                      	               	repulsion_strength, repulsion_range,
+                                      	               	d_viscotic_damp,
+                                      	               	Xdiv, Ydiv, Zdiv, boxMax,
+                                      	               	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                                      	               	threshDist,
+                                      	               	BoxMin, Youngs_mod,
+                                      	               	constrainAngles, d_theta0, d_fConList,
+                                      	               	Pshift,useRigidBoxZ,impurity,f_range);
                                                      	
-       CudaErrorCheck();                                             	
+       	CudaErrorCheck();                                             	
   	
   	                                                     	
-      CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                       	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv, boxMax,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurity,f_range);
-    CudaErrorCheck();	
+      		CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+                                   		                     	d_X, d_Y, d_Z,
+                                      	                  	d_CMx, d_CMy, d_CMz,
+                                      	               	d_XPin,  d_YPin,  d_ZPin,
+                                      	               	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
+                                      	                  	internal_damping,
+                                      	                  	attraction_range,
+                                      	                 	d_viscotic_damp,
+                                      	                  	Xdiv, Ydiv, Zdiv, boxMax,
+                                      	                  	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                                      	                  	d_velListX, d_velListY, d_velListZ,
+                                      	                  	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurity,f_range);
+    		CudaErrorCheck();	
   
+  	}
   
-  
-  }
-  
-  	  volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+  	volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_X, d_Y, d_Z,
                                      d_CMx , d_CMy, d_CMz,
                                      d_volume, d_cell_div, d_DivisionVolume,
                                      checkSphericity, d_area, 
                                      stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
                                      recalc_r0, ApoVol , d_ScaleFactor,
-                                      d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
+                                     d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
   
-
+  }
 	
   int t = MaxNoofC180s;	
 
@@ -2197,42 +2204,7 @@ if (Restart == 0) {
     
     if(rank ==0 ){ 
         
-   	if(impurity){
-		
-		t = impurityNum;		
-  		if (binaryOutput){
-        		
-      			fwrite(&t, sizeof(int), 1, trajPin);
-      
-      			t = (int)useDifferentCell;
-      			fwrite(&t, sizeof(int), 1, trajPin);
-      
-      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      			fwrite(&t, sizeof(int), 1, trajPin);      
-    
-     			WriteBinaryTrajPin(0, trajPin, 1); 
-  	
-  		} else {
-  	
-      			fprintf(trajPin, "Header Start:\n");
-      			fprintf(trajPin, "Maximum number of cells:\n%d\n", impurityNum);
-
-      			fprintf(trajPin, "Using variable stiffness:\n");
-      			if (useDifferentCell) 
-          			fprintf(trajPin, "True\n");
-      			else
-          			fprintf(trajPin, "False\n");
-
-      			fprintf(trajPin, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
-     	 		fprintf(trajPin, "Header End\n");
-      			write_trajPin(0, trajPin);
-  	
-  		}   
-   	
-   	}
-   	
   	if (binaryOutput){
-  
       		
       		fwrite(&t, sizeof(int), 1, trajfile);
       
@@ -2262,7 +2234,7 @@ if (Restart == 0) {
   	}
   	if (write_cont_force){
   
-      		fprintf(forceFile, "step,num_cells,cell_ind,node_ind,glob_node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,VX,VY,VZ,V,X,Y,Z,P,Vol,Area\n");
+      		fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
       
       		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -2270,14 +2242,11 @@ if (Restart == 0) {
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		
-      		cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		
       		writeForces(forceFile, 0, No_of_C180s);
   	}
   	if(write_vel_file){
@@ -2302,24 +2271,51 @@ if (Restart == 0) {
     } else if (nprocs > 1){
     
     	
+    	
+    	
     	MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     	MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     	MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     	MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
     	
-    	if(impurity){
-    	
-    	    	MPI_Send(XPin , impurityNum*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(YPin , impurityNum*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(ZPin , impurityNum*192, MPI_FLOAT, 0, rank, cart_comm);
+    	if (write_cont_force){
+    		      		
+    		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
+      		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		
+      		MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		
+    		MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+      			
     	
     	}
+    	
     	if(write_vel_file){
-    		    	
+    		
+    		cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
+    		   	
     		MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    	
     	} 	
 
     }
@@ -2329,7 +2325,7 @@ if (Restart == 0) {
   //return 0;
 
 
-  int numNodes = No_of_C180s*192;
+  int numNodes;
   NewCellInd = No_of_C180s;
   WithoutApo = true;
   
@@ -2351,59 +2347,57 @@ if (Restart == 0) {
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
 	 
-	 Pshift = shear_rate*step*boxMax.x*delta_t;     
-
-    
-       //printf("step %d\n", step);
-        numNodes = No_of_C180s*192;
-        Integrate<<<No_of_C180s, threadsperblock>>>(d_X, d_Y, d_Z, 
-                                                 d_velListX, d_velListY, d_velListZ, 
-                                                 delta_t,  mass,
-                                                 d_fConList, d_fDisList, d_fRanList,
-                                                 No_of_C180s);
-        CudaErrorCheck();
-
-
-        CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
-        CudaErrorCheck();
-
-
-	if (useRigidSimulationBox){
+	Pshift = shear_rate*step*boxMax.x*delta_t;
 	
-		DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
-								     d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-								     BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
-								     boxMax);
-	}if(usePBCs){			
-	
-		DangerousParticlesFinderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
-									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
-									boxMax, useRigidBoxZ, useRigidBoxY);
-	}if(useLEbc){			
-
-		DangerousParticlesFinderLEbc<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
-									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
-									boxMax, useRigidBoxZ, useRigidBoxY);
-	}
-      
-      
-	cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
-
-
-
-// ------------------------------------------------------------------------------------------------
-
 	if ( apoptosis && WithoutApo && No_of_C180s > popToStartApo && !colloidal_dynamics)
 	{
-	        printf("Cell apoptosis starts.\n");
+		printf("Cell apoptosis starts.\n");
 		WithoutApo = false;
 	}
-
 	
-	// ----------------------------------------- Begin Cell Death ------------	
-	if (apoptosis && !WithoutApo) {	
+	numNodes = No_of_C180s*192;
+	
+	
+	if (No_of_C180s > 0 ) {
+		
+		Integrate<<<No_of_C180s, threadsperblock>>>(d_X, d_Y, d_Z, 
+               	                                  d_velListX, d_velListY, d_velListZ, 
+               	                                  delta_t,  mass,
+               	                                  d_fConList, d_fDisList, d_fRanList,
+               	                                  No_of_C180s);
+        	CudaErrorCheck();
+
+
+        	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
+        	CudaErrorCheck();
+
+
+		if (useRigidSimulationBox){
+	
+			DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+									     d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+									     BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+									     boxMax);
+		}if(usePBCs){			
+	
+			DangerousParticlesFinderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+										d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+										BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+										boxMax, useRigidBoxZ, useRigidBoxY);
+		}if(useLEbc){			
+
+			DangerousParticlesFinderLEbc<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
+										d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+										BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang,
+										boxMax, useRigidBoxZ, useRigidBoxY);
+		}
+      
+      
+		cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
+
+
+		// ----------------------------------------- Begin Cell Death ------------	
+		if (apoptosis && !WithoutApo) {	
 
             		
             		CellApoptosis<<<No_of_C180s/512 + 1, 512>>>(No_of_C180s, d_rngStatesApo, d_Apo_rate,
@@ -2438,6 +2432,8 @@ if (Restart == 0) {
 		
       			}       	
 
+		}
+	
 	}
 // ----------------------------------------- End Cell Death --------------
  
@@ -3485,7 +3481,8 @@ if (Restart == 0) {
 
 
       if (!colloidal_dynamics){      
-      	PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
+      		
+      		PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
         	                                           d_Youngs_mod);
       		CudaErrorCheck(); 
       }
@@ -3516,316 +3513,315 @@ if (Restart == 0) {
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif
 
- if (useRigidSimulationBox){	
+ 
+ if (No_of_C180s > 0 ) {
+ 
+ 	if (useRigidSimulationBox){	
   	
-  	CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     	d_X,  d_Y,  d_Z,
-                                                     	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                                                     	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
-                                                     	attraction_strength, attraction_range,
-                                                     	repulsion_strength, repulsion_range,
-                                                     	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
-                                                     	threshDist,
-								BoxMin, Subdivision_min, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_ExtForces,
-                                                     	impurity,f_range); 
+  		CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
+        		                                             	d_X,  d_Y,  d_Z,
+        	         	                                    	d_CMx, d_CMy, d_CMz,
+                               		                      	d_XPin,  d_YPin,  d_ZPin,
+                               		                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+                               		                      	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
+                               		                      	attraction_strength, attraction_range,
+                               		                      	repulsion_strength, repulsion_range,
+                               		                      	d_viscotic_damp,
+                               		                      	Xdiv, Ydiv, Zdiv, boxMax,
+                               		                      	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                               		                      	threshDist,
+										BoxMin, Subdivision_min, Youngs_mod,
+                               		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                               		                      	impurity,f_range); 
                                                      	
-       CudaErrorCheck();
+       	CudaErrorCheck();
                                                      	
-      CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                        	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv, Subdivision_min,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList,impurity,f_range);
-                                                        
-                                                        
-       CudaErrorCheck();                                                  
-  }
-  
-  if(usePBCs){
-  
-    	CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     	d_X,  d_Y,  d_Z,
-                                                     	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
-                                                     	attraction_strength, attraction_range,
-                                                     	repulsion_strength, repulsion_range,
-                                                     	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                     	threshDist,
-                                                     	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList, d_ExtForces,
-                                                     	useRigidBoxZ,useRigidBoxY,impurity,f_range);
-                                                     	
-       CudaErrorCheck();                                             	
-  	
-  	                                                     	
-      CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                        	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv,boxMax,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                       	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
-    CudaErrorCheck();	
-  
-  }
-  if(useLEbc){
-  
-      CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                                     	d_X,  d_Y,  d_Z,
-                                                     	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                                                     	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
-                                                     	attraction_strength, attraction_range,
-                                                     	repulsion_strength, repulsion_range,
-                                                     	d_viscotic_damp,
-                                                     	Xdiv, Ydiv, Zdiv, boxMax,
-                                                     	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                     	threshDist,
-                                                     	BoxMin, Youngs_mod,
-                                                     	constrainAngles, d_theta0, d_fConList,
-                                                     	Pshift,useRigidBoxZ,impurity,f_range);
-                                                     	
-       CudaErrorCheck();                                             	
-  	
-  	                                                     	
-      CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                        
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                        	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv,boxMax,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurity,f_range);
-    CudaErrorCheck();	
-  
-  
-  
-  }
-       
-
-      // Calculate random Force here...
-      if (add_rands){
-          CalculateRanForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_rngStates, rand_scale_factor,
-                                                              d_fRanList );
-          CudaErrorCheck();
-      }
-      
-      VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                        d_fConList, d_fRanList, delta_t, numNodes, mass);
-      CudaErrorCheck();
-
-
-      // Dissipative velocity update part...
-      for (int s = 0; s < 1; ++s){
-      
-          VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
-                                                           d_fDisList, delta_t, numNodes, mass );
-          CudaErrorCheck();
-          
-          if (useRigidSimulationBox){	
-                                                     	
-     		CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                                                        	d_X, d_Y, d_Z,
-                                                        	d_CMx, d_CMy, d_CMz,
-                                                     	d_XPin,  d_YPin,  d_ZPin,
-                                                     	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
-                                                        	internal_damping,
-                                                        	attraction_range,
-                                                        	d_viscotic_damp,
-                                                        	Xdiv, Ydiv, Zdiv, Subdivision_min,
-                                                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
-                                                        	d_velListX, d_velListY, d_velListZ,
-                                                        	d_fDisList, impurity,f_range);
+      		CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+               	                                         	d_X, d_Y, d_Z,
+                       	                                 	d_CMx, d_CMy, d_CMz,
+                       	                              	d_XPin,  d_YPin,  d_ZPin,
+                       	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
+                       	                                 	internal_damping,
+                       	                                 	attraction_range,
+                       	                                 	d_viscotic_damp,
+                       	                                 	Xdiv, Ydiv, Zdiv, Subdivision_min,
+                       	                                 	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                       	                                 	d_velListX, d_velListY, d_velListZ,
+                       	                                 	d_fDisList,impurity,f_range);
+                       	                                 
                                                         
        	CudaErrorCheck();                                                  
   	}
-  	if(usePBCs){              	
+  
+  	if(usePBCs){
+  
+    		CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+                                          		           	d_X,  d_Y,  d_Z,
+                                                     		d_CMx, d_CMy, d_CMz,
+                                                     		d_XPin,  d_YPin,  d_ZPin,
+                                                     		d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+                                                     		d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
+                                                     		attraction_strength, attraction_range,
+                                                     		repulsion_strength, repulsion_range,
+                                                     		d_viscotic_damp,
+                                                     		Xdiv, Ydiv, Zdiv, boxMax,
+                                                     		d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                                                     		threshDist,
+                                                     		BoxMin, Youngs_mod,
+                                                     		constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                                                     		useRigidBoxZ,useRigidBoxY,impurity,f_range);
+                                                     	
+       	CudaErrorCheck();                                             	
+  	
+  	                                                     	
       		CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                	                                        d_X, d_Y, d_Z,
-                	                                        d_CMx, d_CMy, d_CMz,
-								  d_XPin,  d_YPin,  d_ZPin,
-                                                     	  d_CMxPin, d_CMyPin, d_CMzPin,                	                                        
-                	                                        internal_damping,
-                	                                        attraction_range,
-                	                                        d_viscotic_damp,
-                	                                        Xdiv, Ydiv, Zdiv,boxMax,
-                	                                        d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                	                                        d_velListX, d_velListY, d_velListZ,
-                	                                        d_fDisList,useRigidBoxZ,useRigidBoxY, impurity,f_range);
+                 	                                       	d_X, d_Y, d_Z,
+                       	                                 	d_CMx, d_CMy, d_CMz,
+                       	                              	d_XPin,  d_YPin,  d_ZPin,
+                       	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
+                       	                                 	internal_damping,
+                       	                                 	attraction_range,
+                       	                                 	d_viscotic_damp,
+                      		                                 	Xdiv, Ydiv, Zdiv,boxMax,
+                      		                                  	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                      	             		                     	d_velListX, d_velListY, d_velListZ,
+                                              	         	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
     		CudaErrorCheck();	
   
   	}
   	if(useLEbc){
+  
+      		CalculateConForceLEbc<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+               	                                      	d_X,  d_Y,  d_Z,
+               	                                      	d_CMx, d_CMy, d_CMz,
+               	                                      	d_XPin,  d_YPin,  d_ZPin,
+               	                                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+               	                                      	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
+               	                                      	attraction_strength, attraction_range,
+               	                                      	repulsion_strength, repulsion_range,
+               	                                      	d_viscotic_damp,
+               	                                      	Xdiv, Ydiv, Zdiv, boxMax,
+               	                                      	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+               	                                      	threshDist,
+               	                                      	BoxMin, Youngs_mod,
+               	                                      	constrainAngles, d_theta0, d_fConList,
+               	                                      	Pshift,useRigidBoxZ,impurity,f_range);
+                                                     	
+       	CudaErrorCheck();                                             	
   	
-  	  	                                                     	
+  	                                                     	
       		CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+                	                                        	d_X, d_Y, d_Z,
+                       	                                 	d_CMx, d_CMy, d_CMz,
+                       	                              	d_XPin,  d_YPin,  d_ZPin,
+                       	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                        
+                       	                                 	internal_damping,
+                       	                                 	attraction_range,
+                       	                                 	d_viscotic_damp,
+                       	                                 	Xdiv, Ydiv, Zdiv,boxMax,
+                       	                                 	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                       	                                 	d_velListX, d_velListY, d_velListZ,
+                       	                                 	d_fDisList, Pshift, Vshift, useRigidBoxZ,impurity,f_range);
+    		CudaErrorCheck();	
+  
+  
+  
+  	}
+       
+
+      	// Calculate random Force here...
+      	if (add_rands){
+      	
+      	     CalculateRanForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_rngStates, rand_scale_factor,
+                                                              d_fRanList );
+            CudaErrorCheck();
+     	}
+      
+      	VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
+        	                                                d_fConList, d_fRanList, delta_t, numNodes, mass);
+      	CudaErrorCheck();
+
+
+      	// Dissipative velocity update part...
+      	for (int s = 0; s < 1; ++s){
+      
+          	VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
+               	                                            d_fDisList, delta_t, numNodes, mass );
+          	CudaErrorCheck();
+          
+          	if (useRigidSimulationBox){	
+                                                     	
+     			CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                	                                         	d_X, d_Y, d_Z,
                	                                         	d_CMx, d_CMy, d_CMz,
-                                                     		d_XPin,  d_YPin,  d_ZPin,
-                                                     		d_CMxPin, d_CMyPin, d_CMzPin,               	                                         	
+               	                                      	d_XPin,  d_YPin,  d_ZPin,
+               	                                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
                	                                         	internal_damping,
                	                                         	attraction_range,
                	                                         	d_viscotic_damp,
-               	                                         	Xdiv, Ydiv, Zdiv,boxMax,
-               	                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+               	                                         	Xdiv, Ydiv, Zdiv, Subdivision_min,
+               	                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                	                                         	d_velListX, d_velListY, d_velListZ,
-               	                                         	d_fDisList, Pshift, Vshift, useRigidBoxZ, impurity,f_range);
-    CudaErrorCheck();
+               	                                         	d_fDisList, impurity,f_range);
+                                                        
+       		CudaErrorCheck();                                                  
+  		}
+  		if(usePBCs){              	
+      			
+      			CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+              	      	 	                                        	d_X, d_Y, d_Z,
+              			 	                                       d_CMx, d_CMy, d_CMz,
+										 d_XPin,  d_YPin,  d_ZPin,
+               	                               	       	 d_CMxPin, d_CMyPin, d_CMzPin,                	                                        
+               	 	                       	                internal_damping,
+               	 	                       	                attraction_range,
+                	 	                       	                d_viscotic_damp,
+                	 	                       	                Xdiv, Ydiv, Zdiv,boxMax,
+                	 	                       	                d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+                	 	                       	                d_velListX, d_velListY, d_velListZ,
+                	                               		         d_fDisList,useRigidBoxZ,useRigidBoxY, impurity,f_range);
+    			CudaErrorCheck();	
+  
+  		}
+  		if(useLEbc){
   	
-  	}
+  	  	                                                     	
+      			CalculateDisForceLEbc<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+               		                                         	d_X, d_Y, d_Z,
+               		                                         	d_CMx, d_CMy, d_CMz,
+                       	                              		d_XPin,  d_YPin,  d_ZPin,
+                       	                              		d_CMxPin, d_CMyPin, d_CMzPin,               	                                         	
+               		                                         	internal_damping,
+               		                                         	attraction_range,
+               		                                         	d_viscotic_damp,
+               		                                         	Xdiv, Ydiv, Zdiv,boxMax,
+               		                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
+               		                                         	d_velListX, d_velListY, d_velListZ,
+               		                                         	d_fDisList, Pshift, Vshift, useRigidBoxZ, impurity,f_range);
+    		CudaErrorCheck();
   	
-     }
+  		}
+  	
+     	}
 
 
 
+// ------------------------------ Begin Cell Division ------------------------------------------------
 
-      if (step <= Time_steps && !colloidal_dynamics){
-        // ------------------------------ Begin Cell Division ------------------------------------------------
+      	if (step <= Time_steps && !colloidal_dynamics){
+        		
+         	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
 
-         CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-
-         CudaErrorCheck();
+         	CudaErrorCheck();
 
 
-	 cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
-	 cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));
+	 	cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
+	 	cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));
 	
 	
-        volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
-                                     d_X, d_Y, d_Z,
-                                     d_CMx , d_CMy, d_CMz,
-                                     d_volume, d_cell_div, d_DivisionVolume,
-                                     checkSphericity, d_area,
-                                     stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
-                                     recalc_r0, ApoVol, d_ScaleFactor,
-                                     d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
-        CudaErrorCheck();
+        	volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+               	                      d_X, d_Y, d_Z,
+               	                      d_CMx , d_CMy, d_CMz,
+               	                      d_volume, d_cell_div, d_DivisionVolume,
+               	                      checkSphericity, d_area,
+               	                      stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
+               	                      recalc_r0, ApoVol, d_ScaleFactor,
+               	                      d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
+        	CudaErrorCheck();
 
 
 
-//        count_and_get_div();
+//        	count_and_get_div();
 
-	//cudaStream_t *streams = (cudaStream_t *)malloc(num_cell_div*sizeof(cudaStream_t));
+		cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
 	
-	//for (int i = 0 ; i < num_cell_div; i++) cudaStreamCreate(&streams[i]);
-	//CudaErrorCheck();
-	
-
-	cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
-	
-	if (No_of_C180s + num_cell_div > MaxNoofC180s){                                    
-              printf("ERROR: Population is %d, only allocated enough memory for %d\n",     
-                     No_of_C180s, MaxNoofC180s);                                           
-              printf("ERROR: Fatal error, crashing...\n");                                 
-              return -69;                                                                  
-          }
+		if (No_of_C180s + num_cell_div > MaxNoofC180s){                                    
+              		printf("ERROR: Population is %d, only allocated enough memory for %d\n",     
+                     	No_of_C180s, MaxNoofC180s);                                           
+              		printf("ERROR: Fatal error, crashing...\n");                                 
+              		return -69;                                                                  
+          	}
         
-//        for (int divCell = 0; divCell < num_cell_div; divCell++) {
+//        	for (int divCell = 0; divCell < num_cell_div; divCell++) {
           
-//          globalrank = cell_div_inds[divCell];
+//          		globalrank = cell_div_inds[divCell];
    
-	 if ( num_cell_div > 0 ) {
+	 	if ( num_cell_div > 0 ) {
 	 
           	
-          	cell_division<<<num_cell_div,192>>>(
-               	                    	d_X, d_Y, d_Z, 
-               	                    	d_CMx, d_CMy, d_CMz,
-               	                    	d_velListX, d_velListY, d_velListZ,
-               	                    	No_of_C180s, repulsion_range, d_asym,    
-               	                    	useDifferentCell, daughtSame,  
-               	                    	IndexShifter + No_of_C180s, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
-               	                    	squeeze_rate1, Apo_rate1,  
-               	                    	d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
-               	                    	d_squeeze_rate, d_Apo_rate,
-               	                    	d_gamma_env, d_viscotic_damp, d_CellINdex,
-               	                    	d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, minPressure);       
+          		cell_division<<<num_cell_div,192>>>(
+               		                    	d_X, d_Y, d_Z, 
+               		                    	d_CMx, d_CMy, d_CMz,
+               		                    	d_velListX, d_velListY, d_velListZ,
+               		                    	No_of_C180s, repulsion_range, d_asym,    
+               		                    	useDifferentCell, daughtSame,  
+               		                    	IndexShifter + No_of_C180s, stiffness1, rMax, divVol, gamma_visc, viscotic_damping,
+               		                    	squeeze_rate1, Apo_rate1,  
+               		                    	d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+               		                    	d_squeeze_rate, d_Apo_rate,
+               		                    	d_gamma_env, d_viscotic_damp, d_CellINdex,
+               		                    	d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, minPressure);       
                                    
-          	CudaErrorCheck();                                                                                
+          		CudaErrorCheck();                                                                                
           
           
-        	No_of_C180s += num_cell_div;                           
-        	NewCellInd  += num_cell_div;                           
+        		No_of_C180s += num_cell_div;                           
+        		NewCellInd  += num_cell_div;                           
         	
 
-        }
+        	}
 
 	
-	if (countCells) {
+		if (countCells) {
 
-        	if (countOnlyInternal == 1){
+        		if (countOnlyInternal == 1){
         
-         		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-               		                          d_X, d_Y, d_Z,
-               	        	                  d_CMx, d_CMy, d_CMz);
+         			CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               			                          d_X, d_Y, d_Z,
+               		        	                  d_CMx, d_CMy, d_CMz);
 
-      			CudaErrorCheck();
+      				CudaErrorCheck();
      
      
-      			reductionblocks = (No_of_C180s-1)/1024+1;
-      			SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
+      				reductionblocks = (No_of_C180s-1)/1024+1;
+      				SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_CMx, d_CMy, d_CMz, 
 		    		   		          d_SysCx, d_SysCy, d_SysCz);
-      			CudaErrorCheck(); 
+      				CudaErrorCheck(); 
 
 
-      			SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
-        		  		      d_SysCx, d_SysCy, d_SysCz,
-					      d_sysCM);
+      				SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        			  		      d_SysCx, d_SysCy, d_SysCz,
+						      d_sysCM);
       
          
-      			CudaErrorCheck();
+      				CudaErrorCheck();
       			
-      			cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyDeviceToHost);
-      			cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyDeviceToHost);
-      			cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyDeviceToHost);
-                       CudaErrorCheck();
+      				cudaMemcpy(h_sysCM.x, d_sysCM.x, sizeof(float), cudaMemcpyDeviceToHost);
+      				cudaMemcpy(h_sysCM.y, d_sysCM.y, sizeof(float), cudaMemcpyDeviceToHost);
+      				cudaMemcpy(h_sysCM.z, d_sysCM.z, sizeof(float), cudaMemcpyDeviceToHost);
+               	        CudaErrorCheck();
 
-//			h_SCM = d_SCM;
+//				h_SCM = d_SCM;
         
         
-          		num_cell_div -= num_cells_far();
+          			num_cell_div -= num_cells_far();
           
-        	}
+        		}
 
-        	num_new_cells_per_step[step-1] = num_cell_div;
+        		num_new_cells_per_step[step-1] = num_cell_div;
         	
-        	if (step%newCellCountInt == 0){
-          		newcells = 0;
-          		for (int i = 0; i < newCellCountInt; i++) {
-            			newcells += num_new_cells_per_step[countOffset + i];
-          		}
-          		dividingCells[(step-1)/newCellCountInt] = newcells;
-          		totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells;
-          		// Need to make sure this is how MIs are even calculated
-          		countOffset += newCellCountInt;
-        	}
+        		if (step%newCellCountInt == 0){
+          			newcells = 0;
+          			for (int i = 0; i < newCellCountInt; i++) {
+            				newcells += num_new_cells_per_step[countOffset + i];
+          			}
+          			dividingCells[(step-1)/newCellCountInt] = newcells;
+          			totalCells[(step-1)/newCellCountInt] = No_of_C180s - newcells;
+          			// Need to make sure this is how MIs are even calculated
+          			countOffset += newCellCountInt;
+        		}
       
-       }
+       	}
       
       
 #if defined(FORCE_DEBUG) || defined(PRINT_VOLUMES)
@@ -3860,41 +3856,41 @@ if (Restart == 0) {
       
       
         // --------------------------------------- End Cell Division -----------
-      }
+      	}
 
 
 
  
 
 
-   if(usePBCs && (step)%2000 == 0){
+   	if(usePBCs && (step)%2000 == 0){
 
-      	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-	CudaErrorCheck();
+      		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+		CudaErrorCheck();
         
-        CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-                                                          d_CMx, d_CMy, d_CMz,
-                                                          boxMax, divVol, No_of_C180s,
-                                                          useRigidBoxZ, useRigidBoxY);
+        	CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+        	                                                  d_CMx, d_CMy, d_CMz,
+        	                                                  boxMax, divVol, No_of_C180s,
+        	                                                  useRigidBoxZ, useRigidBoxY);
 
-        CudaErrorCheck();
+        	CudaErrorCheck();
         }
         
-   if(useLEbc && step%1000 == 0){
+   	if(useLEbc && step%1000 == 0){
 
-      	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-	CudaErrorCheck();
-	       
-        UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-                        				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-                        				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
+      		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+      		
+      		CudaErrorCheck();
 	
-	
-   }
+        	UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
+        	                				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
+        	                				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
+		CudaErrorCheck();
+	}
 
 
 
-      if (!growthDone && step > Time_steps+1){
+       if (!growthDone && step > Time_steps+1){
           printf("Cell growth halted.\nProceeding with MD simulation without growth...\n");
           growthDone = true;
           
@@ -4047,37 +4043,39 @@ if (Restart == 0) {
       
       }
 
-    if ( correct_Vcom == true ){
+      if ( correct_Vcom == true ){
      
      
-       VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
-                                          	    d_velListX, d_velListY, d_velListZ,
-                                          	    d_VCMx, d_VCMy, d_VCMz);
+       	VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+               	                           	    d_velListX, d_velListY, d_velListZ,
+               	                           	    d_VCMx, d_VCMy, d_VCMz);
                                           
-        CudaErrorCheck();                        
+        	CudaErrorCheck();                        
                   
-        reductionblocks = (No_of_C180s-1)/1024+1;
+        	reductionblocks = (No_of_C180s-1)/1024+1;
         
-        SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
+        	SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
 			   			d_SysCx, d_SysCy, d_SysCz);
-        CudaErrorCheck(); 
+        	CudaErrorCheck(); 
 
 
-        SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
-        		    d_SysCx, d_SysCy, d_SysCz,
-			    d_sysVCM);
+        	SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        			    d_SysCx, d_SysCy, d_SysCz,
+				    d_sysVCM);
       
-        CudaErrorCheck(); 
+        	CudaErrorCheck(); 
 
-        CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
-                                                                 d_sysVCM,
-                                                                 No_of_C180s*192);
+        	CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
+               	                                                  d_sysVCM,
+               	                                                  No_of_C180s*192);
    
      }
 
-
-      if ( step%trajWriteInt == 0 )
-      {
+   }
+      
+      
+   if ( step%trajWriteInt == 0 )
+   {
           //printf("   Writing trajectory to traj.xyz...\n");
           
           frameCount++; 
@@ -4104,14 +4102,6 @@ if (Restart == 0) {
               		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               
-              		cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              		cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              		cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-              
-              		cudaMemcpy(X, d_X, 192*No_of_C180s, cudaMemcpyDeviceToHost);
-              		cudaMemcpy(Y, d_Y, 192*No_of_C180s, cudaMemcpyDeviceToHost);
-              		cudaMemcpy(Z, d_Z, 192*No_of_C180s, cudaMemcpyDeviceToHost);
-              
               		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
@@ -4132,16 +4122,40 @@ if (Restart == 0) {
     		MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
-    	
-    		if(impurity){
-    	
-    	    		MPI_Send(XPin , impurityNum*192, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(YPin , impurityNum*192, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(ZPin , impurityNum*192, MPI_FLOAT, 0, rank, cart_comm);
+    		
+    		if (write_cont_force){
+    		      		
+    			cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
+      			cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		
+      			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		
+    			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+      			
     	
     		}
     		
+    		
     		if(write_vel_file){
+    		    	
+    		    	cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    			cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    			cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
     		    	
     			MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
@@ -4159,33 +4173,37 @@ if (Restart == 0) {
   }
 
   
-  t = (Time_steps+equiStepCount+Laststep+1) / trajWriteInt; 
+  if (rank ==0) {
   
-  if(write_vel_file){
+  	t = (Time_steps+equiStepCount+Laststep+1) / trajWriteInt; 
+  
+  	if(write_vel_file){
        
-       fclose(velFile);   
+       	fclose(velFile);   
         
-       velFile = fopen("velocity.xyz", "r+");
-       fseek(velFile, 0, SEEK_SET);
-       fwrite(&No_of_C180s, sizeof(int), 1, velFile);  
-       fseek(velFile, 8, SEEK_SET);
-       fwrite(&t, sizeof(int), 1, velFile);
+       	velFile = fopen("velocity.xyz", "r+");
+       	fseek(velFile, 0, SEEK_SET);
+      		fwrite(&No_of_C180s, sizeof(int), 1, velFile);  
+       	fseek(velFile, 8, SEEK_SET);
+       	fwrite(&t, sizeof(int), 1, velFile);
        
-  }
+  	}
   
-    if (binaryOutput){
+    	if (binaryOutput){
   
-      fclose(trajfile);
+      		fclose(trajfile);
       
-      trajfile = fopen (trajFileName, "r+");
-      fseek(trajfile, 0, SEEK_SET);
-      fwrite(&No_of_C180s, sizeof(int), 1, trajfile);    
-      fseek(trajfile, 8, SEEK_SET);
-      fwrite(&t, sizeof(int), 1, trajfile);
-  }
+      		trajfile = fopen (trajFileName, "r+");
+      		fseek(trajfile, 0, SEEK_SET);
+      		fwrite(&No_of_C180s, sizeof(int), 1, trajfile);    
+      		fseek(trajfile, 8, SEEK_SET);
+      		fwrite(&t, sizeof(int), 1, trajfile);
+  	}
+   
   
-  
-  if (rank == 0) printf("   Simulation done!\n");
+  	printf("   Simulation done!\n");
+
+  } 
 
   FILE* MitIndFile;
   std::fstream MitIndFile2;
@@ -4263,9 +4281,12 @@ if (Restart == 0) {
   free(DivPlane.y);
   free(DivPlane.z);
 
-  fclose(trajfile);
-  fclose(forceFile);
-  fclose(velFile);
+  if (rank == 0){
+  	
+  	fclose(trajfile);
+  	fclose(forceFile);
+  	fclose(velFile);
+  }
   fclose(MitIndFile);
 #ifdef OUTPUT_ADP_ERROR
   fclose(timeFile);
@@ -4747,14 +4768,48 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 			
 		}
 
-		for (int i = 0; i < Imp_Cells; i++) {
-			
-			AllCMsPinX[i] = allCMsPin[i].x;		
-			AllCMsPinY[i] = allCMsPin[i].y;
-			AllCMsPinZ[i] = allCMsPin[i].z;
-			
-		}
 
+	   	if(impurity){
+
+			for (int i = 0; i < Imp_Cells; i++) {
+			
+				AllCMsPinX[i] = allCMsPin[i].x;		
+				AllCMsPinY[i] = allCMsPin[i].y;
+				AllCMsPinZ[i] = allCMsPin[i].z;
+			
+			}
+
+
+	   		for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
+						
+	       		for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               		   
+	               		   XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
+	               		   YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
+	               		   ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
+	       		}
+       		
+	      		}
+
+		  	FILE *trajPin;
+  			
+  			if (Restart == 0 ) {
+  			
+  				trajPin = fopen ("inpPin.xyz", "w");
+		
+				int t = *impurityNum;		
+
+	      			fwrite(&t, sizeof(int), 1, trajPin);
+	      
+	      			t = (int)useDifferentCell;
+	      			fwrite(&t, sizeof(int), 1, trajPin);
+      
+	      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+	      			fwrite(&t, sizeof(int), 1, trajPin);      
+    
+	     			WriteBinaryTrajPin(0, trajPin, 1); 
+   			}
+   		}
 
 	}
 
@@ -4782,18 +4837,23 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 				allCMs[i].z = AllCMsZ[i];
 			
 			}
-
-			for (int i = 0; i < Imp_Cells; i++) {
 			
-				allCMsPin[i].x = AllCMsPinX[i];		
-				allCMsPin[i].y = AllCMsPinY[i];
-				allCMsPin[i].z = AllCMsPinZ[i];
+			if ( Imp_Cells > 0){
 			
+				for (int i = 0; i < Imp_Cells; i++) {
+			
+					allCMsPin[i].x = AllCMsPinX[i];		
+					allCMsPin[i].y = AllCMsPinY[i];
+					allCMsPin[i].z = AllCMsPinZ[i];
+			
+				}
+	
 			}
-	
-		}	
-	
+		
+		}
+		
 	}
+	
 	if (colloidal_dynamics){
 	
   	  	if(RandInitDir){	
@@ -4902,33 +4962,36 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
        		*Orig_No_of_C180s = c;
        		
    		}
-   	
-   		int k = 0;
-   		for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
+   		
+   		if ( Imp_Cells > 0){
+   			int k = 0;
+   			for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
        		
-       		if ( allCMsPin[cellInd].x >= Subdivision_min.x - 1.0  && allCMsPin[cellInd].x < Subdivision_max.x + 1.0 ){
-       			if ( allCMsPin[cellInd].y >= Subdivision_min.y - 1.0  && allCMsPin[cellInd].y < Subdivision_max.y + 1.0 ){
-       				if ( allCMsPin[cellInd].z >= Subdivision_min.z - 1.0  && allCMsPin[cellInd].z < Subdivision_max.z + 1.0 ){
+       			if ( allCMsPin[cellInd].x >= Subdivision_min.x - 1.0  && allCMsPin[cellInd].x < Subdivision_max.x + 1.0 ){
+       				if ( allCMsPin[cellInd].y >= Subdivision_min.y - 1.0  && allCMsPin[cellInd].y < Subdivision_max.y + 1.0 ){
+       					if ( allCMsPin[cellInd].z >= Subdivision_min.z - 1.0  && allCMsPin[cellInd].z < Subdivision_max.z + 1.0 ){
 						
-       					for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-               		   			XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
-               		   			YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
-               		   			ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
-       					}
+       						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               			   			XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
+               			   			YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
+               			   			ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
+       						}
        					
-       					k++; 
+       						k++; 
+   						}
    					}
-   				}
-       		}
+       			}
        		
-       		*impurityNum = k;
+       			*impurityNum = k;
        		
+      			}
+      		
       		}
-      		// check all the positions...
+      		
       	
       	}
       	
-      	
+      	// check all the positions...
       	for (int i = 0; i < *Orig_No_of_C180s*192; ++i){
       	   
       	  	if(X[i] == 0 && Y[i] ==0 && Z[i] ==0) continue;
@@ -6118,45 +6181,240 @@ int read_global_params(void)
   return(0);
 }
 
-
-
-
 //C *****************************************************************
-
-
 
 void write_traj(int t_step, FILE* trajfile)
 {
 
-  fprintf(trajfile, "%d\n", No_of_C180s * 192);
-  fprintf(trajfile, "Step: %d frame: %d\n", t_step, t_step/trajWriteInt);
-  
-  if (useDifferentCell){
-      for (int c = 0; c < No_of_C180s; c++){
-          if (youngsModArray[c] == stiffness1)
-              fprintf(trajfile, "cell: %d H\n", CellINdex[c]);
-          else if(youngsModArray[c] == Stiffness2)
-              fprintf(trajfile, "cell: %d C\n", CellINdex[c]);
-          else
-              fprintf(trajfile, "cell: %d UnknownStiffness\n", CellINdex[c]);
 
-          for (int p = 0; p < 192; p++)
-          {
-              fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[(c*192)+p], Y[(c*192)+p], Z[(c*192)+p]);
-          }
-      }
-        
-  } else {
-      for (int c = 0; c < No_of_C180s; c++){
-              fprintf(trajfile, "cell: %d\n", CellINdex[c]);
-              
-              for (int p = 0; p < 192; p++)
-              {
-                  fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[(c*192)+p], Y[(c*192)+p], Z[(c*192)+p]);
-              }
-      }
+    int No_of_All_Cells = 0;
+    
+    if (nprocs > 1){
+    	for (int i = 0; i<nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
+    } else {
+    	No_of_All_Cells = No_of_C180s;
+    	numberofCells_InGPUs[0] = No_of_C180s;
+    }
+    
+    int Num_Cell_OtherGPU;
+
+    fprintf(trajfile, "%d\n", No_of_All_Cells * 192);
+    fprintf(trajfile, "Step: %d frame: %d\n", t_step, t_step/trajWriteInt);
+  
+    for (int i = 0; i < nprocs; i++){
+    	
+	if (nprocs > 1 && i !=0) {        
+    		
+    		Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
+    			
+    		X_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		Y_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		Z_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		//int*  Ghost_Cells_ind_other_GPU = (int*)malloc(sizeof(int)*No_of_Ghost_cells);
+    
+    		MPI_Recv(X_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(Y_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(Z_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		//MPI_Recv(Ghost_Cells_ind_other_GPU , No_of_Ghost_cells, MPI_INT, 1, 61, cart_comm, MPI_STATUS_IGNORE);
+    
+    	}
+  
+  	if (useDifferentCell){
+  	
+  	        for (int c = 0; c < numberofCells_InGPUs[i]; c++){ 
+	
+            		if (i == 0){
+          		
+          			if (CellINdex[c] < 0)
+              				
+              				fprintf(trajfile, "cell: %d C\n", CellINdex[c]);
+          			
+          			else if(CellINdex[c] >= 0)
+              				
+              				fprintf(trajfile, "cell: %d H\n", CellINdex[c]);
+          			else
+              				fprintf(trajfile, "cell: %d UnknownStiffness\n", CellINdex[c]);
+
+          			for (int p = 0; p < 192; p++)
+          			{
+              				fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[(c*192)+p], Y[(c*192)+p], Z[(c*192)+p]);
+          			}
+      			
+      			} else if (nprocs > 1) {
+        		
+        			if (CellINdex_OtherGPU[c] < 0)
+              				
+              				fprintf(trajfile, "cell: %d C\n", CellINdex_OtherGPU[c]);
+          			
+          			else if(CellINdex_OtherGPU[c] >= 0)
+              				
+              				fprintf(trajfile, "cell: %d H\n", CellINdex_OtherGPU[c]);
+          			else
+              				fprintf(trajfile, "cell: %d UnknownStiffness\n", CellINdex_OtherGPU[c]);
+
+          			for (int p = 0; p < 192; p++)
+          			{
+              				fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X_OtherGPU[(c*192)+p], Y_OtherGPU[(c*192)+p], Z_OtherGPU[(c*192)+p]);
+          			}
+        		
+        		}
+  		}
+  
+  	} else {
       
-  }
+      		for (int c = 0; c < numberofCells_InGPUs[i]; c++){
+              		
+              		if (i == 0){
+              		
+              			fprintf(trajfile, "cell: %d\n", CellINdex[c]);
+              
+              			for (int p = 0; p < 192; p++)
+              			{
+                  			fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X[(c*192)+p], Y[(c*192)+p], Z[(c*192)+p]);
+             			}
+ 			
+ 			} else if (nprocs > 1) {
+ 			
+ 				fprintf(trajfile, "cell: %d\n", CellINdex_OtherGPU[c]);
+ 				
+ 				for (int p = 0; p < 192; p++)
+              			{
+                  			fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", X_OtherGPU[(c*192)+p], Y_OtherGPU[(c*192)+p], Z_OtherGPU[(c*192)+p]);
+             			}
+ 			
+ 			}
+ 		}
+ 		
+ 	}
+        
+    }
+
+}
+
+
+void writeForces(FILE* forceFile, int t_step, int num_cells){
+    
+    if(forceFile == NULL){
+        printf("ERROR: forces file not available\n");
+        exit(1);
+    }
+
+    int No_of_All_Cells = 0;
+    
+    if (nprocs > 1){
+    	
+    	for (int i = 0; i<nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
+    
+    } else {
+    
+    	No_of_All_Cells = No_of_C180s;
+    	numberofCells_InGPUs[0] = No_of_C180s;
+    
+    }
+    
+    int Num_Cell_OtherGPU;
+
+    int k = 0;
+    for (int i = 0; i < nprocs; i++){
+    	
+	if (nprocs > 1 && i !=0) {        
+    		
+    		Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
+    			
+    		h_contactForces_OtherGPU.x = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_contactForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_contactForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		
+    		h_ExtForces_OtherGPU.x = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_ExtForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_ExtForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		
+    		pressList_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    		volume_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    		area_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    		
+    		MPI_Recv(h_contactForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_contactForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_contactForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    		MPI_Recv(h_ExtForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_ExtForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_ExtForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    		
+    		MPI_Recv(pressList_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(volume_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(area_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    		
+    
+    	}
+	
+        for (int c = 0; c < numberofCells_InGPUs[i]; c++){
+
+            	if(i == 0) {
+        
+        		for (int n = 0; n < 180; ++n){
+            
+        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        	            		t_step, No_of_All_Cells, k, n,
+        	            		h_contactForces.x[c*192 + n],
+        	            		h_contactForces.y[c*192 + n],
+        	            		h_contactForces.z[c*192 + n],
+        	           		mag(make_float3(h_contactForces.x[c*192 + n],
+        	                       		 h_contactForces.y[c*192 + n],
+        	                       		 h_contactForces.z[c*192 + n])),
+        	            		h_ExtForces.x[c*192 + n],
+        	            		h_ExtForces.y[c*192 + n],
+        	            		h_ExtForces.z[c*192 + n],
+        	            		mag(make_float3(h_ExtForces.x[c*192 + n],
+        	            				 h_ExtForces.y[c*192 + n],
+        	                            		 h_ExtForces.z[c*192 + n])),
+        	            		pressList[c],
+        	            		volume[c],
+        	            		area[c]
+                	    		);
+                        
+        		}
+
+    			k++;
+    		
+    		} else if (nprocs > 1){
+
+   		        for (int n = 0; n < 180; ++n){
+            
+        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        	            		t_step, No_of_All_Cells, k, n,
+        	            		h_contactForces_OtherGPU.x[c*192 + n],
+        	            		h_contactForces_OtherGPU.y[c*192 + n],
+        	            		h_contactForces_OtherGPU.z[c*192 + n],
+        	           		mag(make_float3(h_contactForces_OtherGPU.x[c*192 + n],
+        	                       		 h_contactForces_OtherGPU.y[c*192 + n],
+        	                       		 h_contactForces_OtherGPU.z[c*192 + n])),
+        	            		h_ExtForces_OtherGPU.x[c*192 + n],
+        	            		h_ExtForces_OtherGPU.y[c*192 + n],
+        	            		h_ExtForces_OtherGPU.z[c*192 + n],
+        	            		mag(make_float3(h_ExtForces_OtherGPU.x[c*192 + n],
+        	            				 h_ExtForces_OtherGPU.y[c*192 + n],
+        	                            		 h_ExtForces_OtherGPU.z[c*192 + n])),
+        	            		pressList_OtherGPU[c],
+        	            		volume_OtherGPU[c],
+        	            		area_OtherGPU[c]
+                	    		);
+                        
+        		}
+   		
+   			k++;
+   		
+   		}
+
+	}
+	
+   }	
+
+
 }
 
 void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
@@ -6271,138 +6529,28 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
     	}
               
    }        
-    			
-    			// int ind = 0;
-            	    //for (int k = 0; k < No_of_Ghost_cells; k++){
-        	    //	if ( Ghost_Cells_ind_other_GPU[k] == c ) {
-        	    //			ind = -1;
-        	    //		}
-        	   		
-        	    //} 
-    
+       
 }
 
 void WriteBinaryTrajPin(int t_step, FILE* trajFile, int frameCount){
     
     
-    int No_of_All_Cells = 0;
-    if (nprocs > 1){
-    	for (int i = 0; i<nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
-    } else {
-    	No_of_All_Cells = No_of_C180s;
-    	numberofCells_InGPUs[0] = No_of_C180s;
-    }
-    
-    int Num_Cell_OtherGPU;
-    
     fwrite(&t_step, sizeof(int), 1, trajFile);
     fwrite(&frameCount, sizeof(int), 1, trajFile); 
     fwrite(&impurityNum, sizeof(int), 1, trajFile);
-    
-    for (int i = 0; i < nprocs; i++){
-    	
-	if (i !=0 && nprocs > 1) {        
-    		
-    		Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
-    			
-    		XPin_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		YPin_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		ZPin_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		//CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
-    		//int*  Ghost_Cells_ind_other_GPU = (int*)malloc(sizeof(int)*No_of_Ghost_cells);
-    
-    		MPI_Recv(XPin_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(YPin_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(ZPin_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		//MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		//MPI_Recv(Ghost_Cells_ind_other_GPU , No_of_Ghost_cells, MPI_INT, 1, 61, cart_comm, MPI_STATUS_IGNORE);
-    
-    	}
-    
-    
-    
-    	if (useDifferentCell){
-        
-        	int cellType = 0; 
-        	for (int c = 0; c < numberofCells_InGPUs[i]; c++){ 
-            		
-            		if (i == 0){
-            		
-            			fwrite(&c, sizeof(int), 1, trajFile);
-            			fwrite(XPin + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(YPin + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(ZPin + (c*192), sizeof(float), 192, trajFile);
-            			fwrite(&cellType, sizeof(int), 1, trajFile);
-            		
-            		} else if (nprocs > 1) {
-            			
-            			fwrite(&c, sizeof(int), 1, trajFile);
-            			fwrite(XPin_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(YPin_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(ZPin_OtherGPU + (c*192), sizeof(float), 192, trajFile);
-            			fwrite(&cellType, sizeof(int), 1, trajFile);            		
-            		
-            		}
-        	}
-    
-    
-    
-    	} else {
+
         	
-        	for (int c = 0; c < numberofCells_InGPUs[i]; c++){
-        
-        		if (i == 0){
+    for (int c = 0; c < impurityNum; c++){
             			
-            			fwrite(&c, sizeof(int), 1, trajFile);            
-            			fwrite(XPin + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(YPin + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(ZPin + (c*192), sizeof(float), 192, trajFile); 
-        		
-        		} else if (nprocs > 1){
-        		
-        			fwrite(&c, sizeof(int), 1, trajFile);
-            			fwrite(XPin_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(YPin_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
-            			fwrite(ZPin_OtherGPU + (c*192), sizeof(float), 192, trajFile);
-        		
-        		}
-    		}
-   	}
+            fwrite(&c, sizeof(int), 1, trajFile);            
+            fwrite(XPin + (c*192), sizeof(float), 192, trajFile); 
+            fwrite(YPin + (c*192), sizeof(float), 192, trajFile); 
+            fwrite(ZPin + (c*192), sizeof(float), 192, trajFile); 
+        	
    }  
+
+
 }
-
-
-void write_trajPin(int t_step, FILE* trajfile)
-{
-
-  fprintf(trajfile, "%d\n", impurityNum * 192);
-  fprintf(trajfile, "Step: %d frame: %d\n", t_step, t_step/trajWriteInt);
-  
-  if (useDifferentCell){
-  
-      for (int c = 0; c < impurityNum; c++){
-
-          fprintf(trajfile, "cell: %d UnknownStiffness\n", c);
-
-          for (int p = 0; p < 192; p++)
-          {
-              fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", XPin[(c*192)+p], YPin[(c*192)+p], ZPin[(c*192)+p]);
-          }
-      }
-        
-  } else {
-      for (int c = 0; c < impurityNum; c++){
-              fprintf(trajfile, "cell: %d\n", c);
-              
-              for (int p = 0; p < 192; p++)
-              {
-                  fprintf(trajfile, "%.7f,  %.7f,  %.7f\n", XPin[(c*192)+p], YPin[(c*192)+p], ZPin[(c*192)+p]);
-              }
-      }
-      
-  }
-}
-
 
 void write_vel(int t_step, FILE* velFile,int frameCount){
     
@@ -6549,51 +6697,6 @@ inline int num_cells_far(){
   return farCellCount;
 
 }
-
-void writeForces(FILE* forceFile, int t_step, int num_cells){
-    if(forceFile == NULL){
-        printf("ERROR: forces file not available\n");
-        exit(1);
-    }
-
-    for (int c =0; c < num_cells; ++c){
-        for (int n = 0; n < 180; ++n){
-            fprintf(forceFile, "%d,%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
-                    t_step, num_cells, c, n, c*192+n,
-                    h_contactForces.x[c*192 + n],
-                    h_contactForces.y[c*192 + n],
-                    h_contactForces.z[c*192 + n],
-                    mag(make_float3(h_contactForces.x[c*192 + n],
-                                    h_contactForces.y[c*192 + n],
-                                    h_contactForces.z[c*192 + n])),
-                                        h_ExtForces.x[c*192 + n],
-                    h_ExtForces.y[c*192 + n],
-                    h_ExtForces.z[c*192 + n],
-                    mag(make_float3(h_ExtForces.x[c*192 + n],
-                                    h_ExtForces.y[c*192 + n],
-                                    h_ExtForces.z[c*192 + n])),
-                    velListX[c*192+n],
-                    velListY[c*192+n],
-                    velListZ[c*192+n],
-                    mag(make_float3(velListX[c*192+n],
-                                    velListY[c*192+n],
-                                    velListZ[c*192+n])),
-                    X[c*192+n],
-                    Y[c*192+n],
-                    Z[c*192+n],
-                    pressList[c],
-                    volume[c],
-                    area[c]
-                );
-                        
-        }
-
-
-    }
-}
-
-
-
 
 
 int writeRestartFile(int t_step, int frameCount){
