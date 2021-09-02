@@ -534,10 +534,10 @@ int main(int argc, char *argv[])
 
   if (nprocs > 1) MPI_Barrier(cart_comm);
 
-  //int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
-  //idev = local_rank;
+  int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+  idev = local_rank;
     
-  idev = rank%4; 
+  //idev = rank%4; 
   //printf("local rank=%d: and idev %d\n", local_rank, idev);
   cudaSetDevice(idev);
   cudaDeviceProp deviceProp = getDevice(idev);  
