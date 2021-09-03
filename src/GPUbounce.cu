@@ -1595,7 +1595,8 @@ if (Restart == 0) {
   	cudaMemcpy(d_YPin,  YPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
   	cudaMemcpy(d_ZPin,  ZPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
   	CudaErrorCheck();
-
+	
+	//printf("rank:	%d,imp num:	%d\n",rank,impurityNum);
   	CenterOfMass<<<impurityNum,256>>>(impurityNum, d_XPin, d_YPin, d_ZPin, d_CMxPin, d_CMyPin, d_CMzPin);
   	CudaErrorCheck();
    
@@ -5487,8 +5488,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 		if ( Imp_Cells > 0){
 	
 			MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
-			MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
-			MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
+			MPI_Bcast(AllCMsPinY, Imp_Cells, MPI_FLOAT, 0, cart_comm);
+			MPI_Bcast(AllCMsPinZ, Imp_Cells, MPI_FLOAT, 0, cart_comm);
 	
 		}
 
@@ -5502,18 +5503,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 				allCMs[i].z = AllCMsZ[i];
 			
 			}
-			
-			if ( Imp_Cells > 0){
-			
-				for (int i = 0; i < Imp_Cells; i++) {
-			
-					allCMsPin[i].x = AllCMsPinX[i];		
-					allCMsPin[i].y = AllCMsPinY[i];
-					allCMsPin[i].z = AllCMsPinZ[i];
-			
-				}
-	
-			}
+
 		
 		}
 		
@@ -5633,21 +5623,20 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
    			int k = 0;
    			for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
        		
-       			if ( allCMsPin[cellInd].x >= Subdivision_min.x - 1.0  && allCMsPin[cellInd].x < Subdivision_max.x + 1.0 ){
-       				if ( allCMsPin[cellInd].y >= Subdivision_min.y - 1.0  && allCMsPin[cellInd].y < Subdivision_max.y + 1.0 ){
-       					if ( allCMsPin[cellInd].z >= Subdivision_min.z - 1.0  && allCMsPin[cellInd].z < Subdivision_max.z + 1.0 ){
+       			if ( AllCMsPinX[cellInd] > Subdivision_min.x - 1.0  && AllCMsPinX[cellInd] < Subdivision_max.x  + 1.0){
+       				if ( AllCMsPinY[cellInd] > Subdivision_min.y - 1.0 && AllCMsPinY[cellInd] < Subdivision_max.y + 1.0){
+       					if ( AllCMsPinZ[cellInd] > Subdivision_min.z - 1.0  && AllCMsPinZ[cellInd] < Subdivision_max.z + 1.0){
 						
        						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-               			   			XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
-               			   			YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
-               			   			ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
+               			   			XPin[k*192 + nodeInd] = initx[nodeInd] + AllCMsPinX[cellInd];
+               			   			YPin[k*192 + nodeInd] = inity[nodeInd] + AllCMsPinY[cellInd];
+               			   			ZPin[k*192 + nodeInd] = initz[nodeInd] + AllCMsPinZ[cellInd];
        						}
        					
        						k++; 
    						}
    					}
        			}
-       		
        			
        		
       			}
@@ -7333,9 +7322,10 @@ int ReadPinFile(){
    				}
        		}
        		
-       		impurityNum = k;
-       		
       		}
+     	
+     		impurityNum = k;
+     		//printf("rank:	%d, k:	%d,imp:	%d\n",rank,k,impurityNum)
      	
      	} else {
      	
