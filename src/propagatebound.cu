@@ -734,7 +734,7 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
 
 // Pinning
 __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                            int *d_NoofNNlistPin, int *d_NNlistPin, float DL)
 {
 
@@ -750,16 +750,16 @@ __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz
 		int posz = 0;		
 
 
-	 	posx = (int)((CMx[fullerene] - BoxMin.x)/DL);
+	 	posx = (int)((CMx[fullerene] - Subdivision_min.x)/DL);
 	  	if ( posx < 0 ) posx = 0;
 	  	if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
 	  	
 
-	  	posy = (int)((CMy[fullerene]-BoxMin.y)/DL);
+	  	posy = (int)((CMy[fullerene] - Subdivision_min.y)/DL);
 	  	if ( posy < 0 ) posy = 0;
 	  	if ( posy > Ydiv - 1 ) posy = Ydiv - 1;
 
-	   	posz = (int)((CMz[fullerene]-BoxMin.z)/DL);
+	   	posz = (int)((CMz[fullerene] - Subdivision_min.z)/DL);
 	  	if ( posz < 0 ) posz = 0;
 	  	if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
 	  	

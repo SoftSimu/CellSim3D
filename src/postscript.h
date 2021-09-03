@@ -28,8 +28,8 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
                            int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
                            int *d_NoofNNlist, int *d_NNlist, float DL);
 
-__global__ void makeNNlistPin( int impurityNum, float *CMx, float *CMy,float *CMz,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+__global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                            int *d_NoofNNlistPin, int *d_NNlistPin, float DL);
 
 __global__ void makeNNlistPBCPin(int impurityNum, float *CMx, float *CMy,float *CMz,
@@ -169,6 +169,7 @@ void write_trajPin(int t_step, FILE* trajfile);
 // read and write restart function
 int writeRestartFile(int t_step, int frameCount);
 int ReadRestartFile();
+int ReadPinFile();
 
 
 // Function to get the indeces of dividing cells

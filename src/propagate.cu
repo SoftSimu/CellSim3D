@@ -428,7 +428,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	            if ( NooflocalNN > MAX_NN ){
 	                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-	                //printf("posX:	%d, posy:	%d, posz:	%d\n", posX, posY,posZ);
 	                continue;
 	            }
 
@@ -499,6 +498,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	            		if ( NooflocalNN > MAX_NN ){
 	                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
+	                		//printf("posX:	%d, posy:	%d, posz:	%d\n", posX, posY,posZ);
 	                		continue;
 	            		}
 

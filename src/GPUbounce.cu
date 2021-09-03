@@ -571,8 +571,6 @@ int main(int argc, char *argv[])
   cudaError_t myError;
 
 
-
-
   int* dividingCells; //Cells that are about to divide
   int* totalCells; // No. of cells at every Dividing_steps
 
@@ -747,6 +745,7 @@ int main(int argc, char *argv[])
   
   if(rank == 0) numberofCells_InGPUs = (int *)calloc(nprocs , sizeof(int));
   
+  
   XPin = (float *)calloc(192*impurityNum,sizeof(float));
   YPin = (float *)calloc(192*impurityNum,sizeof(float));
   ZPin = (float *)calloc(192*impurityNum,sizeof(float));
@@ -754,6 +753,7 @@ int main(int argc, char *argv[])
   X = (float *)calloc(192*MaxNoofC180s,sizeof(float));
   Y = (float *)calloc(192*MaxNoofC180s,sizeof(float));
   Z = (float *)calloc(192*MaxNoofC180s,sizeof(float));
+  
   velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -770,6 +770,15 @@ int main(int argc, char *argv[])
   viscotic_damp = (float *)calloc(MaxNoofC180s, sizeof(float));
   area= (float *)calloc(MaxNoofC180s, sizeof(float));
   
+  
+  if (Restart == 1 ) {
+  	
+  	if( ReadRestartFile() != 0 ) return(-1);
+  	
+  	if (impurity){
+  		if( ReadPinFile() != 0 ) return(-1);
+  	}
+  }
   
   h_contactForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_contactForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -909,12 +918,11 @@ int main(int argc, char *argv[])
   angles3* d_theta0 = thrust::raw_pointer_cast(&d_theta0V[0]);
   theta0 = thrust::raw_pointer_cast(&h_theta0[0]);
 
-
   h_R0 = (float *)calloc(192*3, sizeof(float));
+
   for (int i =  0; i < MaxNoofC180s; ++i) ScaleFactor[i] = 1.0;
 
-  //if ( read_global_params()               != 0 ) return(-1);
-  if (Restart == 1 ) if( ReadRestartFile() != 0 ) return(-1); 
+  //if ( read_global_params()               != 0 ) return(-1); 
   if (generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
   if (DispersityFunc(Orig_No_of_C180s) != 0 ) return(-1);
   if (Restart == 0 ) if ( initialize_C180s( &Orig_No_of_C180s, &impurityNum) != 0 ) return(-1);
@@ -1379,15 +1387,6 @@ if (Restart == 0) {
   cudaMemcpy(d_Z,  Z, 192*No_of_C180s*sizeof(float),cudaMemcpyHostToDevice);
   CudaErrorCheck();
   
-  if(impurity){
-  	
-  	cudaMemcpy(d_XPin,  XPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
-  	cudaMemcpy(d_YPin,  YPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
-  	cudaMemcpy(d_ZPin,  ZPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
-  	CudaErrorCheck();
-  
-  }
-  
   cudaMemcpy(d_velListX, velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velListY, velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velListZ, velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
@@ -1591,11 +1590,38 @@ if (Restart == 0) {
   
   
   if(impurity){	
-  
+  	
+  	cudaMemcpy(d_XPin,  XPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
+  	cudaMemcpy(d_YPin,  YPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
+  	cudaMemcpy(d_ZPin,  ZPin, 192*impurityNum*sizeof(float),cudaMemcpyHostToDevice);
+  	CudaErrorCheck();
+
   	CenterOfMass<<<impurityNum,256>>>(impurityNum, d_XPin, d_YPin, d_ZPin, d_CMxPin, d_CMyPin, d_CMzPin);
   	CudaErrorCheck();
+   
+   	if (useRigidSimulationBox){
+      	
+      		makeNNlistPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
+        	Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlistPin, d_NNlistPin, DL);        
+        	CudaErrorCheck(); 
+   
+   	} if(usePBCs){
+    
+       	makeNNlistPBCPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
+        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, useRigidBoxZ,useRigidBoxY);        
+        	CudaErrorCheck(); 
+   
+   	} if(useLEbc){
+    
+       	makeNNlistLEbcPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
+        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, Pshift, useRigidBoxZ);     	
+        	CudaErrorCheck();
+       
+   	} 
+   
+   }
+
   
-  }
   
   // Precalculate random plane
   initialize_Plane(MaxNoofC180s);
@@ -2558,32 +2584,6 @@ if (Restart == 0) {
         CudaErrorCheck();
        
    } 
-  
-
-   if(impurity){
-   
-   	if (useRigidSimulationBox){
-      	
-      		makeNNlistPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
-        	Xdiv, Ydiv, Zdiv, BoxMin, d_NoofNNlistPin, d_NNlistPin, DL);        
-        	CudaErrorCheck(); 
-   
-   	}if(usePBCs){
-    
-       	makeNNlistPBCPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, useRigidBoxZ,useRigidBoxY);        
-        	CudaErrorCheck(); 
-   
-   	}if(useLEbc){
-    
-       	makeNNlistLEbcPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, Pshift, useRigidBoxZ);     	
-        	CudaErrorCheck();
-       
-   	} 
-   
-   }
-
 
 
   if (constrainAngles){
@@ -5451,18 +5451,6 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 			
 			}
 
-
-	   		for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
-						
-	       		for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
-               		   
-	               		   XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsPin[cellInd].x;
-	               		   YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsPin[cellInd].y;
-	               		   ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsPin[cellInd].z;
-	       		}
-       		
-	      		}
-
 		  	FILE *trajPin;
   			
   			if (Restart == 0 ) {
@@ -5472,14 +5460,19 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 				int t = *impurityNum;		
 
 	      			fwrite(&t, sizeof(int), 1, trajPin);
-	      
-	      			t = (int)useDifferentCell;
-	      			fwrite(&t, sizeof(int), 1, trajPin);
-      
-	      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-	      			fwrite(&t, sizeof(int), 1, trajPin);      
-    
-	     			WriteBinaryTrajPin(0, trajPin, 1); 
+				
+				float Cx, Cy, Cz;
+    				for (int c = 0; c < t; c++){
+    				
+					Cx = allCMsPin[c].x;
+					Cy = allCMsPin[c].y;
+					Cz = allCMsPin[c].z;
+	
+					fwrite(&Cx, sizeof(float), 1, trajPin);
+					fwrite(&Cy, sizeof(float), 1, trajPin);
+					fwrite(&Cz, sizeof(float), 1, trajPin);
+    				} 	      			
+	      			 
    			}
    		}
 
@@ -5629,13 +5622,14 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
        				
        				}
        			}
-       		}
-       		
-       		*Orig_No_of_C180s = c;
+       		}      		
        		
    		}
    		
+   		*Orig_No_of_C180s = c;
+   		
    		if ( Imp_Cells > 0){
+   			
    			int k = 0;
    			for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
        		
@@ -5654,10 +5648,11 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
    					}
        			}
        		
-       			*impurityNum = k;
+       			
        		
       			}
       		
+      			*impurityNum = k;
       		}
       		
       	
@@ -7223,25 +7218,160 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
        
 }
 
-void WriteBinaryTrajPin(int t_step, FILE* trajFile, int frameCount){
-    
-    
-    fwrite(&t_step, sizeof(int), 1, trajFile);
-    fwrite(&frameCount, sizeof(int), 1, trajFile); 
-    fwrite(&impurityNum, sizeof(int), 1, trajFile);
+int ReadPinFile(){
 
-        	
-    for (int c = 0; c < impurityNum; c++){
-            			
-            //fwrite(&c, sizeof(int), 1, trajFile);            
-            fwrite(XPin + (c*192), sizeof(float), 192, trajFile); 
-            fwrite(YPin + (c*192), sizeof(float), 192, trajFile); 
-            fwrite(ZPin + (c*192), sizeof(float), 192, trajFile); 
-        	
-   }  
+	
+	
+	float initx[181], inity[181], initz[181];
+	int atom;
+	
+	FILE *infilC;
+  	infilC = fopen("C180","r");
+  	if ( infilC == NULL ) {printf("Unable to open file C180, rank %d\n", rank);return(-1);}
+  	for ( atom = 0 ; atom < 180 ; ++atom)
+  	{
+      		if ( fscanf(infilC,"%f %f %f",&initx[atom], &inity[atom], &initz[atom]) != 3 )
+      		{
+          		printf("   Unable to read file C180 on line %d, rank %d\n",atom+1, rank);
+          		fclose(infilC);
+          		return(-1);
+      		}
+  	}
+  	fclose(infilC);
+
+  	// first correct for the cells com
+
+  	float sumx = 0; 
+  	float sumy = 0; 
+  	float sumz = 0;
+      
+  	for (int i =0; i < 180; ++i){
+      		sumx += initx[i]; 
+      		sumy += inity[i]; 
+      		sumz += initz[i]; 
+  	}
+
+  	sumx /= 180.0; 
+  	sumy /= 180.0; 
+  	sumz /= 180.0;
+      
+  	for (int i =0; i < 180; ++i){
+      		initx[i] -= sumx; 
+      		inity[i] -= sumy; 
+      		initz[i] -= sumz; 
+  	}
+
+
+	
+	FILE *infil;
+
+	if(rank == 0){
+	
+		int Imp;
+  	
+  		printf("Reading inpPin.xyz ...\n");
+  		infil = fopen("inpPin.xyz","r");
+  
+  		if ( infil == NULL ) {
+    		
+    			printf("Unable to open file inpPin.xyz \n");
+    			return(-1);
+  		}
+  	
+  		if ( fread(&Imp, sizeof(int),1,infil) != 1 ) { 
+			printf("Data missing from trajectory. \n");
+			return(-1);
+  		}
+  
+		impurityNum = Imp; 
+  		
+  		printf("Number of the  impurity is: %d \n",impurityNum);
+	
+	}
+
+     	
+     	if (nprocs > 1){
+     	
+     		
+     		MPI_Bcast(&impurityNum, 1, MPI_INT, 0, cart_comm);
+		
+		float allCMsX[impurityNum];
+  		float allCMsY[impurityNum];
+  		float allCMsZ[impurityNum];
+	
+		if(rank == 0){
+		
+			for (int c = 0; c < impurityNum; c++){
+	
+				if ( fread(&allCMsX[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    				if ( fread(&allCMsY[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    				if ( fread(&allCMsZ[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+
+			}
+		}
+	
+	
+		MPI_Bcast(allCMsX, impurityNum, MPI_FLOAT, 0, cart_comm);
+		MPI_Bcast(allCMsY, impurityNum, MPI_FLOAT, 0, cart_comm);
+		MPI_Bcast(allCMsZ, impurityNum, MPI_FLOAT, 0, cart_comm);
+     	
+     	   	int k = 0;
+   		for (int cellInd = 0; cellInd < impurityNum; cellInd++){
+       		
+       		if ( allCMsX[cellInd] >= Subdivision_min.x - 1.0  && allCMsX[cellInd] < Subdivision_max.x + 1.0 ){
+       			if ( allCMsY[cellInd] >= Subdivision_min.y - 1.0  && allCMsY[cellInd] < Subdivision_max.y + 1.0 ){
+       				if ( allCMsZ[cellInd] >= Subdivision_min.z - 1.0  && allCMsZ[cellInd] < Subdivision_max.z + 1.0 ){
+						
+       					for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               			   		XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsX[cellInd];
+               			   		YPin[k*192 + nodeInd] = inity[nodeInd] + allCMsY[cellInd];
+               			   		ZPin[k*192 + nodeInd] = initz[nodeInd] + allCMsZ[cellInd];
+       					}
+       					
+       					k++; 
+   					}
+   				}
+       		}
+       		
+       		impurityNum = k;
+       		
+      		}
+     	
+     	} else {
+     	
+     	
+     	   	float allCMsX[impurityNum];
+  		float allCMsY[impurityNum];
+  		float allCMsZ[impurityNum];
+   	
+   		for (int c = 0; c < impurityNum; c++){
+   		
+			if ( fread(&allCMsX[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&allCMsY[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&allCMsZ[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+
+		}
+		
+		for (int cellInd = 0; cellInd < impurityNum; cellInd++){
+		
+			for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               		
+               		XPin[cellInd*192 + nodeInd] = initx[nodeInd] + allCMsX[cellInd];
+               		YPin[cellInd*192 + nodeInd] = inity[nodeInd] + allCMsY[cellInd];
+               		ZPin[cellInd*192 + nodeInd] = initz[nodeInd] + allCMsZ[cellInd];
+       		
+       		}
+
+     		}
+     	}
+
+
+   if (rank == 0) fclose(infil);
+   return 0;
 
 
 }
+
 
 void write_vel(int t_step, FILE* velFile,int frameCount){
     
@@ -7272,13 +7402,13 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
     		velListY_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		velListZ_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
-    		//int*  Ghost_Cells_ind_other_GPU = (int*)malloc(sizeof(int)*No_of_Ghost_cells);
+    		
     
     		MPI_Recv(velListX_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(velListY_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(velListZ_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		//MPI_Recv(Ghost_Cells_ind_other_GPU , No_of_Ghost_cells, MPI_INT, 1, 61, cart_comm, MPI_STATUS_IGNORE);
+    		
     
     	}
     
@@ -7396,42 +7526,36 @@ inline int num_cells_far(){
 
 int writeRestartFile(int t_step, int frameCount){
 
-
-	cudaMemcpy(X , d_X, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-  	cudaMemcpy(Y , d_Y, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-  	cudaMemcpy(Z , d_Z, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-  	cudaMemcpy(velListX , d_velListX , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-  	cudaMemcpy(velListY , d_velListY , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-  	cudaMemcpy(velListZ , d_velListZ , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-        cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-        cudaMemcpy(youngsModArray, d_Youngs_mod ,No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-  	CudaErrorCheck();
-  	cudaMemcpy(Growth_rate, d_Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-        CudaErrorCheck();			
-	cudaMemcpy(ScaleFactor, d_ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-        cudaMemcpy(DivisionVolume, d_DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-        cudaMemcpy(Apo_rate, d_Apo_rate, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-        cudaMemcpy(squeeze_rate, d_squeeze_rate, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-        cudaMemcpy(gamma_env, d_gamma_env, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-        cudaMemcpy(viscotic_damp, d_viscotic_damp, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
-	cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
-        CudaErrorCheck();
+         cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         CudaErrorCheck();
+         
+         cudaMemcpy(X , d_X, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(Y , d_Y, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(Z , d_Z, No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+         CudaErrorCheck();
+  	
+  	 cudaMemcpy(velListX , d_velListX , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	 cudaMemcpy(velListY , d_velListY , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	 cudaMemcpy(velListZ , d_velListZ , No_of_C180s*192*sizeof(float), cudaMemcpyDeviceToHost);
+  	 CudaErrorCheck();
+         
+         cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(youngsModArray, d_Youngs_mod ,No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(Growth_rate, d_Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);			
+         cudaMemcpy(ScaleFactor, d_ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+         cudaMemcpy(DivisionVolume, d_DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+         cudaMemcpy(Apo_rate, d_Apo_rate, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+         cudaMemcpy(squeeze_rate, d_squeeze_rate, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+         cudaMemcpy(gamma_env, d_gamma_env, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+         cudaMemcpy(viscotic_damp, d_viscotic_damp, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
+         cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+         CudaErrorCheck();
         
         
         int No_of_C180s_All, NumApoCell_All, NumRemoveCell_All;
+        int Num_Cell_OtherGPU;
           
 	if (nprocs > 1){ 
 		
@@ -7449,9 +7573,11 @@ int writeRestartFile(int t_step, int frameCount){
 		
 	}
 	
+	FILE *Restartfile;
+	
 	if(rank == 0){
 	
-		FILE *Restartfile;
+		
 		Restartfile = fopen ("Restart.xyz", "w");
         	
         	if ( Restartfile == NULL)
@@ -7460,8 +7586,168 @@ int writeRestartFile(int t_step, int frameCount){
       	    		return -1;
   		}
 
-		int Num_Cell_OtherGPU;
+		fwrite(&t_step, sizeof(int), 1, Restartfile);
+		fwrite(&frameCount, sizeof(int), 1, Restartfile); 
+		fwrite(&No_of_C180s_All, sizeof(int), 1, Restartfile); 
+		fwrite(&NumApoCell_All, sizeof(int), 1, Restartfile);
+		fwrite(&NumRemoveCell_All, sizeof(int), 1, Restartfile);  
+
+	
+		float *CmX_OtherGPU, *CmY_OtherGPU, *CmZ_OtherGPU;
 		
+		float Cx = 0;
+		float Cy = 0;
+		float Cz = 0;
+		
+		for (int i = 0; i < nprocs; i++){
+    	
+			if (i !=0 && nprocs > 1) {
+    				    				
+    				CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    				CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    				CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    				
+    				MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+			
+			
+			}
+			for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
+				
+				
+				if (i == 0) {
+					
+					Cx = CMx[c];
+					Cy = CMy[c];
+        				Cz = CMz[c];
+        		
+        				fwrite(&Cx, sizeof(float), 1, Restartfile); 
+        				fwrite(&Cy, sizeof(float), 1, Restartfile); 
+        				fwrite(&Cz, sizeof(float), 1, Restartfile);
+        	
+        			
+        			} else if (nprocs > 1) {
+        				
+        				Cx = CmX_OtherGPU[c];
+					Cy = CmY_OtherGPU[c];
+        				Cz = CmZ_OtherGPU[c];
+        				
+        				fwrite(&Cx, sizeof(float), 1, Restartfile); 
+        				fwrite(&Cy, sizeof(float), 1, Restartfile); 
+        				fwrite(&Cz, sizeof(float), 1, Restartfile);
+
+        			
+        			}
+			
+			}
+			
+		}
+	
+	} else {
+		 	
+   		MPI_Send(CMx , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(CMy , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(CMz , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+	
+	}		
+	
+	if (rank == 0){
+		
+		for (int i = 0; i < nprocs; i++){
+    	
+			if (i !=0 && nprocs > 1) {
+			
+			    	Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
+    				    				
+    				X_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    				Y_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    				Z_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    				
+    				MPI_Recv(X_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(Y_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(Z_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+			
+			
+			}
+			for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
+				
+				if (i == 0) {
+			
+        		
+        				fwrite(X + (c*192), sizeof(float), 192, Restartfile); 
+        				fwrite(Y + (c*192), sizeof(float), 192, Restartfile); 
+        				fwrite(Z + (c*192), sizeof(float), 192, Restartfile);
+        	
+        			} else if (nprocs > 1) {
+        		
+        		
+        				fwrite(X_OtherGPU + (c*192), sizeof(float), 192, Restartfile); 
+        				fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, Restartfile); 
+        				fwrite(Z_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
+        			
+        			}
+			
+			}
+		}
+				
+	} else {
+		 	
+   		MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+	
+	}		
+	
+	if(rank == 0) {
+		
+		for (int i = 0; i < nprocs; i++){
+    	
+			if (i !=0 && nprocs > 1) {
+				
+				Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
+				
+				velListX_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    				velListY_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    				velListZ_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    					
+    				MPI_Recv(velListX_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(velListY_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(velListZ_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+			
+			}
+				
+			for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
+				
+				if (i == 0) {
+			
+					fwrite(velListX + (c*192), sizeof(float), 192, Restartfile);
+        	    			fwrite(velListY + (c*192), sizeof(float), 192, Restartfile);
+					fwrite(velListZ + (c*192), sizeof(float), 192, Restartfile);
+					
+        	
+        			} else if (nprocs > 1) {
+        		
+					fwrite(velListX_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
+        	    			fwrite(velListY_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
+					fwrite(velListZ_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
+
+        			
+        			}
+			
+			}
+		}
+	 } else {
+    		
+    		MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+	 
+	 
+	 }	
+	 
+	 if (rank == 0) {
+	 	
 		float p = 0;
 		float y = 0;
 		float g = 0;
@@ -7471,30 +7757,12 @@ int writeRestartFile(int t_step, int frameCount){
 		float sq = 0;
 		float ge = 0;
 		float vd = 0;
-		int I = 0;	
-
-		fwrite(&t_step, sizeof(int), 1, Restartfile);
-		fwrite(&frameCount, sizeof(int), 1, Restartfile); 
-		fwrite(&No_of_C180s_All, sizeof(int), 1, Restartfile); 
-		//fwrite(&impurityNum, sizeof(int), 1, Restartfile);
-		fwrite(&NumApoCell_All, sizeof(int), 1, Restartfile);
-		fwrite(&NumRemoveCell_All, sizeof(int), 1, Restartfile);  
- 		
- 		
- 		for (int i = 0; i < nprocs; i++){
+		int I = 0;
+	 	
+	 	for (int i = 0; i < nprocs; i++){
     	
 			if (i !=0 && nprocs > 1) {        
-    		
-    				
-    				Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
-    				    				
-    				X_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    				Y_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    				Z_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    				
-    				velListX_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    				velListY_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    				velListZ_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+
     				
     				pressList_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     				youngsModArray_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
@@ -7507,13 +7775,6 @@ int writeRestartFile(int t_step, int frameCount){
     				viscotic_damp_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     				CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
 
-    				MPI_Recv(X_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    				MPI_Recv(Y_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    				MPI_Recv(Z_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    				
-    				MPI_Recv(velListX_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    				MPI_Recv(velListY_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    				MPI_Recv(velListZ_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				
     				MPI_Recv(pressList_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(youngsModArray_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
@@ -7525,12 +7786,14 @@ int writeRestartFile(int t_step, int frameCount){
     				MPI_Recv(gamma_env_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(viscotic_damp_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			}
-
-		
+    			}	
+			
+			
 			for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
 				
-				if (rank == 0) {
+				
+				
+				if (i == 0) {
 			
 					p = pressList[c];
 					y = youngsModArray[c];
@@ -7543,12 +7806,6 @@ int writeRestartFile(int t_step, int frameCount){
         				vd =  viscotic_damp[c];
         				I = CellINdex[c];
         		
-        				fwrite(X + (c*192), sizeof(float), 192, Restartfile); 
-        				fwrite(Y + (c*192), sizeof(float), 192, Restartfile); 
-        				fwrite(Z + (c*192), sizeof(float), 192, Restartfile);
-					fwrite(velListX + (c*192), sizeof(float), 192, Restartfile);
-        	    			fwrite(velListY + (c*192), sizeof(float), 192, Restartfile);
-					fwrite(velListZ + (c*192), sizeof(float), 192, Restartfile);
 					fwrite(&p, sizeof(float), 1, Restartfile);
         	    			fwrite(&y, sizeof(float), 1, Restartfile);
         	    			fwrite(&g, sizeof(float), 1, Restartfile);
@@ -7573,12 +7830,6 @@ int writeRestartFile(int t_step, int frameCount){
         				vd =  viscotic_damp_OtherGPU[c];
         				I = CellINdex_OtherGPU[c];
         		
-        				fwrite(X_OtherGPU + (c*192), sizeof(float), 192, Restartfile); 
-        				fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, Restartfile); 
-        				fwrite(Z_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
-					fwrite(velListX_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
-        	    			fwrite(velListY_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
-					fwrite(velListZ_OtherGPU + (c*192), sizeof(float), 192, Restartfile);
 					fwrite(&p, sizeof(float), 1, Restartfile);
         	    			fwrite(&y, sizeof(float), 1, Restartfile);
         	    			fwrite(&g, sizeof(float), 1, Restartfile);
@@ -7592,36 +7843,12 @@ int writeRestartFile(int t_step, int frameCount){
         			
         			}
 			
-			}
+			}	
 		
 		}
 		
-		//if (impurity) {
-        	
-        	//	for (int c = 0; c < impurityNum; c++){
-        		
-        	//		fwrite(XPin + (c*192), sizeof(float), 192, Restartfile); 
-        	//		fwrite(YPin + (c*192), sizeof(float), 192, Restartfile); 
-        	//		fwrite(ZPin + (c*192), sizeof(float), 192, Restartfile);
-            	
-        	//	}
-		//}
-
-  
-   		fclose(Restartfile);
-   	
    	
    	} else {
-   	
-   	
-   		MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		
-    		MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-
     		
     		MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     		MPI_Send(youngsModArray , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
@@ -7636,116 +7863,374 @@ int writeRestartFile(int t_step, int frameCount){
    	
    	}
    	
+   	
+   	//fwrite(&impurityNum, sizeof(int), 1, Restartfile);
+   		//if (impurity) {
+        	
+        	//	for (int c = 0; c < impurityNum; c++){
+        		
+        	//		fwrite(XPin + (c*192), sizeof(float), 192, Restartfile); 
+        	//		fwrite(YPin + (c*192), sizeof(float), 192, Restartfile); 
+        	//		fwrite(ZPin + (c*192), sizeof(float), 192, Restartfile);
+            	
+        	//	}
+		//}
+   	
+   	if (rank == 0 ) fclose(Restartfile);
+   	
    	return 0;
 
 }
 
-int ReadRestartFile( ){
+int ReadRestartFile(){
 
+
+  int Orig_Cells;
+  float *Res_BufferX, *Res_BufferY, *Res_BufferZ;
+  float *Res_Buffer_pressList, *Res_Buffer_youngsModArray, *Res_Buffer_Growth_rate;
+  float *Res_Buffer_ScaleFactor, *Res_Buffer_DivisionVolume, *Res_Buffer_Apo_rate;
+  float *Res_Buffer_squeeze_rate, *Res_Buffer_gamma_env, *Res_Buffer_viscotic_damp;
+  int *Res_Buffer_CellINdex;
+  int *Owning;
+  			
   FILE *infil;
-  int s;
-  int f;
-  int nCell;
-  int nImp;  
-  int CellInd;
-  int shift;
-  int NCA;
-  int NCR;
+  	  	
+  if (rank == 0) {	
+  	
+  	int s;
+  	int f;
+  	int nCell;  
+  	int shift;
+  	int NCA;
+  	int NCR;
+  	 	
+    	
+  	printf("Reading Restart.xyz ...\n");
+  	infil = fopen("Restart.xyz","r");
   
+  	if ( infil == NULL ) {
+    		
+    		printf("Unable to open file Restart.xyz \n");
+    		return(-1);
+  	}
 
-  printf("Reading Restart.xyz ...\n");
-  infil = fopen("Restart.xyz","rb");
+  	if ( fread(&s, sizeof(int),1,infil) != 1 ){ 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+ 	 } else printf("\nstep %d \n",s -1);
+
+  	if ( fread(&f, sizeof(int),1,infil) != 1 ){ 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+  	} else printf("frame number is: %d \n",f - 1);
+
+  	
+  	if ( fread(&nCell, sizeof(int),1,infil) != 1 ) { 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+  	}
   
-  if ( infil == NULL ) {
-    printf("Unable to open file Restart.xyz \n");
-    return(-1);
-  }
+	if ( fread(&NCA, sizeof(int),1,infil) != 1 ) { 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+	}
+
+	if ( fread(&NCR, sizeof(int),1,infil) != 1 ) { 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+	}
 
 
+  	Laststep = s-1;
+  	Lastframe = f-1;
+  	No_of_threads = nCell;	
+ 	No_of_C180s = nCell;
+  	Orig_No_of_C180s = nCell;
+  	NumApoCell = NCA;
+  	NumRemoveCell = NCR;  
 
-  if ( fread(&s, sizeof(int),1,infil) != 1 ){ 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  } else printf("\nstep %d \n",s -1);
-
-  if ( fread(&f, sizeof(int),1,infil) != 1 ){ 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  } else printf("frame number is: %d \n",f - 1);
-
-  if ( fread(&nCell, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
+  	printf("Number of the initial Cells is: %d \n",Orig_No_of_C180s);
+  	
+  	Orig_Cells = Orig_No_of_C180s;
+  	
+  }	
   
-  //if ( fread(&nImp, sizeof(int),1,infil) != 1 ) { 
-  //	printf("Data missing from trajectory. \n");
-  //	return(-1);
-  //}
-
-  if ( fread(&NCA, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
-
-  if ( fread(&NCR, sizeof(int),1,infil) != 1 ) { 
-	printf("Data missing from trajectory. \n");
-	return(-1);
-  }
-
-  Laststep = s-1;
-  Lastframe = f-1;
-  No_of_threads = nCell;	
-  No_of_C180s = nCell;
-  Orig_No_of_C180s = nCell;
-  //impurityNum = nImp;
-  NumApoCell = NCA;
-  NumRemoveCell = NCR;  
-
-  printf("Number of the initial Cells is: %d \n",Orig_No_of_C180s);
-  //printf("Number of the  impurity is: %d \n",impurityNum);
-  
-
-  for (int c = 0; c < Orig_No_of_C180s; c++){
-
-    shift = c*192;
-    
-    if ( fread(&X[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    if ( fread(&Y[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    if ( fread(&Z[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    if ( fread(&velListX[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    if ( fread(&velListY[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    if ( fread(&velListZ[shift], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    if ( fread(&pressList[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&youngsModArray[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&Growth_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&ScaleFactor[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&DivisionVolume[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&Apo_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&squeeze_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&gamma_env[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&viscotic_damp[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-    if ( fread(&CellINdex[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+  if (nprocs > 1){
+		
 	
-   }
-   
-   
-   //if(impurity){
-   	
-   //	for (int c = 0; c < impurityNum; c++){
-   		
-   //		if ( fread(&XPin[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    //		if ( fread(&YPin[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-    //		if ( fread(&ZPin[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
-   
-   //	}
-   
-   //}
+	MPI_Bcast(&Orig_Cells, 1, MPI_INT, 0, cart_comm);
+		
+	float allCMsX[Orig_Cells];
+  	float allCMsY[Orig_Cells];
+  	float allCMsZ[Orig_Cells];
+	
+	if(rank == 0){
+		
+		for (int c = 0; c < Orig_Cells; c++){
+	
+			if ( fread(&allCMsX[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&allCMsY[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&allCMsZ[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
 
-   fclose(infil);
+		}
+	}
+	
+	
+	MPI_Bcast(allCMsX, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(allCMsY, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(allCMsZ, Orig_Cells, MPI_FLOAT, 0, cart_comm);	
+   	
+   	
+   	Owning = (int*)malloc(sizeof(int)*Orig_Cells);
+   	
+   	for (int c = 0; c < Orig_Cells; c++) Owning[c] = 0; 
+   	
+   	int k = 0;
+   	for (int c = 0; c < Orig_Cells; c++){
+   		
+   		if(allCMsX[c] >= Subdivision_min.x  && allCMsX[c] < Subdivision_max.x ){
+       		if ( allCMsY[c] >= Subdivision_min.y && allCMsY[c] < Subdivision_max.y ){
+       			if ( allCMsZ[c] >= Subdivision_min.z && allCMsZ[c] < Subdivision_max.z ){
+						
+					Owning[c] = 1;	
+       					
+       				k++; 
+   				}
+   			}
+       	}
+   	}
+   	
+   	No_of_threads = k;	
+ 	No_of_C180s = k;
+  	Orig_No_of_C180s = k;
+  	
+  	IndexShifter += Orig_Cells;
+  	
+  	Res_BufferX = (float*)malloc(sizeof(float)*Orig_Cells*192);
+  	Res_BufferY = (float*)malloc(sizeof(float)*Orig_Cells*192);
+  	Res_BufferZ = (float*)malloc(sizeof(float)*Orig_Cells*192);
+   	
+   } else {
+   
+   	
+   	float allCMsX[Orig_Cells];
+  	float allCMsY[Orig_Cells];
+  	float allCMsZ[Orig_Cells];
+   	
+   	for (int c = 0; c < Orig_Cells; c++){
+	
+			if ( fread(&allCMsX[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&allCMsY[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&allCMsZ[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+
+	}
+   
+   
+   }
+
+  
+  if (nprocs > 1){
+  
+    	if (rank == 0 ){
+  
+  
+  		for (int c = 0; c < Orig_Cells; c++){
+		
+			if ( fread(&Res_BufferX[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_BufferY[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_BufferZ[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+	
+		}
+  
+ 	}
+  	
+  	MPI_Bcast(Res_BufferX, Orig_Cells*192, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(Res_BufferY, Orig_Cells*192, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(Res_BufferZ, Orig_Cells*192, MPI_FLOAT, 0, cart_comm);
+	
+	int k=0;
+	for (int c = 0; c < Orig_Cells; c++){
+		
+		if(Owning[c] == 1){
+		
+			for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               	
+               		X[k*192 + nodeInd] = Res_BufferX[c*192 + nodeInd];
+               		Y[k*192 + nodeInd] = Res_BufferY[c*192 + nodeInd];
+               		Z[k*192 + nodeInd] = Res_BufferZ[c*192 + nodeInd];
+       		
+       		}
+		
+			k++;
+		}
+	
+	}
+  
+  } else {
+  
+    	for (int c = 0; c < Orig_Cells; c++){
+		
+		if ( fread(&X[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&Y[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&Z[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+	
+	}
+  
+  }
+
+  
+  if (nprocs > 1){
+
+  	if (rank == 0 ){
+  
+  		for (int c = 0; c < Orig_Cells; c++){
+		
+			if ( fread(&Res_BufferX[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_BufferY[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_BufferZ[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+	
+		}
+  
+  	}
+  	
+  	MPI_Bcast(Res_BufferX, Orig_Cells*192, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(Res_BufferY, Orig_Cells*192, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(Res_BufferZ, Orig_Cells*192, MPI_FLOAT, 0, cart_comm);
+	
+	int k=0;
+	for (int c = 0; c < Orig_Cells; c++){
+		
+		if(Owning[c] == 1){
+		
+			for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
+               	
+               		velListX[k*192 + nodeInd] = Res_BufferX[c*192 + nodeInd];
+               		velListY[k*192 + nodeInd] = Res_BufferY[c*192 + nodeInd];
+               		velListZ[k*192 + nodeInd] = Res_BufferZ[c*192 + nodeInd];
+       		
+       		}
+		
+			k++;
+		}
+	
+	}
+  
+  
+    free(Res_BufferX); free(Res_BufferY); free(Res_BufferZ);
+  
+  
+  } else {
+  
+    	for (int c = 0; c < Orig_Cells; c++){
+		
+		if ( fread(&velListX[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&velListY[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&velListZ[c*192], sizeof(float),192,infil) != 192 ) printf("Data missing from trajectory. \n");
+	
+	}
+  }
+
+  
+  if (nprocs > 1){
+  	
+  	
+  	Res_Buffer_pressList = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_youngsModArray = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_Growth_rate = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_ScaleFactor = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_DivisionVolume = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_Apo_rate = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_squeeze_rate = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_gamma_env = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_viscotic_damp = (float*)malloc(sizeof(float)*Orig_Cells);
+  	Res_Buffer_CellINdex = (int*)malloc(sizeof(int)*Orig_Cells);
+  	
+  	
+  	if (rank == 0 ){
+  
+  		for (int c = 0; c < Orig_Cells; c++){
+    		
+    			if ( fread(&Res_Buffer_pressList[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_youngsModArray[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_Growth_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_ScaleFactor[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_DivisionVolume[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_Apo_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_squeeze_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_gamma_env[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_viscotic_damp[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_CellINdex[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+	
+		}
+  
+  	}
+  	
+  	MPI_Bcast(Res_Buffer_pressList, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_youngsModArray, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_Growth_rate, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_ScaleFactor, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_DivisionVolume, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_Apo_rate, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_squeeze_rate, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_gamma_env, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_viscotic_damp, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_CellINdex, Orig_Cells, MPI_INT, 0, cart_comm);	
+
+	
+	int k=0;
+	for (int c = 0; c < Orig_Cells; c++){
+		
+		if(Owning[c] == 1){
+               	
+             		pressList[k] = Res_Buffer_pressList[c];
+			youngsModArray[k] = Res_Buffer_youngsModArray[c];
+        		Growth_rate[k] = Res_Buffer_Growth_rate[c];
+        		ScaleFactor[k] = Res_Buffer_ScaleFactor[c];
+        		DivisionVolume[k] = Res_Buffer_DivisionVolume[c];
+        		Apo_rate[k] = Res_Buffer_Apo_rate[c];
+        		squeeze_rate[k] = Res_Buffer_squeeze_rate[c];
+        		gamma_env[k] = Res_Buffer_gamma_env[c];
+        		viscotic_damp[k] = Res_Buffer_viscotic_damp[c];
+        		CellINdex[k] = Res_Buffer_CellINdex[c];
+       		
+			k++;
+		}
+	
+	}
+   
+  
+  free(Res_Buffer_pressList); free(Res_Buffer_youngsModArray); free(Res_Buffer_Growth_rate);
+  free(Res_Buffer_ScaleFactor); free(Res_Buffer_DivisionVolume); free(Res_Buffer_Apo_rate);
+  free(Res_Buffer_squeeze_rate); free(Res_Buffer_gamma_env); free(Res_Buffer_viscotic_damp);
+  free(Res_Buffer_CellINdex); 
+  
+  } else {
+  
+    	for (int c = 0; c < Orig_Cells; c++){
+    		
+    		if ( fread(&pressList[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&youngsModArray[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&Growth_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&ScaleFactor[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&DivisionVolume[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&Apo_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&squeeze_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&gamma_env[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&viscotic_damp[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&CellINdex[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+	
+	}
+
+  
+  }
+   
+
+   if (rank == 0) fclose(infil);
    return 0;
 
 }
+
+
 
 
 void SetDeviceBeforeInit()
