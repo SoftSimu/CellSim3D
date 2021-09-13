@@ -9,7 +9,7 @@ objects = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
 	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
 linkObjects = $(patsubst %, $(objDir)%, $(objects))
 
-eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) -lm -lcurand
+eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) -lm -lcurand -lmpi
 opt = -O3
 
 debug: opt= -O0
@@ -49,7 +49,7 @@ $(objDir)BondKernels.o : src/BondKernels.cu
 	$(compiler) $(oflags) -c src/BondKernels.cu -o $(objDir)BondKernels.o
 
 $(objDir)GPUbounce.o : src/GPUbounce.cu src/postscript.h
-	$(compiler) $(oflags) -c src/GPUbounce.cu -lmpi -o $(objDir)GPUbounce.o
+	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
 
 CellDiv: $(linkObjects)
 	$(compiler) $(eflags)

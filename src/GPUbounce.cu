@@ -365,16 +365,18 @@ float f_range;
 
 int rank, nprocs, idev;
 MPI_Comm cart_comm;
+int coords[3];
 enum DIRECTIONS {EAST, WEST, NORTH, SOUTH, UP, DOWN};
 int neighbours_ranks[6];
 int No_of_Ghost_cells_buffer[6];
 int No_of_Ghost_cells[6];
 int No_of_migrated_cells_buffer[6]; 
 int No_of_migrated_cells[6];
-int coords[3];
 int* numberofCells_InGPUs;
 int IndexShifter;
 int *CellINdex_OtherGPU;
+float R_ghost_buffer;
+
 float *youngsModArray_OtherGPU, *Growth_rate_OtherGPU, *ScaleFactor_OtherGPU;
 float *DivisionVolume_OtherGPU, *Apo_rate_OtherGPU, *squeeze_rate_OtherGPU;
 float *gamma_env_OtherGPU, *viscotic_damp_OtherGPU;
@@ -493,28 +495,42 @@ int main(int argc, char *argv[])
   
   }
 
+
+  //int min_no_of_cells = 10;
+
+
+  No_of_threads = atoi(argv[1]);
+
+  char inpFile[256];
+  strcpy(inpFile, argv[2]);
+
+  if ( read_json_params(inpFile)   != 0 )
+  { 
+  	printf("my rank is:	%d\n",rank);
+  	return(-1);
+  	
+  }
+
   int periods[3] = {false, false, false};
   	
   if(usePBCs){ 
     
     	periods[0] = true;   
-    	periods[1] = true;
-    	periods[2] = true;
+    	if(!useRigidBoxY) periods[1] = true;
+    	if(!useRigidBoxZ) periods[2] = true;
     
   }
     
   int reorder = true;
     
-
-  
+      
   MPI_Cart_create(MPI_COMM_WORLD, 3, dims, periods, reorder, &cart_comm);
   
   MPI_Barrier(MPI_COMM_WORLD);
   
   MPI_Comm_rank(cart_comm, &rank);
   
-  
-  
+   
   MPI_Cart_coords(cart_comm, rank, 3, coords);  
     
   MPI_Cart_shift(cart_comm, 0, 1, &neighbours_ranks[WEST], &neighbours_ranks[EAST]);
@@ -534,10 +550,10 @@ int main(int argc, char *argv[])
 
   if (nprocs > 1) MPI_Barrier(cart_comm);
 
-  int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
-  idev = local_rank;
+  //int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+  //idev = local_rank;
     
-  //idev = rank%4; 
+  idev = rank%4; 
   //printf("local rank=%d: and idev %d\n", local_rank, idev);
   cudaSetDevice(idev);
   cudaDeviceProp deviceProp = getDevice(idev);  
@@ -578,21 +594,6 @@ int main(int argc, char *argv[])
   int* num_new_cells_per_step;
   int countOffset = 0;
 
-  //int min_no_of_cells = 10;
-
-
-  No_of_threads = atoi(argv[1]);
-
-  char inpFile[256];
-  strcpy(inpFile, argv[2]);
-
-  if ( read_json_params(inpFile)   != 0 )
-  { 
-  	printf("my rank is:	%d\n",rank);
-  	return(-1);
-  	
-  }	
-
 
   printf("   Maximum number of C180s = %d\n", MaxNoofC180s); 
   
@@ -617,8 +618,7 @@ int main(int argc, char *argv[])
       Subdivision_Length.x = (boxMax.x - BoxMin.x)/dims[0];
       Subdivision_Length.y = (boxMax.y - BoxMin.y)/dims[1];
       Subdivision_Length.z = (boxMax.z - BoxMin.z)/dims[2];
-      
-      
+   
       Subdivision_min.x += coords[0]*Subdivision_Length.x;
       Subdivision_min.y += coords[1]*Subdivision_Length.y;
       Subdivision_min.z += coords[2]*Subdivision_Length.z;
@@ -626,9 +626,7 @@ int main(int argc, char *argv[])
       Subdivision_max.x = Subdivision_min.x + Subdivision_Length.x;
       Subdivision_max.y = Subdivision_min.y + Subdivision_Length.y;
       Subdivision_max.z = Subdivision_min.z + Subdivision_Length.z;
-      
-      
- 
+
       Subdivision_Cen.x = (Subdivision_max.x - Subdivision_min.x)/2;
       Subdivision_Cen.y = (Subdivision_max.y - Subdivision_min.y)/2;
       Subdivision_Cen.z = (Subdivision_max.z - Subdivision_min.z)/2;
@@ -666,24 +664,45 @@ int main(int argc, char *argv[])
       	DL = 1.4;
     }
     
-    Xdiv = ceil((boxMax.x - BoxMin.x)/DL);
-    DLp.x = (boxMax.x - BoxMin.x)/Xdiv;
+    
+    Subdivision_Length.x = (boxMax.x - BoxMin.x)/dims[0];
+    Subdivision_Length.y = (boxMax.y - BoxMin.y)/dims[1];
+    Subdivision_Length.z = (boxMax.z - BoxMin.z)/dims[2];
+      
+    Subdivision_min.x += coords[0]*Subdivision_Length.x;
+    Subdivision_min.y += coords[1]*Subdivision_Length.y;
+    Subdivision_min.z += coords[2]*Subdivision_Length.z;
+      
+    Subdivision_max.x = Subdivision_min.x + Subdivision_Length.x;
+    Subdivision_max.y = Subdivision_min.y + Subdivision_Length.y;
+    Subdivision_max.z = Subdivision_min.z + Subdivision_Length.z;
+      
+    Subdivision_Cen.x = (Subdivision_max.x - Subdivision_min.x)/2;
+    Subdivision_Cen.y = (Subdivision_max.y - Subdivision_min.y)/2;
+    Subdivision_Cen.z = (Subdivision_max.z - Subdivision_min.z)/2;
+    
+    
+    Xdiv = ceil((Subdivision_max.x - Subdivision_min.x)/DL);
+    Ydiv = ceil((Subdivision_max.y - Subdivision_min.y)/DL);
+    Zdiv = ceil((Subdivision_max.z - Subdivision_min.z)/DL);
+    
+    DLp.x = (Subdivision_max.x - Subdivision_min.x)/Xdiv;
+    DLp.y = (Subdivision_max.y - Subdivision_min.y)/Ydiv;
+    DLp.z = (Subdivision_max.z - Subdivision_min.z)/Zdiv;    
+    
 
-    Ydiv = ceil((boxMax.y - BoxMin.y)/DL);
-    DLp.y = (boxMax.y - BoxMin.y)/Ydiv;
-
-    Zdiv = ceil((boxMax.z - BoxMin.y)/DL);
-    DLp.z = (boxMax.z - BoxMin.y)/Zdiv;
-
-    printf("    Number of subdivisions: Xdiv = %d, Ydiv = %d, Zdiv = %d\n",Xdiv, Ydiv, Zdiv); 
-    printf("    Subdivision lengths: %f x %f x %f\n",DLp.x,DLp.y,DLp.z);
-    printf("    Simulation box minima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", BoxMin.x, BoxMin.y, BoxMin.z); 
-    printf("    Simulation box maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", boxMax.x, boxMax.y, boxMax.z); 
+    printf("   Number of subdivisions: Xdiv = %d, Ydiv = %d, Zdiv = %d\n",Xdiv, Ydiv, Zdiv); 
+    printf("   Subdivision lengths: %f\n", DL);
+    printf("   Simulation Subdivision minima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", Subdivision_min.x, Subdivision_min.y, Subdivision_min.z); 
+    printf("   Simulation Subdivision maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", Subdivision_max.x, Subdivision_max.y, Subdivision_max.z); 
     
   }
 
-  BufferDistance = 0.25;
-  if(rank == 0) printf("   BufferDistance is: %f \n",BufferDistance);
+  BufferDistance = 0.2;
+  if(rank == 0) printf("   Buffer_Distance is: %f \n",BufferDistance);
+
+  R_ghost_buffer = 1.3;
+  if(rank == 0) printf("   Ghost_Buffer_Distance is: %f \n",R_ghost_buffer);	
 
   IndexShifter = rank * MaxNoofC180s + 1;
   
@@ -880,11 +899,6 @@ int main(int argc, char *argv[])
   Apo_rate_mc_buffer = (float *)calloc(1024,sizeof(float));
   squeeze_rate_mc_buffer= (float *)calloc(1024,sizeof(float));
   CellINdex_mc_buffer = (int *)calloc(1024,sizeof(int));
-  
-//volume= (float *)calloc(MaxNoofC180s, sizeof(float));  
-//  SysCx = (float *) calloc(1024 , sizeof(float));
-//  SysCy = (float *) calloc(1024 , sizeof(float));
-//  SysCz = (float *) calloc(1024 , sizeof(float));
 
 
 
@@ -900,12 +914,6 @@ int main(int argc, char *argv[])
   CPUMemory += 3*180*sizeof(float);
   CPUMemory += 2*MaxNoofC180s*sizeof(int); 
  
-  //if (cudaSuccess != cudaSetDevice(atoi(argv[3]))){
-  //    CudaErrorCheck();
-  //    printf("Could not set to divice %d\n", atoi(argv[3]));
-  //    return -1;
-  //}
-
 
   thrust::device_vector<float> d_volumeV(MaxNoofC180s);
   thrust::host_vector<float> h_volume(MaxNoofC180s);
@@ -920,12 +928,12 @@ int main(int argc, char *argv[])
 
   h_R0 = (float *)calloc(192*3, sizeof(float));
 
-  for (int i =  0; i < MaxNoofC180s; ++i) ScaleFactor[i] = 1.0;
+  if (Restart == 0 ) for (int i =  0; i < MaxNoofC180s; ++i) ScaleFactor[i] = 1.0;
 
   //if ( read_global_params()               != 0 ) return(-1); 
   if (generate_random(Orig_No_of_C180s)  != 0 ) return(-1);
-  if (DispersityFunc(Orig_No_of_C180s) != 0 ) return(-1);
-  if (Restart == 0 ) if ( initialize_C180s( &Orig_No_of_C180s, &impurityNum) != 0 ) return(-1);
+  if (Restart == 0 ) if (DispersityFunc(Orig_No_of_C180s)		 != 0 ) return(-1);
+  if (Restart == 0 ) if ( initialize_C180s( &Orig_No_of_C180s, &impurityNum) 	 != 0 ) return(-1);
   if ( read_fullerene_nn()                != 0 ) return(-1);
   
   No_of_C180s = Orig_No_of_C180s;
@@ -982,7 +990,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_dang,  sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Num_shrink_Cell,  sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_counter, sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_dang_inds, 100*sizeof(int))) return(-1);          
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_dang_inds, 96*sizeof(int))) return(-1);          
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_mig ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
@@ -1195,7 +1203,7 @@ int main(int argc, char *argv[])
   CudaErrorCheck();
   
   cudaMemset(d_num_cell_dang, 0, sizeof(int));
-  cudaMemset(d_cell_dang_inds, 0, 100*sizeof(int));
+  cudaMemset(d_cell_dang_inds, 0, 96*sizeof(int));
   cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));
   CudaErrorCheck();
   
@@ -1328,7 +1336,7 @@ int main(int argc, char *argv[])
 
 
 
-if (Restart == 0) {	
+  if (Restart == 0) {	
 
 
   	for (int cell = 0; cell < MaxNoofC180s; cell++){
@@ -1369,9 +1377,7 @@ if (Restart == 0) {
   	}
   	for (int i =  0; i < MaxNoofC180s; ++i){
       		squeeze_rate[i] = squeeze_rate1; 
-  	}
-  	
-  	
+  	}	
   
 	if(!colloidal_dynamics && useDifferentCell) SecondCell(Orig_No_of_C180s);
   
@@ -1419,7 +1425,7 @@ if (Restart == 0) {
   // initialize device rng
 
 
-    if (add_rands){
+  if (add_rands){
       curandGenerator_t gen;
       
       if (cudaMalloc((void **)&d_rngStates, sizeof(curandState)*192*MaxNoofC180s) != cudaSuccess){
@@ -1458,10 +1464,7 @@ if (Restart == 0) {
   }
 
 
-
-
-
-    if (apoptosis){
+  if (apoptosis){
       
       	curandGenerator_t genApo;
       
@@ -1501,10 +1504,7 @@ if (Restart == 0) {
   }
 
 
-
-
-
-  noofblocks      = No_of_C180s;
+  noofblocks = No_of_C180s;
   threadsperblock = 192;
   printf("   no of blocks = %d, threadsperblock = %d, no of threads = %ld\n",
          noofblocks, threadsperblock, ((long) noofblocks)*((long) threadsperblock));
@@ -1545,16 +1545,14 @@ if (Restart == 0) {
 #endif 
 
 
-  
-
-
   float rGrowth = 0;
   bool growthDone = false;
   
 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*64*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*96*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,    Xdiv*Ydiv*Zdiv*sizeof(int))) return(-1);
-  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*64*sizeof(int)); 
+  
+  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*96*sizeof(int)); 
   cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int)); 
   
   CudaErrorCheck();
@@ -1609,7 +1607,7 @@ if (Restart == 0) {
    	} if(usePBCs){
     
        	makeNNlistPBCPin<<<impurityNum/512+1,512>>>( impurityNum, d_CMxPin, d_CMyPin, d_CMzPin,
-        	attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlistPin, d_NNlistPin, DLp, useRigidBoxZ,useRigidBoxY);        
+        	attraction_range, Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlistPin, d_NNlistPin, DL, useRigidBoxZ,useRigidBoxY);        
         	CudaErrorCheck(); 
    
    	} if(useLEbc){
@@ -1761,41 +1759,12 @@ if (Restart == 0) {
   	}  
   
   }
-  if ( No_of_C180s > 0 ){
-  	
-  	
-  	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
-  	CudaErrorCheck(); 
-  
-
-
-   	if(usePBCs ){
-        
-       	CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-               	                                           d_CMx, d_CMy, d_CMz,
-               	                                           boxMax, divVol, No_of_C180s,
-               	                                           useRigidBoxZ, useRigidBoxY);
-  
-
-
-       	CudaErrorCheck();
-   	}
-   	if(useLEbc){
-        
-       	UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-               	        				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-               	        				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
-                        
-        	CudaErrorCheck();	
-	
-    	} 	
-
-
-   	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
    
-   	CudaErrorCheck(); 
-  
-   }
+   
+   if ( No_of_C180s > 0 ) CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
+   
+   CudaErrorCheck(); 
+   
    
    int Sending_cell_Num_total = 0;
    int Received_New_cell = 0;
@@ -1855,7 +1824,7 @@ if (Restart == 0) {
         	                       						d_DivisionVolume_mc_buffer,
         	                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	                       						d_CellINdex_mc_buffer, 
-        	                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer);
+        	                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -1880,21 +1849,24 @@ if (Restart == 0) {
         			
         		cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
-	
-        		CudaErrorCheck();	
-        		
-        	}
+   			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
 
+   			CudaErrorCheck();
+   			
+   			if(!colloidal_dynamics) {
+   			
+   				cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+	
+        			CudaErrorCheck();	
         		
-        		
+        		}
+		}
         			
         		
         	MPI_Sendrecv(&No_of_migrated_cells_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 18, &No_of_migrated_cells[WEST],
@@ -1906,7 +1878,7 @@ if (Restart == 0) {
         	 			CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
    					X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-     					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+     					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
         		
@@ -1920,7 +1892,7 @@ if (Restart == 0) {
         				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
  					X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-     					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+     					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         			
         		
         	No_of_C180s -= Sending_cell_Num_total;
@@ -1947,15 +1919,22 @@ if (Restart == 0) {
     				
     		cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
-  		cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
     		cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-        		
+
+		CudaErrorCheck();
+		
+		if(!colloidal_dynamics){
+			
+			cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		CudaErrorCheck();
+        	}	
+		
 		No_of_C180s += Received_New_cell;
 			
 		// NORTH-SOUTH Migration
@@ -2006,7 +1985,7 @@ if (Restart == 0) {
         	               	        					d_DivisionVolume_mc_buffer,
         	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	               	        					d_CellINdex_mc_buffer, 
-        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer);
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -2031,17 +2010,21 @@ if (Restart == 0) {
         			
         		cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
-
-   		     	CudaErrorCheck();	
-        		
+			
+			CudaErrorCheck();
+			
+			if(!colloidal_dynamics) {
+   				
+   				cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   		     		CudaErrorCheck();	
+        		}
    	        }
         		
    	        MPI_Sendrecv(&No_of_migrated_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 28, &No_of_migrated_cells[SOUTH],
@@ -2053,7 +2036,7 @@ if (Restart == 0) {
    		     			 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
    		     			 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 					 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-					 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+					 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		       		
         		
       	        MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
@@ -2066,7 +2049,7 @@ if (Restart == 0) {
    		     		 	 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
    		     			 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 				     	 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-				     	 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+				     	 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
    	        No_of_C180s -= Sending_cell_Num_total;
@@ -2094,15 +2077,22 @@ if (Restart == 0) {
     				
     		cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
-  		cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
     		cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		
+		CudaErrorCheck();
+		
+		if(!colloidal_dynamics) {
+			
+			cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
         		
+        		CudaErrorCheck();
+        	}	
 		No_of_C180s += Received_New_cell;
 		
 		// UP-DOWN Migration
@@ -2153,7 +2143,7 @@ if (Restart == 0) {
         	               	        					d_DivisionVolume_mc_buffer,
         	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	               	        					d_CellINdex_mc_buffer, 
-        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer);
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -2178,16 +2168,24 @@ if (Restart == 0) {
         			
         		cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    			cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
 
-        		CudaErrorCheck();	
+   			CudaErrorCheck();
+   			
+   			if(!colloidal_dynamics) {
+   			
+   				cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				
+				CudaErrorCheck();
+			}
+        		
+        			
         		
         	}
         		
@@ -2200,7 +2198,7 @@ if (Restart == 0) {
         				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 					X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         			       		
         		
         	MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
@@ -2213,7 +2211,7 @@ if (Restart == 0) {
         	 			 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         				 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 					 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-					 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+					 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
         	No_of_C180s -= Sending_cell_Num_total;
@@ -2241,15 +2239,23 @@ if (Restart == 0) {
     				
     		cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
-  		cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
     		cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-        		
+		
+		CudaErrorCheck();
+		
+		if(!colloidal_dynamics) {
+			
+			cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        	
+        		CudaErrorCheck();	
+		}
+		
 		No_of_C180s += Received_New_cell;
 			
 		MPI_Barrier(cart_comm);
@@ -2264,7 +2270,7 @@ if (Restart == 0) {
 		cudaMemset(d_counter_gc_d, 0, sizeof(int));
 			
 			
-      		makeNNlistMultiGpu<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+      		makeNNlistMultiGpu<<<No_of_C180s/512+1,512>>>( No_of_C180s, R_ghost_buffer, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
         						Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
         						d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
         						d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
@@ -2367,7 +2373,7 @@ if (Restart == 0) {
 		// North-South comm
 	
 		if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMy, 
-												Subdivision_max.y, Subdivision_min.y,
+												Subdivision_max.y, Subdivision_min.y, R_ghost_buffer,
 												d_counter_gc_n, d_counter_gc_s,
         	              		  							d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH);
    			
@@ -2462,7 +2468,7 @@ if (Restart == 0) {
    		// UP_DOWN comm
    			
    		if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMz, 
-												Subdivision_max.z, Subdivision_min.z,
+												Subdivision_max.z, Subdivision_min.z, R_ghost_buffer,
 												d_counter_gc_u, d_counter_gc_d,
                	        		  						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);
    			
@@ -2564,7 +2570,7 @@ if (Restart == 0) {
         		
         	All_Cells -= All_Cells_UD;   				
 		
-        }else {
+        } else {
         
         	makeNNlist<<<No_of_C180s/512+1,512>>>(No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
                            				Xdiv, Ydiv, Zdiv, BoxMin,
@@ -2572,11 +2578,823 @@ if (Restart == 0) {
         
         }	
    
-   }if(usePBCs){
-    
-       makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-        attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);        
-        CudaErrorCheck(); 
+    }if(usePBCs){
+	
+		// EAST-WEST Migration
+			
+		cudaMemset(d_counter_mc_e, 0, sizeof(int));
+		cudaMemset(d_counter_mc_w, 0, sizeof(int));
+		cudaMemset(d_cell_mig, 0, MaxNoofC180s*sizeof(char));
+						
+        		
+       	 migrated_cells_finderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,d_CMx,
+        							Subdivision_max.x, Subdivision_min.x, BoxMin.x, boxMax.x,
+               	          				d_counter_mc_e, d_counter_mc_w,
+               	          				d_migrated_cells_ind_EAST, d_migrated_cells_ind_WEST,
+               	          				d_cell_mig);
+        		
+        	CudaErrorCheck();
+        		
+		cudaMemcpy(&No_of_migrated_cells_buffer[EAST], d_counter_mc_e, sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&No_of_migrated_cells_buffer[WEST], d_counter_mc_w, sizeof(int), cudaMemcpyDeviceToHost);
+        	CudaErrorCheck();        		
+        		
+        	
+        	if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_migrated_cells_buffer[EAST] = 0;
+        	if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_migrated_cells_buffer[WEST] = 0;
+        		
+        	cudaMemcpy(d_migrated_cells_ind_EAST_WEST, d_migrated_cells_ind_EAST, No_of_migrated_cells_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        	cudaMemcpy(d_migrated_cells_ind_EAST_WEST + No_of_migrated_cells_buffer[EAST], d_migrated_cells_ind_WEST, 
+        			No_of_migrated_cells_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+		CudaErrorCheck();
+			
+        		
+        	Sending_cell_Num_total = No_of_migrated_cells_buffer[EAST]  + No_of_migrated_cells_buffer[WEST];
+        		
+        	if (Sending_cell_Num_total > 0){
+        			
+        		cudaMemset(d_counter, 0, sizeof(int));
+        					
+        		migrated_Cells_Remove_PackPBC_X<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
+											d_migrated_cells_ind_EAST_WEST, d_cell_mig, boxMax,
+   											d_X,  d_Y, d_Z,
+        	                       						d_velListX, d_velListY, d_velListZ,
+        	                       						d_CMx, d_CMy, d_CMz,
+        	                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+        	                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
+        	                       						d_Apo_rate, d_squeeze_rate,
+											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
+        	                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
+        	                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
+        	                       						d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
+        	                       						d_DivisionVolume_mc_buffer,
+        	                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
+        	                       						d_CellINdex_mc_buffer, 
+        	                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        
+        		CudaErrorCheck();
+        		
+        			
+        		cudaMemcpy(X_mc_buffer,  d_X_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Y_mc_buffer,  d_Y_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Z_mc_buffer,  d_Z_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   	
+			cudaMemcpy(velListX_mc_buffer,  d_velListX_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListY_mc_buffer,  d_velListY_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListZ_mc_buffer,  d_velListZ_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   		
+   			cudaMemcpy(CMx_mc_buffer,  d_CMx_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMy_mc_buffer,  d_CMy_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        				
+        		CudaErrorCheck();
+        			
+        		cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+
+   			CudaErrorCheck();
+   			
+   			if(!colloidal_dynamics) {
+   			
+   				cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+	
+        			CudaErrorCheck();	
+        		
+        		}
+		
+		}
+        			
+        		
+        	MPI_Sendrecv(&No_of_migrated_cells_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 18, &No_of_migrated_cells[WEST],
+        			1, MPI_INT, neighbours_ranks[WEST], 18, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        	Send_Recv_migrated_cells(No_of_migrated_cells_buffer[EAST], No_of_migrated_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 17, cart_comm,
+        	 			0, 0 , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer, velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        	 			CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+   					X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+     					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		
+        		
+        		
+        	MPI_Sendrecv(&No_of_migrated_cells_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 18, &No_of_migrated_cells[EAST],
+        			1, MPI_INT, neighbours_ranks[EAST], 18, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        	Send_Recv_migrated_cells(No_of_migrated_cells_buffer[WEST], No_of_migrated_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 17, cart_comm,
+    					No_of_migrated_cells_buffer[EAST], No_of_migrated_cells[WEST] , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer,
+        				velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+ 					X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+     					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        			
+        		
+        	No_of_C180s -= Sending_cell_Num_total;
+        	Received_New_cell = No_of_migrated_cells[EAST] + No_of_migrated_cells[WEST];
+        		
+        	cudaMemcpy(d_X + No_of_C180s*192,  X_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        	cudaMemcpy(d_Y + No_of_C180s*192,  Y_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        	cudaMemcpy(d_Z + No_of_C180s*192,  Z_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   		CudaErrorCheck();
+   	
+		cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  		CudaErrorCheck();
+ 	
+ 		cudaMemcpy(d_CMx + No_of_C180s,  CMx_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMy + No_of_C180s,  CMy_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMz + No_of_C180s,  CMz_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  		CudaErrorCheck(); 
+    				
+    				
+    		cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+    		cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
+
+		CudaErrorCheck();
+		
+		if(!colloidal_dynamics){
+			
+			cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		CudaErrorCheck();
+        	}	
+		No_of_C180s += Received_New_cell;
+			
+		// NORTH-SOUTH Migration
+			
+		cudaMemset(d_counter_mc_n, 0, sizeof(int));
+		cudaMemset(d_counter_mc_s, 0, sizeof(int));
+		cudaMemset(d_cell_mig, 0, MaxNoofC180s*sizeof(char));
+			
+			
+        		
+        	migrated_cells_finderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,d_CMy,
+        	               	  			Subdivision_max.y, Subdivision_min.y, BoxMin.y, boxMax.y,
+        	               	  			d_counter_mc_n, d_counter_mc_s,
+        	               	  			d_migrated_cells_ind_NORTH, d_migrated_cells_ind_SOUTH,
+        	               	  			d_cell_mig);
+        		
+        	CudaErrorCheck();
+        		
+		cudaMemcpy(&No_of_migrated_cells_buffer[NORTH], d_counter_mc_n, sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&No_of_migrated_cells_buffer[SOUTH], d_counter_mc_s, sizeof(int), cudaMemcpyDeviceToHost);
+        	CudaErrorCheck();        		
+        	
+        	if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_migrated_cells_buffer[NORTH] = 0;
+        	if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_migrated_cells_buffer[SOUTH] = 0;	
+        		
+        	cudaMemcpy(d_migrated_cells_ind_NORTH_SOUTH, d_migrated_cells_ind_NORTH, No_of_migrated_cells_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        	cudaMemcpy(d_migrated_cells_ind_NORTH_SOUTH + No_of_migrated_cells_buffer[NORTH], d_migrated_cells_ind_SOUTH, 
+        			No_of_migrated_cells_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+		CudaErrorCheck();
+			
+        		
+        	Sending_cell_Num_total = No_of_migrated_cells_buffer[NORTH]  + No_of_migrated_cells_buffer[SOUTH];
+        				
+        	if (Sending_cell_Num_total > 0){
+        			
+        		cudaMemset(d_counter, 0, sizeof(int));
+        					
+        		migrated_Cells_Remove_PackPBC_Y<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
+											d_migrated_cells_ind_NORTH_SOUTH, d_cell_mig, boxMax,
+   											d_X,  d_Y, d_Z,
+        	               	        					d_velListX, d_velListY, d_velListZ,
+        	               	        					d_CMx, d_CMy, d_CMz,
+        	               	        					d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+        	               	        					d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
+        	               	        					d_Apo_rate, d_squeeze_rate,
+											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
+        	               	        					d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
+        	               	        					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
+        	               	        					d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
+        	               	        					d_DivisionVolume_mc_buffer,
+        	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
+        	               	        					d_CellINdex_mc_buffer, 
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        
+        		CudaErrorCheck();
+        		
+        			
+        		cudaMemcpy(X_mc_buffer,  d_X_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Y_mc_buffer,  d_Y_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Z_mc_buffer,  d_Z_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   	
+			cudaMemcpy(velListX_mc_buffer,  d_velListX_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListY_mc_buffer,  d_velListY_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListZ_mc_buffer,  d_velListZ_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   		
+   			cudaMemcpy(CMx_mc_buffer,  d_CMx_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMy_mc_buffer,  d_CMy_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			
+        		CudaErrorCheck();
+        			
+        		cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+			
+			CudaErrorCheck();
+			
+			if(!colloidal_dynamics) {
+   				
+   				cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   		     		CudaErrorCheck();	
+        		}
+   	        
+   	        
+   	        	//if(rank == 0)printf("rank 0 sending %d cells\n", No_of_migrated_cells_buffer[NORTH]);
+			//if(rank == 1)printf("rank 1 receiving %d cells\n", No_of_migrated_cells[SOUTH]);
+   	        
+   	        }
+        		
+   	        MPI_Sendrecv(&No_of_migrated_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 28, &No_of_migrated_cells[SOUTH],
+   		      		1, MPI_INT, neighbours_ranks[SOUTH], 28, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+   	        Send_Recv_migrated_cells(No_of_migrated_cells_buffer[NORTH], No_of_migrated_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 17, cart_comm,
+   		     			 0, 0 , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer, velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+   		     			 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+   		     			 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+					 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+					 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		       		
+        		
+      	        MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
+   		     		1, MPI_INT, neighbours_ranks[NORTH], 28, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+   	        Send_Recv_migrated_cells(No_of_migrated_cells_buffer[SOUTH], No_of_migrated_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 17, cart_comm,
+   		     			 No_of_migrated_cells_buffer[NORTH], No_of_migrated_cells[SOUTH] , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer,
+   		     			 velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+   		     		 	 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+   		     			 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+				     	 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+				     	 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		
+        		
+   	        No_of_C180s -= Sending_cell_Num_total;
+   	        Received_New_cell = No_of_migrated_cells[NORTH] + No_of_migrated_cells[SOUTH];
+        		
+        		
+   	        cudaMemcpy(d_X + No_of_C180s*192,  X_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	        cudaMemcpy(d_Y + No_of_C180s*192,  Y_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	        cudaMemcpy(d_Z + No_of_C180s*192,  Z_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   	        CudaErrorCheck();
+   			
+	        cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+	        cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+	        cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   		
+  	        CudaErrorCheck();
+ 		
+ 		cudaMemcpy(d_CMx + No_of_C180s,  CMx_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMy + No_of_C180s,  CMy_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMz + No_of_C180s,  CMz_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  		CudaErrorCheck(); 
+    				
+    				
+    		cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+    		cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
+		
+		CudaErrorCheck();
+		
+		if(!colloidal_dynamics) {
+			
+			cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		
+        		CudaErrorCheck();
+        	}	
+		No_of_C180s += Received_New_cell;
+		
+		// UP-DOWN Migration
+			
+		cudaMemset(d_counter_mc_u, 0, sizeof(int));
+		cudaMemset(d_counter_mc_d, 0, sizeof(int));
+		cudaMemset(d_cell_mig, 0, MaxNoofC180s*sizeof(char));
+			
+			
+        		
+        	migrated_cells_finderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,d_CMz,
+        	                 				Subdivision_max.z, Subdivision_min.z, BoxMin.z, boxMax.z,
+        	                 				d_counter_mc_u, d_counter_mc_d,
+               	        				d_migrated_cells_ind_UP, d_migrated_cells_ind_DOWN,
+               	          				d_cell_mig);
+        			
+       	 CudaErrorCheck();
+        		
+		cudaMemcpy(&No_of_migrated_cells_buffer[UP], d_counter_mc_u, sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&No_of_migrated_cells_buffer[DOWN], d_counter_mc_d, sizeof(int), cudaMemcpyDeviceToHost);
+        	CudaErrorCheck();        		
+        		
+        	if (neighbours_ranks[UP] == MPI_PROC_NULL) No_of_migrated_cells_buffer[UP] = 0;
+        	if (neighbours_ranks[DOWN] == MPI_PROC_NULL) No_of_migrated_cells_buffer[DOWN] = 0;
+        		
+        	cudaMemcpy(d_migrated_cells_ind_UP_DOWN, d_migrated_cells_ind_UP, No_of_migrated_cells_buffer[UP]*sizeof(int), cudaMemcpyDeviceToDevice);
+        	cudaMemcpy(d_migrated_cells_ind_UP_DOWN + No_of_migrated_cells_buffer[UP], d_migrated_cells_ind_DOWN, 
+        			No_of_migrated_cells_buffer[DOWN]*sizeof(int), cudaMemcpyDeviceToDevice);
+		CudaErrorCheck();
+			
+        		
+        	Sending_cell_Num_total = No_of_migrated_cells_buffer[UP]  + No_of_migrated_cells_buffer[DOWN];
+        			
+        	if (Sending_cell_Num_total > 0){
+        			
+        		cudaMemset(d_counter, 0, sizeof(int));
+        					
+        		migrated_Cells_Remove_PackPBC_Z<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
+											d_migrated_cells_ind_UP_DOWN, d_cell_mig, boxMax,
+   											d_X,  d_Y, d_Z,
+        	               	        					d_velListX, d_velListY, d_velListZ,
+        	               	        					d_CMx, d_CMy, d_CMz,
+        	               	        					d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+        	               	        					d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
+        	               	        					d_Apo_rate, d_squeeze_rate,
+											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
+        	               	        					d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
+        	               	        					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
+        	               	        					d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
+        	               	        					d_DivisionVolume_mc_buffer,
+        	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
+        	               	        					d_CellINdex_mc_buffer, 
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        
+        		CudaErrorCheck();
+        		
+        			
+        		cudaMemcpy(X_mc_buffer,  d_X_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Y_mc_buffer,  d_Y_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Z_mc_buffer,  d_Z_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   		
+			cudaMemcpy(velListX_mc_buffer,  d_velListX_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListY_mc_buffer,  d_velListY_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListZ_mc_buffer,  d_velListZ_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   		
+   			CudaErrorCheck();
+   		
+   			cudaMemcpy(CMx_mc_buffer,  d_CMx_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMy_mc_buffer,  d_CMy_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			
+        		CudaErrorCheck();
+        			
+        		cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+
+   			CudaErrorCheck();
+   			
+   			if(!colloidal_dynamics) {
+   			
+   				cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				
+				CudaErrorCheck();
+			}
+        		
+        			
+        		
+        	}
+        		
+        	MPI_Sendrecv(&No_of_migrated_cells_buffer[UP], 1, MPI_INT, neighbours_ranks[UP], 38, &No_of_migrated_cells[DOWN],
+        			1, MPI_INT, neighbours_ranks[DOWN], 38, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        	Send_Recv_migrated_cells(No_of_migrated_cells_buffer[UP], No_of_migrated_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 27, cart_comm,
+       		 		0, 0 , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer, velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+					X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+					DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        			       		
+        		
+        	MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
+        			1, MPI_INT, neighbours_ranks[UP], 38, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        	Send_Recv_migrated_cells(No_of_migrated_cells_buffer[DOWN], No_of_migrated_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 27, cart_comm,
+        				 No_of_migrated_cells_buffer[UP], No_of_migrated_cells[DOWN] , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer,
+        	 			 velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        	 			 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        				 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+					 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+					 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		
+        		
+        	No_of_C180s -= Sending_cell_Num_total;
+        	Received_New_cell = No_of_migrated_cells[UP] + No_of_migrated_cells[DOWN];
+        		
+        			
+        	cudaMemcpy(d_X + No_of_C180s*192,  X_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        	cudaMemcpy(d_Y + No_of_C180s*192,  Y_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+       	cudaMemcpy(d_Z + No_of_C180s*192,  Z_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   		CudaErrorCheck();
+   	
+		cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  		CudaErrorCheck();
+ 		
+ 		cudaMemcpy(d_CMx + No_of_C180s,  CMx_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMy + No_of_C180s,  CMy_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMz + No_of_C180s,  CMz_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  		CudaErrorCheck(); 
+    				
+    				
+    		cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+    		cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
+		
+		CudaErrorCheck();
+		
+		if(!colloidal_dynamics) {
+			
+			cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        	
+        		CudaErrorCheck();	
+		}
+		
+		No_of_C180s += Received_New_cell;
+			
+		MPI_Barrier(cart_comm);
+
+		// Ghost Cells
+	
+		cudaMemset(d_counter_gc_e, 0, sizeof(int));
+		cudaMemset(d_counter_gc_w, 0, sizeof(int));
+		cudaMemset(d_counter_gc_n, 0, sizeof(int));
+		cudaMemset(d_counter_gc_s, 0, sizeof(int));
+		cudaMemset(d_counter_gc_u, 0, sizeof(int));
+		cudaMemset(d_counter_gc_d, 0, sizeof(int));
+			
+			
+      		makeNNlistMultiGpuPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, R_ghost_buffer, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        						Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
+        						d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
+        						d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
+        						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);        
+        
+        	CudaErrorCheck(); 
+        		
+        	// EAST-WEST COMM
+        		
+        	cudaMemcpy(&No_of_Ghost_cells_buffer[EAST], d_counter_gc_e, sizeof(int), cudaMemcpyDeviceToHost);
+        	cudaMemcpy(&No_of_Ghost_cells_buffer[WEST], d_counter_gc_w, sizeof(int), cudaMemcpyDeviceToHost);
+        	CudaErrorCheck();
+        	
+        	if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[EAST] = 0;
+        	if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[WEST] = 0;        		
+        		
+        		
+        	cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST, d_Ghost_Cells_ind_EAST, No_of_Ghost_cells_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        	cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST + No_of_Ghost_cells_buffer[EAST], d_Ghost_Cells_ind_WEST, No_of_Ghost_cells_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+		CudaErrorCheck();
+        	
+        	Sending_Ghost_cells_Num_total_EW = No_of_Ghost_cells_buffer[EAST]  + No_of_Ghost_cells_buffer[WEST];
+        		
+        		
+        	if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        					
+        		Ghost_Cells_Pack_PBC_X<<<Sending_Ghost_cells_Num_total_EW,192>>>( Sending_Ghost_cells_Num_total_EW, No_of_Ghost_cells_buffer[EAST],
+        										d_Ghost_Cells_ind_EAST_WEST, boxMax, R_ghost_buffer,
+        										d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        										d_CMx, d_CMy, d_CMz,
+											d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+											d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+											d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+	
+			CudaErrorCheck();
+				
+			cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   
+			cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   		
+   			cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();	
+							
+		}
+			
+		MPI_Sendrecv(&No_of_Ghost_cells_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_cells[WEST],
+        			1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+					cart_comm, 0, 0, 
+				  	X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  	CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  	X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  	CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  	d_CMx, d_CMy, d_CMz);
+	
+
+        	MPI_Sendrecv(&No_of_Ghost_cells_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_cells[EAST],
+        			1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+
+		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[WEST], No_of_Ghost_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+					cart_comm, No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST],
+		  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+		  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+		  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+		  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+		  			d_CMx, d_CMy, d_CMz);
+			
+			
+		All_Cells_EW = No_of_Ghost_cells[EAST] + No_of_Ghost_cells[WEST];
+			
+		cudaMemcpy(d_X + No_of_C180s*192,  X_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Y + No_of_C180s*192,  Y_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_Z + No_of_C180s*192,  Z_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     		CudaErrorCheck();
+   	
+		cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   		CudaErrorCheck();
+ 
+ 		cudaMemcpy(d_CMx + No_of_C180s,  CMx_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMy + No_of_C180s,  CMy_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMz + No_of_C180s,  CMz_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   		CudaErrorCheck();
+				
+		All_Cells = All_Cells_EW;		
+
+		// North-South comm
+	
+		if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMy, 
+												Subdivision_max.y, Subdivision_min.y, R_ghost_buffer,
+												d_counter_gc_n, d_counter_gc_s,
+        	              		  							d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH);
+   			
+   			
+   		cudaMemcpy(&No_of_Ghost_cells_buffer[NORTH], d_counter_gc_n, sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&No_of_Ghost_cells_buffer[SOUTH], d_counter_gc_s, sizeof(int), cudaMemcpyDeviceToHost);
+		CudaErrorCheck();        		
+        	
+        	
+        	if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[NORTH] = 0;
+        	if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[SOUTH] = 0; 	
+        		
+        	cudaMemcpy(d_Ghost_Cells_ind_NORTH_SOUTH, d_Ghost_Cells_ind_NORTH, No_of_Ghost_cells_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        	cudaMemcpy(d_Ghost_Cells_ind_NORTH_SOUTH + No_of_Ghost_cells_buffer[NORTH], d_Ghost_Cells_ind_SOUTH, No_of_Ghost_cells_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+		CudaErrorCheck();
+        	
+        	Sending_Ghost_cells_Num_total_NS = No_of_Ghost_cells_buffer[NORTH]  + No_of_Ghost_cells_buffer[SOUTH];
+        	        
+        	if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        			
+        		Ghost_Cells_Pack_PBC_Y<<<Sending_Ghost_cells_Num_total_NS,192>>>( Sending_Ghost_cells_Num_total_NS, No_of_Ghost_cells_buffer[NORTH],
+        										d_Ghost_Cells_ind_NORTH_SOUTH, boxMax, R_ghost_buffer,
+        										d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        										d_CMx, d_CMy, d_CMz,
+											d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+											d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+											d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+
+			CudaErrorCheck();
+				
+			cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   
+			cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   		
+   			cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();	
+							
+		}
+			
+   		MPI_Sendrecv(&No_of_Ghost_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_cells[SOUTH],
+        			1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+			
+		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+					cart_comm, 0, 0, 
+	  				X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+	  				CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+	  				X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+	  				CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+	  				d_CMx, d_CMy, d_CMz);
+	
+
+        	MPI_Sendrecv(&No_of_Ghost_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_cells[NORTH],
+        			 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[SOUTH], No_of_Ghost_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+					cart_comm, No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH],
+	  				X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+	  				CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+	  				X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+	  				CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+	  				d_CMx, d_CMy, d_CMz);
+   			
+   		All_Cells_NS = No_of_Ghost_cells[NORTH] + No_of_Ghost_cells[SOUTH];
+   			
+   		cudaMemcpy(d_X + (No_of_C180s + All_Cells)*192,  X_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   		cudaMemcpy(d_Y + (No_of_C180s + All_Cells)*192,  Y_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   		cudaMemcpy(d_Z + (No_of_C180s + All_Cells)*192,  Z_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     		CudaErrorCheck();
+   	
+		cudaMemcpy(d_velListX + (No_of_C180s + All_Cells)*192,  velListX_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListY + (No_of_C180s + All_Cells)*192,  velListY_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells)*192,  velListZ_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   		CudaErrorCheck();
+ 
+ 		cudaMemcpy(d_CMx + (No_of_C180s + All_Cells),  CMx_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMy + (No_of_C180s + All_Cells),  CMy_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMz + (No_of_C180s + All_Cells),  CMz_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   		CudaErrorCheck();
+   	
+   		All_Cells += All_Cells_NS;		
+   	
+   		// UP_DOWN comm
+   			
+   		if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMz, 
+												Subdivision_max.z, Subdivision_min.z, R_ghost_buffer,
+												d_counter_gc_u, d_counter_gc_d,
+               	        		  						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);
+   			
+   			
+   		cudaMemcpy(&No_of_Ghost_cells_buffer[UP], d_counter_gc_u, sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&No_of_Ghost_cells_buffer[DOWN], d_counter_gc_d, sizeof(int), cudaMemcpyDeviceToHost);
+        	CudaErrorCheck();        		
+        	
+        	if (neighbours_ranks[UP] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[UP] = 0;
+        	if (neighbours_ranks[DOWN] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[DOWN] = 0; 	
+        		
+        	cudaMemcpy(d_Ghost_Cells_ind_UP_DOWN, d_Ghost_Cells_ind_UP, No_of_Ghost_cells_buffer[UP]*sizeof(int), cudaMemcpyDeviceToDevice);
+        	cudaMemcpy(d_Ghost_Cells_ind_UP_DOWN + No_of_Ghost_cells_buffer[UP], d_Ghost_Cells_ind_DOWN, No_of_Ghost_cells_buffer[DOWN]*sizeof(int), cudaMemcpyDeviceToDevice);
+		CudaErrorCheck();
+        	
+        	Sending_Ghost_cells_Num_total_UD = No_of_Ghost_cells_buffer[UP]  + No_of_Ghost_cells_buffer[DOWN];
+        	        
+        	if ( Sending_Ghost_cells_Num_total_UD > 0 ){
+        			
+        			
+        		Ghost_Cells_Pack_PBC_Z<<<Sending_Ghost_cells_Num_total_UD,192>>>( Sending_Ghost_cells_Num_total_UD, No_of_Ghost_cells_buffer[UP],
+        										d_Ghost_Cells_ind_UP_DOWN, boxMax, R_ghost_buffer,
+        										d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        										d_CMx, d_CMy, d_CMz,
+											d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+											d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+											d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+
+			CudaErrorCheck();
+				
+			cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        		cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   
+			cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+			cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();
+   		
+   			cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   			cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   			CudaErrorCheck();	
+							
+		}
+			
+			
+   		MPI_Sendrecv(&No_of_Ghost_cells_buffer[UP], 1, MPI_INT, neighbours_ranks[UP], 47, &No_of_Ghost_cells[DOWN],
+        			1, MPI_INT, neighbours_ranks[DOWN], 47, cart_comm, MPI_STATUS_IGNORE);
+			
+		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 25,
+					cart_comm, 0, 0, 
+		  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+		  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+		  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+		  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+		  			d_CMx, d_CMy, d_CMz);
+	
+
+        	MPI_Sendrecv(&No_of_Ghost_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 17, &No_of_Ghost_cells[UP],
+        			 1, MPI_INT, neighbours_ranks[UP], 17, cart_comm, MPI_STATUS_IGNORE);
+
+		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[DOWN], No_of_Ghost_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 22,
+					cart_comm, No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN],
+		  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+		  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+		  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+		  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+		  			d_CMx, d_CMy, d_CMz);
+   			
+   	
+   	
+   		All_Cells_UD = No_of_Ghost_cells[UP] + No_of_Ghost_cells[DOWN];
+   			
+   		cudaMemcpy(d_X + (No_of_C180s + All_Cells)*192,  X_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        	cudaMemcpy(d_Y + (No_of_C180s + All_Cells)*192,  Y_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        	cudaMemcpy(d_Z + (No_of_C180s + All_Cells)*192,  Z_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     		CudaErrorCheck();
+   	
+		cudaMemcpy(d_velListX + (No_of_C180s + All_Cells)*192,  velListX_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListY + (No_of_C180s + All_Cells)*192,  velListY_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells)*192,  velListZ_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   		CudaErrorCheck();
+ 
+ 		cudaMemcpy(d_CMx + (No_of_C180s + All_Cells),  CMx_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMy + (No_of_C180s + All_Cells),  CMy_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_CMz + (No_of_C180s + All_Cells),  CMz_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   		CudaErrorCheck();
+
+   			
+   		All_Cells += All_Cells_UD;
+   			
+   		if( All_Cells > 0) UpdateNNlistWithGhostCellsPBC<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
+        									Xdiv, Ydiv, Zdiv, Subdivision_min, boxMax, d_NoofNNlist, d_NNlist, DL); 
+        		
+        	All_Cells -= All_Cells_UD;   				
+
    
    }if(useLEbc){
     
@@ -2643,40 +3461,43 @@ if (Restart == 0) {
   	}
   
   	if(usePBCs){
-  
-    		CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-        		                                             	d_X,  d_Y,  d_Z,
-        		                                             	d_CMx, d_CMy, d_CMz,
-                       	                              	d_XPin,  d_YPin,  d_ZPin,
-                       	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                       	                              	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
-                       	                              	attraction_strength, attraction_range,
-                       	                              	repulsion_strength, repulsion_range,
-                       	                              	d_viscotic_damp,
-                       	                              	Xdiv, Ydiv, Zdiv, boxMax,
-                       	                              	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                       	                              	threshDist,
-                       	                              	BoxMin, Youngs_mod,
-                       	                              	constrainAngles, d_theta0, d_fConList, d_ExtForces,
-                       	                              	useRigidBoxZ,useRigidBoxY,impurity,f_range);
+
+  		
+ 		CalculateConForceMultiGPUPBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+        			                                             	d_X,  d_Y,  d_Z,
+        			                                             	d_CMx, d_CMy, d_CMz,
+                       		                              	d_XPin,  d_YPin,  d_ZPin,
+                       		                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+                       		                              	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
+                       		                              	attraction_strength, attraction_range,
+                       		                              	repulsion_strength, repulsion_range,
+                       		                              	d_viscotic_damp,
+                       		                              	Xdiv, Ydiv, Zdiv, boxMax, Subdivision_min,
+                       		                              	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                       		                              	threshDist,
+                       		                              	BoxMin, Youngs_mod,
+                       		                              	constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                       		                              	useRigidBoxZ,useRigidBoxY,impurity,f_range);
                                                      	
        	CudaErrorCheck();                                             	
   	
   	                                                     	
-      		CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                	                                        	d_X, d_Y, d_Z,
-                       	                                 	d_CMx, d_CMy, d_CMz,
-                                	                        	d_XPin,  d_YPin,  d_ZPin,
-                                	                        	d_CMxPin, d_CMyPin, d_CMzPin,
-                                	                        	internal_damping,
-                                	                        	attraction_range,
-                                	                        	d_viscotic_damp,
-                                	                        	Xdiv, Ydiv, Zdiv, boxMax,
-                                	                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                	                        	d_velListX, d_velListY, d_velListZ,
-                                	                        	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
-    		CudaErrorCheck();			
-  
+      		CalculateDisForceMultiGPUPBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+                		                                        	d_X, d_Y, d_Z,
+                       		                                 	d_CMx, d_CMy, d_CMz,
+                       	         	                        	d_XPin,  d_YPin,  d_ZPin,
+                       	         	                        	d_CMxPin, d_CMyPin, d_CMzPin,
+                       	         	                        	internal_damping,
+                       	         	                        	attraction_range,
+                       	         	                        	d_viscotic_damp,
+                       	         	                        	Xdiv, Ydiv, Zdiv, boxMax, Subdivision_min,
+                       	         	                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                       	         	                        	d_velListX, d_velListY, d_velListZ,
+                       	         	                        	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
+    		CudaErrorCheck();
+  		
+  					
+  		
   	}
   	if(useLEbc){
   
@@ -2805,9 +3626,7 @@ if (Restart == 0) {
        }
   	
 		  	
-    } else if (nprocs > 1){
-    
-    	
+    } else if (nprocs > 1){   	
     	
     	
     	MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
@@ -2906,6 +3725,7 @@ if (Restart == 0) {
 	
 	if (No_of_C180s > 0 ) {
 		
+		
 		Integrate<<<No_of_C180s, threadsperblock>>>(d_X, d_Y, d_Z, 
                	                                  d_velListX, d_velListY, d_velListZ, 
                	                                  delta_t,  mass,
@@ -2996,14 +3816,14 @@ if (Restart == 0) {
 ////////////////////////////////////////////////////////////////////////////
 
       	
-      	if ( NNlistUpdaterAll > 0 || (step)%StepLEbc == 0){
+      	if ( NNlistUpdaterAll > 0 || (step)%StepLEbc == 0) {
 	//if(1 == 1){
 					
 		NNlistUpdater = 0;
 		NNlistUpdaterAll = 0;	
 			
 		cudaMemset(d_num_cell_dang, 0, sizeof(int));
-		cudaMemset(d_cell_dang_inds, 0, 100*sizeof(int));
+		cudaMemset(d_cell_dang_inds, 0, 96*sizeof(int));
 		cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));		
       		
       		num_cell_Apo = 0;
@@ -3065,7 +3885,7 @@ if (Restart == 0) {
                                									d_DivisionVolume_mc_buffer,
                                									d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
                                									d_CellINdex_mc_buffer, 
-                               									d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer);
+                               									d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         		
@@ -3088,19 +3908,25 @@ if (Restart == 0) {
         			
         				CudaErrorCheck();
         			
+        			
         				cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-        				cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
 
-        				CudaErrorCheck();	
-        		
+					CudaErrorCheck();
+					
+					if(!colloidal_dynamics) {
+						
+						cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					
+        					CudaErrorCheck();	
+        				}
         			}
 
         		
@@ -3116,7 +3942,7 @@ if (Restart == 0) {
         		 				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         		 				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 			     				X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-			     				DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+			     				DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
         		
@@ -3130,7 +3956,7 @@ if (Restart == 0) {
         		 				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         		 				viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 			     				X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-			     				DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+			     				DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
         			No_of_C180s -= Sending_cell_Num_total;
@@ -3156,18 +3982,25 @@ if (Restart == 0) {
    	
   		 		CudaErrorCheck(); 
     				
-    				
     				cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
-  		 		cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
     				cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-        		
+				
+				CudaErrorCheck();
+				
+				if(!colloidal_dynamics) {    				
+
+  		 			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+        				
+        				CudaErrorCheck();
+        			}
+        			
 				No_of_C180s += Received_New_cell;
 			
 				//MPI_Barrier(cart_comm);
@@ -3220,7 +4053,7 @@ if (Restart == 0) {
                        	        								d_DivisionVolume_mc_buffer,
                        	        								d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
                        	        								d_CellINdex_mc_buffer, 
-                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer);
+                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         		
@@ -3245,19 +4078,25 @@ if (Restart == 0) {
         			
         				cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-        				cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
 
-        				CudaErrorCheck();	
+					CudaErrorCheck();
+					
+					if(!colloidal_dynamics) {   					
+   					
+   						cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        					cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+
+        					CudaErrorCheck();	
         		
+        				}
+        			
         			}
-        		
         			MPI_Sendrecv(&No_of_migrated_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 28, &No_of_migrated_cells[SOUTH],
         				1, MPI_INT, neighbours_ranks[SOUTH], 28, cart_comm, MPI_STATUS_IGNORE);
         		
@@ -3267,7 +4106,7 @@ if (Restart == 0) {
         			 			CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         			 			viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 				     			X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-				     			DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+				     			DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		       		
         		
         			MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
@@ -3280,7 +4119,7 @@ if (Restart == 0) {
         		 				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         			 			viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 			     				X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-			     				DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+			     				DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
         			No_of_C180s -= Sending_cell_Num_total;
@@ -3308,15 +4147,23 @@ if (Restart == 0) {
     				
     				cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
-  		 		cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
     				cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-        		
+				
+				CudaErrorCheck();
+				
+				if(!colloidal_dynamics) {
+				
+					cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  		 			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					
+					CudaErrorCheck();
+        			}
+				
 				No_of_C180s += Received_New_cell;
 		
 				// UP-DOWN Migration
@@ -3367,7 +4214,7 @@ if (Restart == 0) {
                        	        								d_DivisionVolume_mc_buffer,
                        	        								d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
                        	        								d_CellINdex_mc_buffer, 
-                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer);
+                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         		
@@ -3389,20 +4236,26 @@ if (Restart == 0) {
    					cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
         			
         				CudaErrorCheck();
+
         			
         				cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-        				cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
-   					cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+					
+					CudaErrorCheck();
+					
+					if(!colloidal_dynamics) {
+   						
+   						cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        					cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
 
-        				CudaErrorCheck();	
-        		
+        					CudaErrorCheck();	
+        				}
         			}
         		
         			MPI_Sendrecv(&No_of_migrated_cells_buffer[UP], 1, MPI_INT, neighbours_ranks[UP], 38, &No_of_migrated_cells[DOWN],
@@ -3414,7 +4267,7 @@ if (Restart == 0) {
         			 			CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         			 			viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 				     			X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-				     			DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+				     			DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         			       		
         		
         			MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
@@ -3427,7 +4280,7 @@ if (Restart == 0) {
         			 			CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
         			 			viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
 				     			X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
-				     			DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc);
+				     			DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
         		
         		
         			No_of_C180s -= Sending_cell_Num_total;
@@ -3453,18 +4306,25 @@ if (Restart == 0) {
    	
   		 		CudaErrorCheck(); 
     				
-    				
     				cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
-  		 		cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
     				cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-				cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
-        		
+				
+				CudaErrorCheck();
+				
+				if(!colloidal_dynamics) {    				
+
+					cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  		 			cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        			
+        				CudaErrorCheck();
+        			}
+				
 				No_of_C180s += Received_New_cell;
 			
 				MPI_Barrier(cart_comm);
@@ -3481,7 +4341,7 @@ if (Restart == 0) {
 				cudaMemset(d_counter_gc_d, 0, sizeof(int));
 			
 			
-      				makeNNlistMultiGpu<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+      				makeNNlistMultiGpu<<<No_of_C180s/512+1,512>>>( No_of_C180s, R_ghost_buffer, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
         			Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
         			d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
         			d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
@@ -3497,7 +4357,9 @@ if (Restart == 0) {
         		
         		
         			cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST, d_Ghost_Cells_ind_EAST, No_of_Ghost_cells_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
-        			cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST + No_of_Ghost_cells_buffer[EAST], d_Ghost_Cells_ind_WEST, No_of_Ghost_cells_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        			cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST + No_of_Ghost_cells_buffer[EAST], d_Ghost_Cells_ind_WEST, 
+        			No_of_Ghost_cells_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+				
 				CudaErrorCheck();
         	
         	        	Sending_Ghost_cells_Num_total_EW = No_of_Ghost_cells_buffer[EAST]  + No_of_Ghost_cells_buffer[WEST];
@@ -3584,7 +4446,7 @@ if (Restart == 0) {
 				// North-South comm
 			
 				if (All_Cells > 0 )ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMy, 
-														Subdivision_max.y, Subdivision_min.y,
+														Subdivision_max.y, Subdivision_min.y, R_ghost_buffer,
 														d_counter_gc_n, d_counter_gc_s,
                	        		  								d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH);
    			
@@ -3683,7 +4545,7 @@ if (Restart == 0) {
    				// UP_DOWN comm
    			
    				if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMz, 
-														Subdivision_max.z, Subdivision_min.z,
+														Subdivision_max.z, Subdivision_min.z, R_ghost_buffer,
 														d_counter_gc_u, d_counter_gc_d,
                	        		  								d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);
    			
@@ -3796,11 +4658,828 @@ if (Restart == 0) {
        	}
 		
 		if(usePBCs){
+		   	
 	
-       		makeNNlistPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-        		attraction_range, Xdiv, Ydiv, Zdiv, boxMax, d_NoofNNlist, d_NNlist, DLp, useRigidBoxZ,useRigidBoxY);
+			// EAST-WEST Migration
+			
+			cudaMemset(d_counter_mc_e, 0, sizeof(int));
+			cudaMemset(d_counter_mc_w, 0, sizeof(int));
+			cudaMemset(d_cell_mig, 0, MaxNoofC180s*sizeof(char));
+						
+        		
+       		migrated_cells_finderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,d_CMx,
+        									Subdivision_max.x, Subdivision_min.x, BoxMin.x, boxMax.x,
+               			          				d_counter_mc_e, d_counter_mc_w,
+               			          				d_migrated_cells_ind_EAST, d_migrated_cells_ind_WEST,
+               			          				d_cell_mig);
+        			
+        		CudaErrorCheck();
+        		
+			cudaMemcpy(&No_of_migrated_cells_buffer[EAST], d_counter_mc_e, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_migrated_cells_buffer[WEST], d_counter_mc_w, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck();        		
+        		        			
+        		if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_migrated_cells_buffer[EAST] = 0;
+        		if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_migrated_cells_buffer[WEST] = 0;
+        			
+        		cudaMemcpy(d_migrated_cells_ind_EAST_WEST, d_migrated_cells_ind_EAST, No_of_migrated_cells_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_migrated_cells_ind_EAST_WEST + No_of_migrated_cells_buffer[EAST], d_migrated_cells_ind_WEST, 
+        					No_of_migrated_cells_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+
+        			
+        		Sending_cell_Num_total = No_of_migrated_cells_buffer[EAST]  + No_of_migrated_cells_buffer[WEST];
+        		
+        			
+        		if (Sending_cell_Num_total > 0){
+        				
+        			cudaMemset(d_counter, 0, sizeof(int));
+        						
+        			migrated_Cells_Remove_PackPBC_X<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
+												d_migrated_cells_ind_EAST_WEST, d_cell_mig, boxMax,
+   												d_X,  d_Y, d_Z,
+        		                       						d_velListX, d_velListY, d_velListZ,
+        		                       						d_CMx, d_CMy, d_CMz,
+        		                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+        		                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
+        		                       						d_Apo_rate, d_squeeze_rate,
+												d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
+        		                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
+        		                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
+        		                       						d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
+        		                       						d_DivisionVolume_mc_buffer,
+        		                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
+        		                       						d_CellINdex_mc_buffer, 
+        		                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        
+        			CudaErrorCheck();
+        		
+        			
+        			cudaMemcpy(X_mc_buffer,  d_X_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_mc_buffer,  d_Y_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_mc_buffer,  d_Z_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   	
+				cudaMemcpy(velListX_mc_buffer,  d_velListX_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_mc_buffer,  d_velListY_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_mc_buffer,  d_velListZ_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_mc_buffer,  d_CMx_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_mc_buffer,  d_CMy_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        				
+        			CudaErrorCheck();
+        			
+        			cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+
+   				CudaErrorCheck();
+   			
+   				if(!colloidal_dynamics) {
+   			
+   					cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        				cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+	
+        				CudaErrorCheck();	
+        		
+        			}
+			
+			}
+        			
+        			
+        		MPI_Sendrecv(&No_of_migrated_cells_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 18, &No_of_migrated_cells[WEST],
+        					1, MPI_INT, neighbours_ranks[WEST], 18, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        		Send_Recv_migrated_cells(No_of_migrated_cells_buffer[EAST], No_of_migrated_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 17, cart_comm,
+        	 				0, 0 , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer, velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        	 				CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        					viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+   						X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+     						DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		
+        		
+        		
+        		MPI_Sendrecv(&No_of_migrated_cells_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 18, &No_of_migrated_cells[EAST],
+        					1, MPI_INT, neighbours_ranks[EAST], 18, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        		Send_Recv_migrated_cells(No_of_migrated_cells_buffer[WEST], No_of_migrated_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 17, cart_comm,
+    						No_of_migrated_cells_buffer[EAST], No_of_migrated_cells[WEST] , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer,
+        					velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        					CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        					viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+ 						X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+     						DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        			
+        		
+        		No_of_C180s -= Sending_cell_Num_total;
+        		Received_New_cell = No_of_migrated_cells[EAST] + No_of_migrated_cells[WEST];
+        		
+        		cudaMemcpy(d_X + No_of_C180s*192,  X_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + No_of_C180s*192,  Y_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + No_of_C180s*192,  Z_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  			CudaErrorCheck();
+ 	
+ 			cudaMemcpy(d_CMx + No_of_C180s,  CMx_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + No_of_C180s,  CMy_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + No_of_C180s,  CMz_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  			CudaErrorCheck(); 
+    				
+    				
+    			cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+    			cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
+
+			CudaErrorCheck();
+		
+			if(!colloidal_dynamics){
+			
+				cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  				cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        			
+        			CudaErrorCheck();
+        		}	
+				
+			No_of_C180s += Received_New_cell;
+
+		
+			// NORTH-SOUTH Migration
+			
+			cudaMemset(d_counter_mc_n, 0, sizeof(int));
+			cudaMemset(d_counter_mc_s, 0, sizeof(int));
+			cudaMemset(d_cell_mig, 0, MaxNoofC180s*sizeof(char));
+					
+        		
+        		migrated_cells_finderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,d_CMy,
+        			               	  			Subdivision_max.y, Subdivision_min.y, BoxMin.y, boxMax.y,
+        			               	  			d_counter_mc_n, d_counter_mc_s,
+        	        		       	  			d_migrated_cells_ind_NORTH, d_migrated_cells_ind_SOUTH,
+        	               			  			d_cell_mig);
+        		
+        		CudaErrorCheck();
+        		
+			cudaMemcpy(&No_of_migrated_cells_buffer[NORTH], d_counter_mc_n, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_migrated_cells_buffer[SOUTH], d_counter_mc_s, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck();        		
+        		
+        		if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_migrated_cells_buffer[NORTH] = 0;
+        		if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_migrated_cells_buffer[SOUTH] = 0;
+        			
+        		cudaMemcpy(d_migrated_cells_ind_NORTH_SOUTH, d_migrated_cells_ind_NORTH, No_of_migrated_cells_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_migrated_cells_ind_NORTH_SOUTH + No_of_migrated_cells_buffer[NORTH], d_migrated_cells_ind_SOUTH, 
+        					No_of_migrated_cells_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+			
+        		
+        		Sending_cell_Num_total = No_of_migrated_cells_buffer[NORTH]  + No_of_migrated_cells_buffer[SOUTH];
+        				
+        		if (Sending_cell_Num_total > 0){
+        			
+        			cudaMemset(d_counter, 0, sizeof(int));
+        					
+        			migrated_Cells_Remove_PackPBC_Y<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
+												d_migrated_cells_ind_NORTH_SOUTH, d_cell_mig, boxMax,
+   												d_X,  d_Y, d_Z,
+        			               	        				d_velListX, d_velListY, d_velListZ,
+        			               	        				d_CMx, d_CMy, d_CMz,
+        			               	        				d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+        			               	        				d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
+        			               	        				d_Apo_rate, d_squeeze_rate,
+												d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
+        			               	       				d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
+        			               	        				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
+        			               	        				d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
+        			               	        				d_DivisionVolume_mc_buffer,
+        			               	        				d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
+        			               	       				d_CellINdex_mc_buffer, 
+        			               	        				d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        
+        			CudaErrorCheck();
+        		
+        			
+        			cudaMemcpy(X_mc_buffer,  d_X_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_mc_buffer,  d_Y_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_mc_buffer,  d_Z_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   	
+				cudaMemcpy(velListX_mc_buffer,  d_velListX_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_mc_buffer,  d_velListY_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_mc_buffer,  d_velListZ_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   		
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_mc_buffer,  d_CMx_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_mc_buffer,  d_CMy_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			
+        			CudaErrorCheck();
+        			
+        			cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+			
+				CudaErrorCheck();
+			
+				if(!colloidal_dynamics) {
+   				
+   					cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        				cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   		     			CudaErrorCheck();	
+        			}
+   	        	
+   	        	}
+        		
+   	        	MPI_Sendrecv(&No_of_migrated_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 28, &No_of_migrated_cells[SOUTH],
+   				      		1, MPI_INT, neighbours_ranks[SOUTH], 28, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+   	        	Send_Recv_migrated_cells(No_of_migrated_cells_buffer[NORTH], No_of_migrated_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 17, cart_comm,
+   				     			 0, 0 , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer, velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+   				     			 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+   				     			 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+							 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+							 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		       		
+        		
+      	        	MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
+   				     		1, MPI_INT, neighbours_ranks[NORTH], 28, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+   	        	Send_Recv_migrated_cells(No_of_migrated_cells_buffer[SOUTH], No_of_migrated_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 17, cart_comm,
+   				     			 No_of_migrated_cells_buffer[NORTH], No_of_migrated_cells[SOUTH] , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer,
+   				     			 velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+   				     		 	 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+   				     			 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+						     	 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+						     	 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		
+        		
+   	        	No_of_C180s -= Sending_cell_Num_total;
+   	        	Received_New_cell = No_of_migrated_cells[NORTH] + No_of_migrated_cells[SOUTH];
+        		
+        		
+   	        	cudaMemcpy(d_X + No_of_C180s*192,  X_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	        	cudaMemcpy(d_Y + No_of_C180s*192,  Y_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	        	cudaMemcpy(d_Z + No_of_C180s*192,  Z_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   	        	CudaErrorCheck();
+   			
+	        	cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+	        	cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+	        	cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   		
+  	        	CudaErrorCheck();
+ 		
+ 			cudaMemcpy(d_CMx + No_of_C180s,  CMx_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + No_of_C180s,  CMy_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + No_of_C180s,  CMz_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  			CudaErrorCheck(); 
+    				
+    			cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+    			cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
+		
+			CudaErrorCheck();
+		
+			if(!colloidal_dynamics) {
+			
+				cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  				cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		
+        			CudaErrorCheck();
+        		}	
+				
+			No_of_C180s += Received_New_cell;
+
+			
+			// UP-DOWN Migration
+			
+			cudaMemset(d_counter_mc_u, 0, sizeof(int));
+			cudaMemset(d_counter_mc_d, 0, sizeof(int));
+			cudaMemset(d_cell_mig, 0, MaxNoofC180s*sizeof(char));
+			
+			
+        		
+        		migrated_cells_finderPBC<<<No_of_C180s/512+1,512>>>(No_of_C180s,d_CMz,
+        			                 				Subdivision_max.z, Subdivision_min.z, BoxMin.z, boxMax.z,
+        			                 				d_counter_mc_u, d_counter_mc_d,
+               			        				d_migrated_cells_ind_UP, d_migrated_cells_ind_DOWN,
+               			          				d_cell_mig);
+        			
+       		CudaErrorCheck();
+        		
+			cudaMemcpy(&No_of_migrated_cells_buffer[UP], d_counter_mc_u, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_migrated_cells_buffer[DOWN], d_counter_mc_d, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck();        		
+        			
+        		if (neighbours_ranks[UP] == MPI_PROC_NULL) No_of_migrated_cells_buffer[UP] = 0;
+        		if (neighbours_ranks[DOWN] == MPI_PROC_NULL) No_of_migrated_cells_buffer[DOWN] = 0;
+        			
+        		cudaMemcpy(d_migrated_cells_ind_UP_DOWN, d_migrated_cells_ind_UP, No_of_migrated_cells_buffer[UP]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_migrated_cells_ind_UP_DOWN + No_of_migrated_cells_buffer[UP], d_migrated_cells_ind_DOWN, 
+        					No_of_migrated_cells_buffer[DOWN]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+			
+        		
+        		Sending_cell_Num_total = No_of_migrated_cells_buffer[UP]  + No_of_migrated_cells_buffer[DOWN];
+        			
+        		if (Sending_cell_Num_total > 0){
+        			
+        			cudaMemset(d_counter, 0, sizeof(int));
+        					
+        			migrated_Cells_Remove_PackPBC_Z<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
+												d_migrated_cells_ind_UP_DOWN, d_cell_mig, boxMax,
+   												d_X,  d_Y, d_Z,
+        	        		       	        				d_velListX, d_velListY, d_velListZ,
+        	        		       	        				d_CMx, d_CMy, d_CMz,
+        	        		       	        				d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
+        	        		       	        				d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
+        	        		       	        				d_Apo_rate, d_squeeze_rate,
+												d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
+        	        		       	        				d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
+        	        		       	        				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
+        	        		       	        				d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
+        	        		       	        				d_DivisionVolume_mc_buffer,
+        	        		       	        				d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
+        	        		       	        				d_CellINdex_mc_buffer, 
+        	        		       	        				d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        
+        			CudaErrorCheck();
+        			
+        			
+        			cudaMemcpy(X_mc_buffer,  d_X_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_mc_buffer,  d_Y_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_mc_buffer,  d_Z_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+				cudaMemcpy(velListX_mc_buffer,  d_velListX_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_mc_buffer,  d_velListY_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_mc_buffer,  d_velListZ_mc_buffer, 192*Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   		
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_mc_buffer,  d_CMx_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_mc_buffer,  d_CMy_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_mc_buffer,  d_CMz_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        			
+        			CudaErrorCheck();
+        			
+        			cudaMemcpy(ScaleFactor_mc_buffer,  d_ScaleFactor_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(Youngs_mod_mc_buffer,  d_Youngs_mod_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(gamma_env_mc_buffer,  d_gamma_env_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(viscotic_damp_mc_buffer,  d_viscotic_damp_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(pressList_mc_buffer,  d_pressList_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CellINdex_mc_buffer,  d_CellINdex_mc_buffer, Sending_cell_Num_total*sizeof(int),cudaMemcpyDeviceToHost);
+
+   				CudaErrorCheck();
+   			
+   				if(!colloidal_dynamics) {
+   			
+   					cudaMemcpy(Growth_rate_mc_buffer,  d_Growth_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+        				cudaMemcpy(DivisionVolume_mc_buffer,  d_DivisionVolume_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(Apo_rate_mc_buffer,  d_Apo_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
+				
+					CudaErrorCheck();
+				}
+        		
+        			
+        		
+        		}
+        		
+        		MPI_Sendrecv(&No_of_migrated_cells_buffer[UP], 1, MPI_INT, neighbours_ranks[UP], 38, &No_of_migrated_cells[DOWN],
+        					1, MPI_INT, neighbours_ranks[DOWN], 38, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        		Send_Recv_migrated_cells(No_of_migrated_cells_buffer[UP], No_of_migrated_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 27, cart_comm,
+       				 		0, 0 , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer, velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        						CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        						viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+							X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+							DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        			       		
+        		
+        		MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
+        					1, MPI_INT, neighbours_ranks[UP], 38, cart_comm, MPI_STATUS_IGNORE);
+        		
+        		
+        		Send_Recv_migrated_cells(No_of_migrated_cells_buffer[DOWN], No_of_migrated_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 27, cart_comm,
+        						 No_of_migrated_cells_buffer[UP], No_of_migrated_cells[DOWN] , X_mc_buffer, Y_mc_buffer, Z_mc_buffer, velListX_mc_buffer,
+        			 			 velListY_mc_buffer, velListZ_mc_buffer, CMx_mc_buffer, CMy_mc_buffer,
+        			 			 CMz_mc_buffer, ScaleFactor_mc_buffer, Youngs_mod_mc_buffer, Growth_rate_mc_buffer, DivisionVolume_mc_buffer, gamma_env_mc_buffer,
+        						 viscotic_damp_mc_buffer, pressList_mc_buffer, Apo_rate_mc_buffer, squeeze_rate_mc_buffer, CellINdex_mc_buffer,	
+							 X_mc, Y_mc, Z_mc, velListX_mc, velListY_mc, velListZ_mc, CMx_mc, CMy_mc, CMz_mc, ScaleFactor_mc, Youngs_mod_mc, Growth_rate_mc,
+							 DivisionVolume_mc, gamma_env_mc, viscotic_damp_mc, pressList_mc, Apo_rate_mc, squeeze_rate_mc, CellINdex_mc, colloidal_dynamics);
+        		
+        		
+        		No_of_C180s -= Sending_cell_Num_total;
+        		Received_New_cell = No_of_migrated_cells[UP] + No_of_migrated_cells[DOWN];
+        		
+        			
+        		cudaMemcpy(d_X + No_of_C180s*192,  X_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + No_of_C180s*192,  Y_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+       		cudaMemcpy(d_Z + No_of_C180s*192,  Z_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_mc, 192*Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  			CudaErrorCheck();
+ 		
+ 			cudaMemcpy(d_CMx + No_of_C180s,  CMx_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + No_of_C180s,  CMy_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + No_of_C180s,  CMz_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+   	
+  			CudaErrorCheck(); 
+    				
+    				
+    			cudaMemcpy(d_ScaleFactor + No_of_C180s,  ScaleFactor_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Youngs_mod + No_of_C180s,  Youngs_mod_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_gamma_env + No_of_C180s,  gamma_env_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_viscotic_damp + No_of_C180s,  viscotic_damp_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+    			cudaMemcpy(d_pressList + No_of_C180s,  pressList_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CellINdex + No_of_C180s,  CellINdex_mc, Received_New_cell*sizeof(int),cudaMemcpyHostToDevice);
+		
+			CudaErrorCheck();
+		
+			if(!colloidal_dynamics) {
+				
+				cudaMemcpy(d_Growth_rate + No_of_C180s,  Growth_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice); 
+  				cudaMemcpy(d_DivisionVolume + No_of_C180s,  DivisionVolume_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_Apo_rate + No_of_C180s,  Apo_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_squeeze_rate + No_of_C180s,  squeeze_rate_mc, Received_New_cell*sizeof(float),cudaMemcpyHostToDevice);
+        	
+        			CudaErrorCheck();	
+			}
+		
+			No_of_C180s += Received_New_cell;
+
+			
+			MPI_Barrier(cart_comm);
+
+			// Ghost Cells
+	
+			cudaMemset(d_counter_gc_e, 0, sizeof(int));
+			cudaMemset(d_counter_gc_w, 0, sizeof(int));
+			cudaMemset(d_counter_gc_n, 0, sizeof(int));
+			cudaMemset(d_counter_gc_s, 0, sizeof(int));
+			cudaMemset(d_counter_gc_u, 0, sizeof(int));
+			cudaMemset(d_counter_gc_d, 0, sizeof(int));
+			
+			
+      			makeNNlistMultiGpuPBC<<<No_of_C180s/512+1,512>>>( No_of_C180s, R_ghost_buffer, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
+        								Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
+        								d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
+        								d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
+        								d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);        
         
         		CudaErrorCheck(); 
+        		
+        		// EAST-WEST COMM
+        		
+        		cudaMemcpy(&No_of_Ghost_cells_buffer[EAST], d_counter_gc_e, sizeof(int), cudaMemcpyDeviceToHost);
+        		cudaMemcpy(&No_of_Ghost_cells_buffer[WEST], d_counter_gc_w, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck();        		
+        			
+        		if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[EAST] = 0;
+        		if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[WEST] = 0;
+        		
+        		cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST, d_Ghost_Cells_ind_EAST, No_of_Ghost_cells_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_Cells_ind_EAST_WEST + No_of_Ghost_cells_buffer[EAST], d_Ghost_Cells_ind_WEST, No_of_Ghost_cells_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_cells_Num_total_EW = No_of_Ghost_cells_buffer[EAST]  + No_of_Ghost_cells_buffer[WEST];
+        		
+        		
+        		if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        					
+        			Ghost_Cells_Pack_PBC_X<<<Sending_Ghost_cells_Num_total_EW,192>>>(Sending_Ghost_cells_Num_total_EW, No_of_Ghost_cells_buffer[EAST],
+        												d_Ghost_Cells_ind_EAST_WEST, boxMax, R_ghost_buffer,
+        												d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        												d_CMx, d_CMy, d_CMz,
+													d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+													d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+													d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+	
+				CudaErrorCheck();
+				
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+			
+			MPI_Sendrecv(&No_of_Ghost_cells_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_cells[WEST],
+        					1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+							cart_comm, 0, 0, 
+						  	X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+						  	CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+						  	X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+						  	CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+						  	d_CMx, d_CMy, d_CMz);
+	
+
+        		MPI_Sendrecv(&No_of_Ghost_cells_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_cells[EAST],
+        					1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[WEST], No_of_Ghost_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+							cart_comm, No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST],
+		  					X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+		  					CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+		  					X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+		  					CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+		  					d_CMx, d_CMy, d_CMz);
+			
+			
+			All_Cells_EW = No_of_Ghost_cells[EAST] + No_of_Ghost_cells[WEST];
+			
+			cudaMemcpy(d_X + No_of_C180s*192,  X_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Y + No_of_C180s*192,  Y_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_Z + No_of_C180s*192,  Z_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + No_of_C180s,  CMx_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + No_of_C180s,  CMy_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + No_of_C180s,  CMz_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+				
+			All_Cells = All_Cells_EW;		
+
+			// North-South comm
+	
+			if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMy, 
+													Subdivision_max.y, Subdivision_min.y, R_ghost_buffer,
+													d_counter_gc_n, d_counter_gc_s,
+        			              		  						d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH);
+   			
+   			
+   			cudaMemcpy(&No_of_Ghost_cells_buffer[NORTH], d_counter_gc_n, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_Ghost_cells_buffer[SOUTH], d_counter_gc_s, sizeof(int), cudaMemcpyDeviceToHost);			
+			CudaErrorCheck();
+				
+			if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[NORTH] = 0;
+        		if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[SOUTH] = 0;
+        		
+        		
+        		cudaMemcpy(d_Ghost_Cells_ind_NORTH_SOUTH, d_Ghost_Cells_ind_NORTH, No_of_Ghost_cells_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_Cells_ind_NORTH_SOUTH + No_of_Ghost_cells_buffer[NORTH], d_Ghost_Cells_ind_SOUTH, No_of_Ghost_cells_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+				
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_cells_Num_total_NS = No_of_Ghost_cells_buffer[NORTH]  + No_of_Ghost_cells_buffer[SOUTH];
+        	        
+        		if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        			
+        			Ghost_Cells_Pack_PBC_Y<<<Sending_Ghost_cells_Num_total_NS,192>>>(Sending_Ghost_cells_Num_total_NS, No_of_Ghost_cells_buffer[NORTH],
+        											 	d_Ghost_Cells_ind_NORTH_SOUTH, boxMax, R_ghost_buffer,
+        												d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        												d_CMx, d_CMy, d_CMz,
+													d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+													d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+													d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+		
+				CudaErrorCheck();
+				
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+			
+   			MPI_Sendrecv(&No_of_Ghost_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_cells[SOUTH],
+        					1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+							cart_comm, 0, 0, 
+	  						X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+	  						CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+	  						X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+	  						CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+	  						d_CMx, d_CMy, d_CMz);
+	
+
+        		MPI_Sendrecv(&No_of_Ghost_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_cells[NORTH],
+        					 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[SOUTH], No_of_Ghost_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+							cart_comm, No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH],
+	  						X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+	  						CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+	  						X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+	  						CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+	  						d_CMx, d_CMy, d_CMz);
+   			
+   			All_Cells_NS = No_of_Ghost_cells[NORTH] + No_of_Ghost_cells[SOUTH];
+   			
+   				
+   			cudaMemcpy(d_X + (No_of_C180s + All_Cells)*192,  X_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			cudaMemcpy(d_Y + (No_of_C180s + All_Cells)*192,  Y_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			cudaMemcpy(d_Z + (No_of_C180s + All_Cells)*192,  Z_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + (No_of_C180s + All_Cells)*192,  velListX_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + (No_of_C180s + All_Cells)*192,  velListY_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells)*192,  velListZ_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + (No_of_C180s + All_Cells),  CMx_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + (No_of_C180s + All_Cells),  CMy_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + (No_of_C180s + All_Cells),  CMz_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   				
+   			CudaErrorCheck();
+   	
+   			All_Cells += All_Cells_NS;		
+
+ 	
+   			// UP_DOWN comm
+   			
+   			if (All_Cells > 0) ghost_cells_finder_Auxiliary<<<All_Cells/512+1,512>>>(No_of_C180s, All_Cells, d_CMz, 
+													Subdivision_max.z, Subdivision_min.z, R_ghost_buffer,
+													d_counter_gc_u, d_counter_gc_d,
+               			        		  					d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);
+   			
+   			
+   			cudaMemcpy(&No_of_Ghost_cells_buffer[UP], d_counter_gc_u, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_Ghost_cells_buffer[DOWN], d_counter_gc_d, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck();        		
+        			
+        		if (neighbours_ranks[UP] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[UP] = 0;
+        		if (neighbours_ranks[DOWN] == MPI_PROC_NULL) No_of_Ghost_cells_buffer[DOWN] = 0;
+        		
+        		cudaMemcpy(d_Ghost_Cells_ind_UP_DOWN, d_Ghost_Cells_ind_UP, No_of_Ghost_cells_buffer[UP]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_Cells_ind_UP_DOWN + No_of_Ghost_cells_buffer[UP], d_Ghost_Cells_ind_DOWN, No_of_Ghost_cells_buffer[DOWN]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_cells_Num_total_UD = No_of_Ghost_cells_buffer[UP]  + No_of_Ghost_cells_buffer[DOWN];
+        	        
+        		if ( Sending_Ghost_cells_Num_total_UD > 0 ){
+        			
+        			
+        			Ghost_Cells_Pack_PBC_Z<<<Sending_Ghost_cells_Num_total_UD,192>>>(Sending_Ghost_cells_Num_total_UD, No_of_Ghost_cells_buffer[UP],
+        												d_Ghost_Cells_ind_UP_DOWN, boxMax, R_ghost_buffer,
+        												d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        												d_CMx, d_CMy, d_CMz,
+													d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+													d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+													d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+
+				CudaErrorCheck();
+				
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+			
+			
+   			MPI_Sendrecv(&No_of_Ghost_cells_buffer[UP], 1, MPI_INT, neighbours_ranks[UP], 47, &No_of_Ghost_cells[DOWN],
+        					1, MPI_INT, neighbours_ranks[DOWN], 47, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 25,
+							cart_comm, 0, 0, 
+				  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  			d_CMx, d_CMy, d_CMz);
+	
+
+        		MPI_Sendrecv(&No_of_Ghost_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 17, &No_of_Ghost_cells[UP],
+        					 1, MPI_INT, neighbours_ranks[UP], 17, cart_comm, MPI_STATUS_IGNORE);
+
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[DOWN], No_of_Ghost_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 22,
+							cart_comm, No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN],
+				  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  			d_CMx, d_CMy, d_CMz);
+   			
+   	
+   	
+   			All_Cells_UD = No_of_Ghost_cells[UP] + No_of_Ghost_cells[DOWN];
+   			
+   			cudaMemcpy(d_X + (No_of_C180s + All_Cells)*192,  X_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + (No_of_C180s + All_Cells)*192,  Y_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + (No_of_C180s + All_Cells)*192,  Z_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + (No_of_C180s + All_Cells)*192,  velListX_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + (No_of_C180s + All_Cells)*192,  velListY_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells)*192,  velListZ_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + (No_of_C180s + All_Cells),  CMx_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + (No_of_C180s + All_Cells),  CMy_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + (No_of_C180s + All_Cells),  CMz_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+
+   			
+   			All_Cells += All_Cells_UD;
+
+
+   			
+   			if( All_Cells > 0) UpdateNNlistWithGhostCellsPBC<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
+        											Xdiv, Ydiv, Zdiv, Subdivision_min, boxMax, d_NoofNNlist, d_NNlist, DL); 
+        		
+        		   				
+
+
        	}
        	if(useLEbc){
        
@@ -3812,215 +5491,432 @@ if (Restart == 0) {
        	}
 	
 	
-	} else if (nprocs > 1) {
+	} else {
     
+        	if (useRigidSimulationBox && nprocs > 1){	
         		
-        	if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        		
+        		if ( Sending_Ghost_cells_Num_total_EW > 0 ){
         			
-        		Ghost_Cells_Pack<<<Sending_Ghost_cells_Num_total_EW,192>>>( Sending_Ghost_cells_Num_total_EW, d_Ghost_Cells_ind_EAST_WEST,
-        										d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-        										d_CMx, d_CMy, d_CMz,
-											d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
-											d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
-											d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+        			
+        			Ghost_Cells_Pack<<<Sending_Ghost_cells_Num_total_EW,192>>>( Sending_Ghost_cells_Num_total_EW, d_Ghost_Cells_ind_EAST_WEST,
+        											d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        											d_CMx, d_CMy, d_CMz,
+												d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+												d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+												d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
 
-			CudaErrorCheck();
+				CudaErrorCheck();
 				
-			cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();
+   				CudaErrorCheck();
    
-			cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
-			cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
-			cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();
+   				CudaErrorCheck();
    		
-   			cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();	
+   				CudaErrorCheck();	
 							
-		}
+			}
 			
-		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
-					cart_comm, 0, 0, 
-			  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
-			  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
-			  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
-			  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-			  		d_CMx, d_CMy, d_CMz);
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+						cart_comm, 0, 0, 
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
 
-		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[WEST], No_of_Ghost_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
-					cart_comm, No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST],
-			  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
-			  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
-			  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
-			  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-			  		d_CMx, d_CMy, d_CMz);
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[WEST], No_of_Ghost_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+						cart_comm, No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST],
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
 			
 			
 			
-		cudaMemcpy(d_X + No_of_C180s*192,  X_gc, 192*All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-        	cudaMemcpy(d_Y + No_of_C180s*192,  Y_gc, 192*All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-        	cudaMemcpy(d_Z + No_of_C180s*192,  Z_gc, 192*All_Cells*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_X + No_of_C180s*192,  X_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + No_of_C180s*192,  Y_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + No_of_C180s*192,  Z_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
      			
-     		CudaErrorCheck();
+     			CudaErrorCheck();
    	
-		cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_gc, 192*All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_gc, 192*All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_gc, 192*All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-   	
-   		CudaErrorCheck();
- 
- 		cudaMemcpy(d_CMx + No_of_C180s,  CMx_gc, All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_CMy + No_of_C180s,  CMy_gc, All_Cells*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_CMz + No_of_C180s,  CMz_gc, All_Cells*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
    		
-   		CudaErrorCheck();
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + No_of_C180s,  CMx_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + No_of_C180s,  CMy_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + No_of_C180s,  CMz_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
         	        
         	
-        	if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        		if ( Sending_Ghost_cells_Num_total_NS > 0 ){
         			
-        		Ghost_Cells_Pack<<<Sending_Ghost_cells_Num_total_NS,192>>>( Sending_Ghost_cells_Num_total_NS, d_Ghost_Cells_ind_NORTH_SOUTH,
-        										d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-        										d_CMx, d_CMy, d_CMz,
-											d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
-											d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
-											d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+        			Ghost_Cells_Pack<<<Sending_Ghost_cells_Num_total_NS,192>>>( Sending_Ghost_cells_Num_total_NS, d_Ghost_Cells_ind_NORTH_SOUTH,
+        											d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        											d_CMx, d_CMy, d_CMz,
+												d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+												d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+												d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
 
-			CudaErrorCheck();
+				CudaErrorCheck();
 				
-			cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();
+   				CudaErrorCheck();
    
-			cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
-			cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
-			cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();
+   				CudaErrorCheck();
    		
-   			cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();	
+   				CudaErrorCheck();	
 							
-		}
+			}
 			
 			
-		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
-					cart_comm, 0, 0, 
-			  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
-			  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
-			  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
-			  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-			  		d_CMx, d_CMy, d_CMz);
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+						cart_comm, 0, 0, 
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
 
-		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[SOUTH], No_of_Ghost_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-					cart_comm, No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH],
-		  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
-		  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
-		  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
-		  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-		  			d_CMx, d_CMy, d_CMz);
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[SOUTH], No_of_Ghost_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+						cart_comm, No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH],
+			  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+			  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+			  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+			  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+			  			d_CMx, d_CMy, d_CMz);
 
    			
-   		cudaMemcpy(d_X + (No_of_C180s + All_Cells_EW)*192,  X_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
-        	cudaMemcpy(d_Y + (No_of_C180s + All_Cells_EW)*192,  Y_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
-        	cudaMemcpy(d_Z + (No_of_C180s + All_Cells_EW)*192,  Z_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			cudaMemcpy(d_X + (No_of_C180s + All_Cells_EW)*192,  X_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + (No_of_C180s + All_Cells_EW)*192,  Y_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + (No_of_C180s + All_Cells_EW)*192,  Z_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
      			
-     		CudaErrorCheck();
+     			CudaErrorCheck();
    	
-		cudaMemcpy(d_velListX + (No_of_C180s + All_Cells_EW)*192,  velListX_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_velListY + (No_of_C180s + All_Cells_EW)*192,  velListY_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells_EW)*192,  velListZ_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListX + (No_of_C180s + All_Cells_EW)*192,  velListX_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + (No_of_C180s + All_Cells_EW)*192,  velListY_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells_EW)*192,  velListZ_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
    	
-   		CudaErrorCheck();
+   			CudaErrorCheck();
  
- 		cudaMemcpy(d_CMx + (No_of_C180s + All_Cells_EW),  CMx_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_CMy + (No_of_C180s + All_Cells_EW),  CMy_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_CMz + (No_of_C180s + All_Cells_EW),  CMz_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+ 			cudaMemcpy(d_CMx + (No_of_C180s + All_Cells_EW),  CMx_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + (No_of_C180s + All_Cells_EW),  CMy_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + (No_of_C180s + All_Cells_EW),  CMz_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
    		
-   		CudaErrorCheck();
+   			CudaErrorCheck();
 
 
-		if ( Sending_Ghost_cells_Num_total_UD > 0 ){
+			if ( Sending_Ghost_cells_Num_total_UD > 0 ){
         			
-        		Ghost_Cells_Pack<<<Sending_Ghost_cells_Num_total_UD,192>>>( Sending_Ghost_cells_Num_total_UD, d_Ghost_Cells_ind_UP_DOWN,
-        										d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-        										d_CMx, d_CMy, d_CMz,
-											d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
-											d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
-											d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+        			Ghost_Cells_Pack<<<Sending_Ghost_cells_Num_total_UD,192>>>( Sending_Ghost_cells_Num_total_UD, d_Ghost_Cells_ind_UP_DOWN,
+        											d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        											d_CMx, d_CMy, d_CMz,
+												d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+												d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+												d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
 
-			CudaErrorCheck();
+				CudaErrorCheck();
 				
-			cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
-        		cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();
-   
-			cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
-			cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
-			cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				CudaErrorCheck();
    	
-   			CudaErrorCheck();
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
    		
-   			cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
-   			cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   			CudaErrorCheck();	
+   				CudaErrorCheck();	
 							
-		}
+			}
 			
 			
-		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 25,
-					cart_comm, 0, 0, 
-		  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
-		  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
-		  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
-		  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-		  			d_CMx, d_CMy, d_CMz);
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 25,
+						cart_comm, 0, 0, 
+			  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+			  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+			  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+			  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+			  			d_CMx, d_CMy, d_CMz);
 
-		Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[DOWN], No_of_Ghost_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 22,
-					cart_comm, No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN],
-			  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
-			  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
-			  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
-			  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
-			  		d_CMx, d_CMy, d_CMz);
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[DOWN], No_of_Ghost_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 22,
+						cart_comm, No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN],
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
    			
    			
    			
-   		cudaMemcpy(d_X + (No_of_C180s + All_Cells)*192,  X_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-        	cudaMemcpy(d_Y + (No_of_C180s + All_Cells)*192,  Y_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-        	cudaMemcpy(d_Z + (No_of_C180s + All_Cells)*192,  Z_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   			cudaMemcpy(d_X + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  X_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  Y_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  Z_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
      			
-     		CudaErrorCheck();
-   	
-		cudaMemcpy(d_velListX + (No_of_C180s + All_Cells)*192,  velListX_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_velListY + (No_of_C180s + All_Cells)*192,  velListY_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells)*192,  velListZ_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-   	
-   		CudaErrorCheck();
- 
- 		cudaMemcpy(d_CMx + (No_of_C180s + All_Cells),  CMx_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_CMy + (No_of_C180s + All_Cells),  CMy_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_CMz + (No_of_C180s + All_Cells),  CMz_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+     			CudaErrorCheck();
    		
-   		CudaErrorCheck();
+			cudaMemcpy(d_velListX + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  velListX_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  velListY_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  velListZ_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + (No_of_C180s + All_Cells_EW + All_Cells_NS),  CMx_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + (No_of_C180s + All_Cells_EW + All_Cells_NS),  CMy_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + (No_of_C180s + All_Cells_EW + All_Cells_NS),  CMz_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   			CudaErrorCheck();
 
+		
+		} if(usePBCs) {
+		
+			
+			if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        				
+        			Ghost_Cells_Pack_PBC_X<<<Sending_Ghost_cells_Num_total_EW,192>>>(Sending_Ghost_cells_Num_total_EW, No_of_Ghost_cells_buffer[EAST],
+        											d_Ghost_Cells_ind_EAST_WEST, boxMax, R_ghost_buffer,
+        											d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        											d_CMx, d_CMy, d_CMz,
+												d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+												d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+												d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+
+				CudaErrorCheck();
+				
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+						cart_comm, 0, 0, 
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
+
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[WEST], No_of_Ghost_cells[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+						cart_comm, No_of_Ghost_cells_buffer[EAST], No_of_Ghost_cells[WEST],
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
+			
+			
+			
+			cudaMemcpy(d_X + No_of_C180s*192,  X_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + No_of_C180s*192,  Y_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + No_of_C180s*192,  Z_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + No_of_C180s*192,  velListX_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + No_of_C180s*192,  velListY_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + No_of_C180s*192,  velListZ_gc, 192*All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + No_of_C180s,  CMx_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + No_of_C180s,  CMy_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + No_of_C180s,  CMz_gc, All_Cells_EW*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+   			
+   			
+   			if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        			
+        			Ghost_Cells_Pack_PBC_Y<<<Sending_Ghost_cells_Num_total_NS,192>>>(Sending_Ghost_cells_Num_total_NS, No_of_Ghost_cells_buffer[NORTH],
+        											d_Ghost_Cells_ind_NORTH_SOUTH, boxMax, R_ghost_buffer,
+        											d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        											d_CMx, d_CMy, d_CMz,
+												d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+												d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+												d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+
+				CudaErrorCheck();
+				
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+			
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+						cart_comm, 0, 0, 
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
+
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[SOUTH], No_of_Ghost_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+						cart_comm, No_of_Ghost_cells_buffer[NORTH], No_of_Ghost_cells[SOUTH],
+			  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+			  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+			  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+			  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+			  			d_CMx, d_CMy, d_CMz);
+
+   			
+   			cudaMemcpy(d_X + (No_of_C180s + All_Cells_EW)*192,  X_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + (No_of_C180s + All_Cells_EW)*192,  Y_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + (No_of_C180s + All_Cells_EW)*192,  Z_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     			CudaErrorCheck();
+   	
+			cudaMemcpy(d_velListX + (No_of_C180s + All_Cells_EW)*192,  velListX_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + (No_of_C180s + All_Cells_EW)*192,  velListY_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells_EW)*192,  velListZ_gc, 192*All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   	
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + (No_of_C180s + All_Cells_EW),  CMx_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + (No_of_C180s + All_Cells_EW),  CMy_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + (No_of_C180s + All_Cells_EW),  CMz_gc, All_Cells_NS*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+
+
+			if ( Sending_Ghost_cells_Num_total_UD > 0 ){
+        			
+        			Ghost_Cells_Pack_PBC_Z<<<Sending_Ghost_cells_Num_total_UD,192>>>(Sending_Ghost_cells_Num_total_UD, No_of_Ghost_cells_buffer[UP],
+        											d_Ghost_Cells_ind_UP_DOWN, boxMax, R_ghost_buffer,
+        											d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+        											d_CMx, d_CMy, d_CMz,
+												d_X_gc_buffer, d_Y_gc_buffer, d_Z_gc_buffer, 
+												d_velListX_gc_buffer, d_velListY_gc_buffer, d_velListZ_gc_buffer,
+												d_CMx_gc_buffer, d_CMy_gc_buffer, d_CMz_gc_buffer);
+
+				CudaErrorCheck();
+				
+				cudaMemcpy(X_gc_buffer,  d_X_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Y_gc_buffer,  d_Y_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+        			cudaMemcpy(Z_gc_buffer,  d_Z_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   	
+				cudaMemcpy(velListX_gc_buffer,  d_velListX_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY_gc_buffer,  d_velListY_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ_gc_buffer,  d_velListZ_gc_buffer, 192*Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(CMx_gc_buffer,  d_CMx_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMy_gc_buffer,  d_CMy_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(CMz_gc_buffer,  d_CMz_gc_buffer, Sending_Ghost_cells_Num_total_UD*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+			
+			
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN], neighbours_ranks[UP], neighbours_ranks[DOWN], 25,
+						cart_comm, 0, 0, 
+			  			X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+			  			CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+			  			X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+			  			CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+			  			d_CMx, d_CMy, d_CMz);
+
+			Send_Recv_ghost_cells( No_of_Ghost_cells_buffer[DOWN], No_of_Ghost_cells[UP], neighbours_ranks[DOWN], neighbours_ranks[UP], 22,
+						cart_comm, No_of_Ghost_cells_buffer[UP], No_of_Ghost_cells[DOWN],
+				  		X_gc_buffer, Y_gc_buffer, Z_gc_buffer, velListX_gc_buffer, velListY_gc_buffer, velListZ_gc_buffer,
+				  		CMx_gc_buffer, CMy_gc_buffer, CMz_gc_buffer,
+				  		X_gc, Y_gc, Z_gc, velListX_gc, velListY_gc, velListZ_gc, CMx_gc,
+				  		CMy_gc, CMz_gc , d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ,
+				  		d_CMx, d_CMy, d_CMz);
+   			
+   			
+   			
+   			cudaMemcpy(d_X + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  X_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Y + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  Y_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+        		cudaMemcpy(d_Z + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  Z_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+     			
+     			CudaErrorCheck();
+   		
+			cudaMemcpy(d_velListX + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  velListX_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListY + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  velListY_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_velListZ + (No_of_C180s + All_Cells_EW + All_Cells_NS)*192,  velListZ_gc, 192*All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   		
+   			CudaErrorCheck();
+ 
+ 			cudaMemcpy(d_CMx + (No_of_C180s + All_Cells_EW + All_Cells_NS),  CMx_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMy + (No_of_C180s + All_Cells_EW + All_Cells_NS),  CMy_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_CMz + (No_of_C180s + All_Cells_EW + All_Cells_NS),  CMz_gc, All_Cells_UD*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   			CudaErrorCheck();
+
+		
+		}
+	
 	}
-
 	
 // ---------------------------------------------------------------------------------------------------
 
@@ -4029,7 +5925,7 @@ if (Restart == 0) {
       if (!colloidal_dynamics){      
       		
       		PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
-        	                                           d_Youngs_mod);
+        	                                           	d_Youngs_mod);
       		CudaErrorCheck(); 
       }
       
@@ -4066,7 +5962,7 @@ if (Restart == 0) {
  
  	if (useRigidSimulationBox){	
   	
-  		CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
+  		CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
         		                                             	d_X,  d_Y,  d_Z,
         	         	                                    	d_CMx, d_CMy, d_CMz,
                                		                      	d_XPin,  d_YPin,  d_ZPin,
@@ -4078,7 +5974,7 @@ if (Restart == 0) {
                                		                      	Xdiv, Ydiv, Zdiv, boxMax,
                                		                      	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                		                      	threshDist,
-										BoxMin, Subdivision_min, Youngs_mod,
+									BoxMin, Subdivision_min, Youngs_mod,
                                		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                		                      	impurity,f_range); 
                                                      	
@@ -4103,39 +5999,40 @@ if (Restart == 0) {
   
   	if(usePBCs){
   
-    		CalculateConForcePBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-                                          		           	d_X,  d_Y,  d_Z,
-                                                     		d_CMx, d_CMy, d_CMz,
-                                                     		d_XPin,  d_YPin,  d_ZPin,
-                                                     		d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                                                     		d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
-                                                     		attraction_strength, attraction_range,
-                                                     		repulsion_strength, repulsion_range,
-                                                     		d_viscotic_damp,
-                                                     		Xdiv, Ydiv, Zdiv, boxMax,
-                                                     		d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                                                     		threshDist,
-                                                     		BoxMin, Youngs_mod,
-                                                     		constrainAngles, d_theta0, d_fConList, d_ExtForces,
-                                                     		useRigidBoxZ,useRigidBoxY,impurity,f_range);
+  		
+  		CalculateConForceMultiGPUPBC<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
+        			                                             	d_X,  d_Y,  d_Z,
+        			                                             	d_CMx, d_CMy, d_CMz,
+                       		                              	d_XPin,  d_YPin,  d_ZPin,
+                       		                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
+                       		                              	d_R0,d_ScaleFactor, d_pressList, d_Youngs_mod , 
+                       		                              	attraction_strength, attraction_range,
+                       		                              	repulsion_strength, repulsion_range,
+                       		                              	d_viscotic_damp,
+                       		                              	Xdiv, Ydiv, Zdiv, boxMax, Subdivision_min,
+                       		                              	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                       		                              	threshDist,
+                       		                              	BoxMin, Youngs_mod,
+                       		                              	constrainAngles, d_theta0, d_fConList, d_ExtForces,
+                       		                              	useRigidBoxZ,useRigidBoxY,impurity,f_range);
                                                      	
        	CudaErrorCheck();                                             	
   	
   	                                                     	
-      		CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-                 	                                       	d_X, d_Y, d_Z,
-                       	                                 	d_CMx, d_CMy, d_CMz,
-                       	                              	d_XPin,  d_YPin,  d_ZPin,
-                       	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
-                       	                                 	internal_damping,
-                       	                                 	attraction_range,
-                       	                                 	d_viscotic_damp,
-                      		                                 	Xdiv, Ydiv, Zdiv,boxMax,
-                      		                                  	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                      	             		                     	d_velListX, d_velListY, d_velListZ,
-                                              	         	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
-    		CudaErrorCheck();	
-  
+      		CalculateDisForceMultiGPUPBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+                		                                        	d_X, d_Y, d_Z,
+                       		                                 	d_CMx, d_CMy, d_CMz,
+                       	         	                        	d_XPin,  d_YPin,  d_ZPin,
+                       	         	                        	d_CMxPin, d_CMyPin, d_CMzPin,
+                       	         	                        	internal_damping,
+                       	         	                        	attraction_range,
+                       	         	                        	d_viscotic_damp,
+                       	         	                        	Xdiv, Ydiv, Zdiv, boxMax, Subdivision_min,
+                       	         	                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                       	         	                        	d_velListX, d_velListY, d_velListZ,
+                       	         	                        	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
+    		CudaErrorCheck();
+
   	}
   	if(useLEbc){
   
@@ -4213,23 +6110,27 @@ if (Restart == 0) {
                	                                         	d_fDisList, impurity,f_range);
                                                         
        		CudaErrorCheck();                                                  
+  		
   		}
   		if(usePBCs){              	
       			
-      			CalculateDisForcePBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
-              	      	 	                                        	d_X, d_Y, d_Z,
-              			 	                                       d_CMx, d_CMy, d_CMz,
-										 d_XPin,  d_YPin,  d_ZPin,
-               	                               	       	 d_CMxPin, d_CMyPin, d_CMzPin,                	                                        
-               	 	                       	                internal_damping,
-               	 	                       	                attraction_range,
-                	 	                       	                d_viscotic_damp,
-                	 	                       	                Xdiv, Ydiv, Zdiv,boxMax,
-                	 	                       	                d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
-                	 	                       	                d_velListX, d_velListY, d_velListZ,
-                	                               		         d_fDisList,useRigidBoxZ,useRigidBoxY, impurity,f_range);
-    			CudaErrorCheck();	
-  
+      				
+      			CalculateDisForceMultiGPUPBC<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+                			                                        	d_X, d_Y, d_Z,
+                       			                                 	d_CMx, d_CMy, d_CMz,
+                       		         	                        	d_XPin,  d_YPin,  d_ZPin,
+                       		         	                        	d_CMxPin, d_CMyPin, d_CMzPin,
+                       		         	                        	internal_damping,
+                       		         	                        	attraction_range,
+                       		         	                        	d_viscotic_damp,
+                       		         	                        	Xdiv, Ydiv, Zdiv, boxMax, Subdivision_min,
+                       		         	                        	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
+                       		         	                        	d_velListX, d_velListY, d_velListZ,
+                       		         	                        	d_fDisList, useRigidBoxZ,useRigidBoxY,impurity,f_range);
+    			
+    			CudaErrorCheck();
+      			
+  		
   		}
   		if(useLEbc){
   	
@@ -4246,7 +6147,7 @@ if (Restart == 0) {
                		                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DLp, d_gamma_env,
                		                                         	d_velListX, d_velListY, d_velListZ,
                		                                         	d_fDisList, Pshift, Vshift, useRigidBoxZ, impurity,f_range);
-    		CudaErrorCheck();
+    			CudaErrorCheck();
   	
   		}
   	
@@ -4257,7 +6158,7 @@ if (Restart == 0) {
 // ------------------------------ Begin Cell Division ------------------------------------------------
    
    
-   if (step <= Time_steps && !colloidal_dynamics){
+   if (step <= Time_steps && !colloidal_dynamics) {
    
   	if (No_of_C180s > 0 ){
         		
@@ -4327,6 +6228,7 @@ if (Restart == 0) {
 		
 	if (countCells) {
 
+        	int temp = num_cell_div;
         		
         	if (countOnlyInternal == 1){
         
@@ -4379,17 +6281,17 @@ if (Restart == 0) {
        		 }
         
         
-          		num_cell_div -= num_cells_far();
+          		temp -= num_cells_far();
           
         	}
 			
 			
 		int num_cell_div_All;
-		MPI_Reduce(&num_cell_div, &num_cell_div_All, 1, MPI_INT, MPI_SUM, 0, cart_comm);
+		MPI_Reduce(&temp, &num_cell_div_All, 1, MPI_INT, MPI_SUM, 0, cart_comm);
         		
         	if (rank == 0){
         			
-        		num_new_cells_per_step[step-1] = num_cell_div;
+        		num_new_cells_per_step[step-1] = num_cell_div_All;
         	
         		if (step%newCellCountInt == 0){
           			newcells = 0;
@@ -4439,38 +6341,7 @@ if (Restart == 0) {
   }
         // --------------------------------------- End Cell Division -----------
 
-
- 
-   if (No_of_C180s > 0 ){
-
-   	if(usePBCs && (step)%2000 == 0){
-
-      		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-		CudaErrorCheck();
-        
-        	CoorUpdatePBC <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-        	                                                  d_CMx, d_CMy, d_CMz,
-        	                                                  boxMax, divVol, No_of_C180s,
-        	                                                  useRigidBoxZ, useRigidBoxY);
-
-        	CudaErrorCheck();
-        }
-        
-   	if(useLEbc && step%1000 == 0){
-
-      		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-      		
-      		CudaErrorCheck();
-	
-        	UpdateLEbc <<<No_of_C180s, threadsperblock>>> (d_X, d_Y, d_Z,
-        	                				 d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz,
-        	                				 boxMax, divVol, No_of_C180s, Pshift, Vshift, useRigidBoxZ);
-		CudaErrorCheck();
-	}
-
-
-   }
-       
+   
    if (!growthDone && step > Time_steps+1){
           
           printf("Cell growth halted.\nProceeding with MD simulation without growth...\n");
@@ -4559,8 +6430,7 @@ if (Restart == 0) {
                   
                   	CudaErrorCheck();
 
-		   }	
-//		   h_SCM = d_SCM;	
+		   }		
                   
                   if (nprocs > 1){        
 		
@@ -4617,7 +6487,7 @@ if (Restart == 0) {
    
    if (correct_com == true){
 
-	if(No_of_C180s){
+	if(No_of_C180s > 0 ){
       		
       		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                		                  d_X, d_Y, d_Z,
@@ -4668,7 +6538,7 @@ if (Restart == 0) {
         
         }
       
-        if(No_of_C180s){
+        if(No_of_C180s > 0){
       		
       		CorrectCoMMotion<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_X, d_Y, d_Z,
                	                                              d_sysCM, BoxCen,
@@ -4686,7 +6556,7 @@ if (Restart == 0) {
    }
    if ( correct_Vcom == true ){
      
-     	if(No_of_C180s){
+     	if(No_of_C180s > 0){
      	
        	VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
                	                           	    d_velListX, d_velListY, d_velListZ,
@@ -4735,17 +6605,16 @@ if (Restart == 0) {
         	//if( step%1000 == 0) printf("Cx:	%f, Cy:	%f, Cz:	%f\n", *h_sysVCM.x, *h_sysVCM.y, *h_sysVCM.z); 
         
         }
-	if(No_of_C180s){
+	if(No_of_C180s > 0){
 
         	CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(d_velListX, d_velListY, d_velListZ,
                	                                                  d_sysVCM,
                	                                                  No_of_C180s*192);
    	}
    
-   }
-
    
-      
+   }
+   
       
    if ( step%trajWriteInt == 0 )
    {
@@ -4837,12 +6706,13 @@ if (Restart == 0) {
     		}
     	}		   
       	
-      	} 
-      	myError = cudaGetLastError();
-     	if ( cudaSuccess != myError )
-      	{
-       	printf( "Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
-      	}
+  } 
+  myError = cudaGetLastError();
+  if ( cudaSuccess != myError )
+  {
+       printf( "Error %d: %s!\n",myError,cudaGetErrorString(myError) );return(-1);
+  }
+  
   }
 
   
@@ -4912,6 +6782,9 @@ if (Restart == 0) {
 
   }
   
+  
+  
+   
   if ( writeRestartFile(step + Laststep, frameCount + Lastframe) != 0 ){
  	printf("Unable to call Restart Kernel. \n");
 	return(-1);
@@ -5036,12 +6909,17 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   	float AllCMsY[Orig_Cells];
   	float AllCMsZ[Orig_Cells];
   	
-  	float3 allCMsPin[Imp_Cells];
-  	float AllCMsPinX[Imp_Cells];
-  	float AllCMsPinY[Imp_Cells];
-  	float AllCMsPinZ[Imp_Cells];
-  	
-  	
+  	int impNum;
+  	if(usePBCs)  	
+		impNum = 2*Imp_Cells;
+  	else
+  		impNum = Imp_Cells;
+  		
+  	float3 allCMsPin[impNum];
+  	float AllCMsPinX[impNum];
+  	float AllCMsPinY[impNum];
+  	float AllCMsPinZ[impNum];
+	
 	if (colloidal_dynamics) ShapeScaler(initx,inity,initz);
 
   	float rCheck = powf(0.75*(1.f/3.14159)*0.786, 1.f/3.f); // this code is magical
@@ -5432,18 +7310,92 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 		}
 		
 		
-
-		for (int i = 0; i < Orig_Cells; i++) {
+		if(impurity){
 			
-			AllCMsX[i] = allCMs[i].x;		
-			AllCMsY[i] = allCMs[i].y;
-			AllCMsZ[i] = allCMs[i].z;
 			
-		}
-
-
-	   	if(impurity){
-
+			if(usePBCs){
+				
+				
+				int k = 0;
+				for (int i = 0; i < Imp_Cells; i++) {
+					
+					if(allCMsPin[i].x < 1.5){
+						
+						allCMsPin[Imp_Cells+k].x = allCMsPin[i].x + boxMax.x;
+						allCMsPin[Imp_Cells+k].y = allCMsPin[i].y;
+						allCMsPin[Imp_Cells+k].z = allCMsPin[i].z;
+						
+						k++;
+					
+					} else if(allCMsPin[i].x > boxMax.x - 1.5){
+						
+						allCMsPin[Imp_Cells+k].x = allCMsPin[i].x - boxMax.x;
+						allCMsPin[Imp_Cells+k].y = allCMsPin[i].y;
+						allCMsPin[Imp_Cells+k].z = allCMsPin[i].z;
+						
+						k++;
+					}
+				
+				}
+				
+				Imp_Cells += k;
+				
+				if (!useRigidBoxY){
+				
+					int k = 0;
+					for (int i = 0; i < Imp_Cells; i++) {
+					
+						if(allCMsPin[i].y < 1.5){
+						
+							allCMsPin[Imp_Cells+k].x = allCMsPin[i].x;
+							allCMsPin[Imp_Cells+k].y = allCMsPin[i].y + boxMax.y;
+							allCMsPin[Imp_Cells+k].z = allCMsPin[i].z;
+							
+							k++;
+					
+						}else if(allCMsPin[i].y > boxMax.y - 1.5){
+							
+							allCMsPin[Imp_Cells+k].x = allCMsPin[i].x;
+							allCMsPin[Imp_Cells+k].y = allCMsPin[i].y - boxMax.y;
+							allCMsPin[Imp_Cells+k].z = allCMsPin[i].z;
+							
+							k++;
+						}
+				
+					}
+				
+					Imp_Cells +=k;
+				}
+				
+				if (!useRigidBoxZ){
+				
+					int k = 0;
+					for (int i = 0; i < Imp_Cells; i++) {
+					
+						if(allCMsPin[i].z < 1.5){
+						
+							allCMsPin[Imp_Cells+k].x = allCMsPin[i].x;
+							allCMsPin[Imp_Cells+k].y = allCMsPin[i].y;
+							allCMsPin[Imp_Cells+k].z = allCMsPin[i].z + boxMax.z;
+							
+							k++;
+					
+						}else if(allCMsPin[i].z > boxMax.z - 1.5){
+							
+							allCMsPin[Imp_Cells+k].x = allCMsPin[i].x;
+							allCMsPin[Imp_Cells+k].y = allCMsPin[i].y;
+							allCMsPin[Imp_Cells+k].z = allCMsPin[i].z - boxMax.z;
+							
+							k++;
+						}
+				
+					}
+				
+					Imp_Cells +=k;
+				}
+				
+			}
+				
 			for (int i = 0; i < Imp_Cells; i++) {
 			
 				AllCMsPinX[i] = allCMsPin[i].x;		
@@ -5457,8 +7409,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   			if (Restart == 0 ) {
   			
   				trajPin = fopen ("inpPin.xyz", "w");
-		
-				int t = *impurityNum;		
+			
+				int t = Imp_Cells;		
 
 	      			fwrite(&t, sizeof(int), 1, trajPin);
 				
@@ -5475,6 +7427,21 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
     				} 	      			
 	      			 
    			}
+		
+		}
+		
+		for (int i = 0; i < Orig_Cells; i++) {
+			
+			AllCMsX[i] = allCMs[i].x;		
+			AllCMsY[i] = allCMs[i].y;
+			AllCMsZ[i] = allCMs[i].z;
+			
+		}
+
+
+	   	if(impurity){
+
+
    		}
 
 	}
@@ -5487,6 +7454,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	
 		if ( Imp_Cells > 0){
 	
+			MPI_Bcast(&Imp_Cells, 1 , MPI_INT, 0, cart_comm);
 			MPI_Bcast(AllCMsPinX, Imp_Cells, MPI_FLOAT, 0, cart_comm);
 			MPI_Bcast(AllCMsPinY, Imp_Cells, MPI_FLOAT, 0, cart_comm);
 			MPI_Bcast(AllCMsPinZ, Imp_Cells, MPI_FLOAT, 0, cart_comm);
@@ -5623,9 +7591,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
    			int k = 0;
    			for (int cellInd = 0; cellInd < Imp_Cells; cellInd++){
        		
-       			if ( AllCMsPinX[cellInd] > Subdivision_min.x - 1.0  && AllCMsPinX[cellInd] < Subdivision_max.x  + 1.0){
-       				if ( AllCMsPinY[cellInd] > Subdivision_min.y - 1.0 && AllCMsPinY[cellInd] < Subdivision_max.y + 1.0){
-       					if ( AllCMsPinZ[cellInd] > Subdivision_min.z - 1.0  && AllCMsPinZ[cellInd] < Subdivision_max.z + 1.0){
+       			if ( AllCMsPinX[cellInd] > Subdivision_min.x - 1.5  && AllCMsPinX[cellInd] < Subdivision_max.x  + 1.5){
+       				if ( AllCMsPinY[cellInd] > Subdivision_min.y - 1.5 && AllCMsPinY[cellInd] < Subdivision_max.y + 1.5){
+       					if ( AllCMsPinZ[cellInd] > Subdivision_min.z - 1.5  && AllCMsPinZ[cellInd] < Subdivision_max.z + 1.5){
 						
        						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
                			   			XPin[k*192 + nodeInd] = initx[nodeInd] + AllCMsPinX[cellInd];
@@ -7141,8 +9109,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 	
             		if (i == 0){
             			
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);
+            			fwrite(&i, sizeof(int), 1, trajFile);
+            			//fwrite(&CellINdex[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -7157,8 +9125,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1) {
             		
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			fwrite(&i, sizeof(int), 1, trajFile);
+            			//fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
@@ -7181,8 +9149,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 
             		if(i == 0) {
 
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
+            			fwrite(&i, sizeof(int), 1, trajFile);
+            			//fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
 							
 				fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -7190,8 +9158,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1){
             			
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			fwrite(&i, sizeof(int), 1, trajFile);
+            			//fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
@@ -7307,9 +9275,9 @@ int ReadPinFile(){
      	   	int k = 0;
    		for (int cellInd = 0; cellInd < impurityNum; cellInd++){
        		
-       		if ( allCMsX[cellInd] >= Subdivision_min.x - 1.0  && allCMsX[cellInd] < Subdivision_max.x + 1.0 ){
-       			if ( allCMsY[cellInd] >= Subdivision_min.y - 1.0  && allCMsY[cellInd] < Subdivision_max.y + 1.0 ){
-       				if ( allCMsZ[cellInd] >= Subdivision_min.z - 1.0  && allCMsZ[cellInd] < Subdivision_max.z + 1.0 ){
+       		if ( allCMsX[cellInd] >= Subdivision_min.x - 1.5  && allCMsX[cellInd] < Subdivision_max.x + 1.5 ){
+       			if ( allCMsY[cellInd] >= Subdivision_min.y - 1.5  && allCMsY[cellInd] < Subdivision_max.y + 1.5 ){
+       				if ( allCMsZ[cellInd] >= Subdivision_min.z - 1.5  && allCMsZ[cellInd] < Subdivision_max.z + 1.5 ){
 						
        					for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
                			   		XPin[k*192 + nodeInd] = initx[nodeInd] + allCMsX[cellInd];
@@ -7817,7 +9785,7 @@ int writeRestartFile(int t_step, int frameCount){
         				Ap = Apo_rate_OtherGPU[c];
         				sq = squeeze_rate_OtherGPU[c];
         				ge = gamma_env_OtherGPU[c];
-        				vd =  viscotic_damp_OtherGPU[c];
+        				vd = viscotic_damp_OtherGPU[c];
         				I = CellINdex_OtherGPU[c];
         		
 					fwrite(&p, sizeof(float), 1, Restartfile);
@@ -7976,18 +9944,56 @@ int ReadRestartFile(){
    	for (int c = 0; c < Orig_Cells; c++) Owning[c] = 0; 
    	
    	int k = 0;
-   	for (int c = 0; c < Orig_Cells; c++){
+   	
+   	if( useRigidSimulationBox ){
+   	
+   		for (int c = 0; c < Orig_Cells; c++){
    		
-   		if(allCMsX[c] >= Subdivision_min.x  && allCMsX[c] < Subdivision_max.x ){
-       		if ( allCMsY[c] >= Subdivision_min.y && allCMsY[c] < Subdivision_max.y ){
-       			if ( allCMsZ[c] >= Subdivision_min.z && allCMsZ[c] < Subdivision_max.z ){
-						
-					Owning[c] = 1;	
+   			if(allCMsX[c] >= Subdivision_min.x  && allCMsX[c] < Subdivision_max.x ){
+       			if ( allCMsY[c] >= Subdivision_min.y && allCMsY[c] < Subdivision_max.y ){
+       				if ( allCMsZ[c] >= Subdivision_min.z && allCMsZ[c] < Subdivision_max.z ){
+							
+						Owning[c] = 1;	
        					
        				k++; 
+   					}
    				}
-   			}
-       	}
+       		}
+   		}
+   	}
+   	
+   	if (usePBCs){
+   				
+   		float MinX = Subdivision_min.x;
+   		float MinY = Subdivision_min.y;
+   		float MinZ = Subdivision_min.z;
+   		float MaxX = Subdivision_max.x;
+   		float MaxY = Subdivision_max.y;
+   		float MaxZ = Subdivision_max.z;
+   		
+   		if( Subdivision_min.x == 0) MinX -= 0.2;
+   		if( Subdivision_min.y == 0) MinY -= 0.2;
+   		if( Subdivision_min.z == 0) MinZ -= 0.2;
+   		
+   		if( Subdivision_max.x == boxMax.x) MaxX += 0.2;
+   		if( Subdivision_max.y == boxMax.y) MaxY += 0.2;
+   		if( Subdivision_max.z == boxMax.z) MaxZ += 0.2;
+
+   		for (int c = 0; c < Orig_Cells; c++){
+
+			if(allCMsX[c] >= MinX  && allCMsX[c] < MaxX ){
+       			if ( allCMsY[c] >= MinY && allCMsY[c] < MaxY ){
+       				if ( allCMsZ[c] >= MinZ && allCMsZ[c] < MaxZ ){
+						
+						Owning[c] = 1;	
+       					
+       						k++; 
+   					}
+   				}
+       		}	   		
+       			   			
+   		}
+		
    	}
    	
    	No_of_threads = k;	

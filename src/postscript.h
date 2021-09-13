@@ -33,8 +33,8 @@ __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz
                            int *d_NoofNNlistPin, int *d_NNlistPin, float DL);
 
 __global__ void makeNNlistPBCPin(int impurityNum, float *CMx, float *CMy,float *CMz,
-                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
-                           int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
+                           int *d_NoofNNlistPin, int *d_NNlistPin, float DL, bool useRigidBoxZ,bool useRigidBoxY);
 
                            
 __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float *CMz,
@@ -42,7 +42,7 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
                            int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
-__global__ void makeNNlistMultiGpu(int No_of_C180s, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+__global__ void makeNNlistMultiGpu(int No_of_C180s, float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
@@ -53,6 +53,12 @@ __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
 
+__global__ void makeNNlistMultiGpuPBC( int No_of_C180s, float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
+                           int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
+                           int* d_Ghost_Cells_ind_EAST, int* d_Ghost_Cells_ind_WEST, int* d_Ghost_Cells_ind_NORTH, int* d_Ghost_Cells_ind_SOUTH,
+                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN );
                            
 __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
@@ -120,12 +126,28 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax, float3 Subdivision_min,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
                            float3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
                            bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
+
+__global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+                           	float d_X[],  float d_Y[],  float d_Z[],
+                           	float *d_CMx, float *d_CMy, float *d_CMz,
+                           	float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           	float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                   
+                           	float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
+                           	float attraction_strength, float attraction_range,
+                           	float repulsion_strength, float repulsion_range,
+                           	float* d_viscotic_damp,
+                           	int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
+                           	int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
+                           	float threshDist, 
+                           	float3 BoxMin, float Youngs_mod, 
+                           	bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
+                           	bool useRigidBoxZ, bool useRigidBoxY,bool impurity, float f_range);
                            
 __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
@@ -254,10 +276,24 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
+                                   int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
+
+
+__global__ void CalculateDisForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+                                   	float d_X[],  float d_Y[],  float d_Z[],
+                                   	float *d_CMx, float *d_CMy, float *d_CMz,
+                           	    	float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           	    	float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                                   
+                                   	float gamma_int,
+                                   	float attraction_range,
+                                   	float* d_viscotic_damp,
+                                   	int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
+                                   	int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
+                                   	float* d_velListX, float* d_velListY, float* d_velListZ,
+                                   	R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
                                    
 __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
@@ -339,7 +375,7 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
  				
 
 __global__ void ghost_cells_finder_Auxiliary(int No_of_C180s, int All_Cells, float *d_CM , 
-						float Sub_max, float Sub_min,
+						float Sub_max, float Sub_min, float R_ghost_buffer,
 						int* d_counter_gc_r, int* d_counter_gc_l,
                          			int* d_Ghost_Cells_ind_R, int* d_Ghost_Cells_ind_L);
 
@@ -350,11 +386,38 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
 				float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
                               float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
                               float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
+
+__global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+					float *d_X,  float *d_Y,  float *d_Z,
+                               	float* d_velListX, float* d_velListY, float* d_velListZ,
+                               	float* d_CMx, float* d_CMy, float* d_CMz,
+					float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
+                              	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
+                              	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
+                            
+__global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+					float *d_X,  float *d_Y,  float *d_Z,
+                               	float* d_velListX, float* d_velListY, float* d_velListZ,
+                               	float* d_CMx, float* d_CMy, float* d_CMz,
+					float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
+                              	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
+                              	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
+                              	
+__global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+					float *d_X,  float *d_Y,  float *d_Z,
+                               	float* d_velListX, float* d_velListY, float* d_velListZ,
+                               	float* d_CMx, float* d_CMy, float* d_CMz,
+					float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
+                              	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
+                              	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
                               
 __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                            int *d_NoofNNlist, int *d_NNlist, float DL); 
-                           
+                             
+__global__ void UpdateNNlistWithGhostCellsPBC(int No_of_C180s, int All_Cells, float *d_CMx, float *d_CMy,float *d_CMz,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 boxMax,
+                           int *d_NoofNNlist, int *d_NNlist, float DL);
 
 __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig,
@@ -369,10 +432,60 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer);
-      
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+
+__global__ void migrated_Cells_Remove_PackPBC_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+   						float *d_X,  float *d_Y,  float *d_Z,
+                               		float* d_velListX, float* d_velListY, float* d_velListZ,
+                               		float* d_CMx, float* d_CMy, float* d_CMz,
+                               		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               		float* d_Apo_rate, float* d_squeeze_rate,
+						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
+                               		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
+                               		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
+                               		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
+                               		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+                               		
+__global__ void migrated_Cells_Remove_PackPBC_Y(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+   						float *d_X,  float *d_Y,  float *d_Z,
+                               		float* d_velListX, float* d_velListY, float* d_velListZ,
+                               		float* d_CMx, float* d_CMy, float* d_CMz,
+                               		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               		float* d_Apo_rate, float* d_squeeze_rate,
+						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
+                               		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
+                               		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
+                               		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
+                               		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+
+__global__ void migrated_Cells_Remove_PackPBC_Z(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+   						float *d_X,  float *d_Y,  float *d_Z,
+                               		float* d_velListX, float* d_velListY, float* d_velListZ,
+                               		float* d_CMx, float* d_CMy, float* d_CMz,
+                               		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               		float* d_Apo_rate, float* d_squeeze_rate,
+						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
+                               		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
+                               		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
+                               		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
+                               		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);      
 
 __global__ void migrated_cells_finder(int No_of_C180s, float *d_CM,
+                         		float Sub_max, float Sub_min, float BMin, float BMax,
+                         		int* d_counter_mc_r, int* d_counter_mc_l,
+                         		int* d_migrated_cells_ind_R, int* d_migrated_cells_ind_L,
+                         		char* d_cell_mig);
+
+__global__ void migrated_cells_finderPBC(int No_of_C180s, float *d_CM,
                          		float Sub_max, float Sub_min, float BMin, float BMax,
                          		int* d_counter_mc_r, int* d_counter_mc_l,
                          		int* d_migrated_cells_ind_R, int* d_migrated_cells_ind_L,
@@ -400,4 +513,5 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 			     float* squeeze_rate_mc_buffer, int* CellINdex_mc_buffer,	
 			     float* X_mc, float* Y_mc, float* Z_mc, float* velListX_mc,
 			     float* velListY_mc, float* velListZ_mc,float* CMx_mc, float* CMy_mc, float* CMz_mc, float* ScaleFactor_mc, float* Youngs_mod_mc, float* Growth_rate_mc,
-			     float* DivisionVolume_mc, float* gamma_env_mc, float* viscotic_damp_mc, float* pressList_mc,float* Apo_rate_mc, float* squeeze_rate_mc, int* CellINdex_mc);
+			     float* DivisionVolume_mc, float* gamma_env_mc, float* viscotic_damp_mc, float* pressList_mc,float* Apo_rate_mc, float* squeeze_rate_mc, int* CellINdex_mc,
+			     bool colloidal_dynamics);
