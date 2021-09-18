@@ -559,11 +559,11 @@ int main(int argc, char *argv[])
 
   if (nprocs > 1) MPI_Barrier(cart_comm);
 
-  //int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
-  //idev = local_rank;
+  int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+  idev = local_rank;
     
-  idev = rank%4; 
-  //printf("local rank=%d: and idev %d\n", local_rank, idev);
+  //idev = rank%4; 
+  printf("local rank=%d: and idev %d\n", local_rank, idev);
   cudaSetDevice(idev);
   cudaDeviceProp deviceProp = getDevice(idev);  
  
@@ -9033,8 +9033,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 	
             		if (i == 0){
             			
-            			fwrite(&i, sizeof(int), 1, trajFile);
-            			//fwrite(&CellINdex[c], sizeof(int), 1, trajFile);
+            			//fwrite(&i, sizeof(int), 1, trajFile);
+            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -9049,8 +9049,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1) {
             		
-            			fwrite(&i, sizeof(int), 1, trajFile);
-            			//fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			//fwrite(&i, sizeof(int), 1, trajFile);
+            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
@@ -9076,8 +9076,9 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 				//int r = 0;
 				//if (c >= No_of_C180s) r = 1; 
             			//fwrite(&r, sizeof(int), 1, trajFile);
-            			fwrite(&i, sizeof(int), 1, trajFile);
-            			//fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
+            			
+            			//fwrite(&i, sizeof(int), 1, trajFile);
+            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
 							
 				fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -9085,8 +9086,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1){
             			
-            			fwrite(&i, sizeof(int), 1, trajFile);
-            			//fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			//fwrite(&i, sizeof(int), 1, trajFile);
+            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
