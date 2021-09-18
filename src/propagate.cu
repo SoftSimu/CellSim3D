@@ -202,12 +202,11 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float threshDist, 
                            float3 BoxMin, float3 Subdivision_min, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
-                           bool impurity, float f_range)
+                           bool impurity, float f_range,
+                           bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX)
 {
-    // __shared__ curandState rngState;
-    // if (threadIdx.x == 0){
-    //     rngState = rngStates[threadIdx.x + blockDim.x*blockIdx.x];
-    // }
+
+
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
         __shared__ float FY_sum;
@@ -227,41 +226,27 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 #endif
 
 
-
-    int rank, atom, nn_rank, nn_atom;
-    rank = blockIdx.x;
-    atom = threadIdx.x;
-  
-    	//int N1, N2, N3;
-    	//float A1, A2, A3;
-    	//float B1, B2, B3;
-    	//float TX, TY, TZ;
-    	//float NORM;     	
-    	//float NX, NY, NZ;
-    	//float setPress;
-
-    	//float3 disForce = make_float3(0, 0, 0);
-
-    	int cellOffset = rank*192;
-    	int atomInd = cellOffset + atom;    	
+    	int rank = blockIdx.x;
+    	int atom = threadIdx.x;
+    	int atomInd = rank*192 + atom;    	
     	
     	
     	if ( rank < No_of_C180s && atom < 180 )
     	{
 
 
-    	int NooflocalNN;
-    	int localNNs[5];
-    	float deltaX, deltaY, deltaZ;
-    	float R;
-    	int N1;
-    	
-
-    	
-    	float R0=0;
-    	float Pressure = d_pressList[rank];
-    	float stiffness = d_stiffness[rank];
-    	float Scale = d_ScaleFactor[rank];
+    		int NooflocalNN;
+    		int localNNs[6];
+    		float deltaX, deltaY, deltaZ;
+    		float R;
+    		int N1;
+    		int nn_rank;
+    		float R0=0;
+    		
+    		float Pressure = d_pressList[rank];
+    		float stiffness = d_stiffness[rank];
+    		float Scale = d_ScaleFactor[rank];
+    			
     	
         	if (isnan(d_X[rank*192+atom]) ||
         	    isnan(d_Y[rank*192+atom]) || 
@@ -272,31 +257,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    asm("trap;"); 
         	}
 
-        	 
-        	// printf("stiffness: %f\n", stiffness);
-        	// asm("trap;"); 
-        
-       	//N1 = d_C180_nn[  0+atom];
-       	//N2 = d_C180_nn[192+atom];
-        	//N3 = d_C180_nn[384+atom];
-
-        	//A1 = d_X[rank*192+N2]-d_X[rank*192+N1];
-        	//A2 = d_Y[rank*192+N2]-d_Y[rank*192+N1];
-        	//A3 = d_Z[rank*192+N2]-d_Z[rank*192+N1];
-
-        	//B1 = d_X[rank*192+N3]-d_X[rank*192+N1];
-        	//B2 = d_Y[rank*192+N3]-d_Y[rank*192+N1];
-        	//B3 = d_Z[rank*192+N3]-d_Z[rank*192+N1];
-
-        	//TX = A2*B3-A3*B2;
-        	//TY = A3*B1-A1*B3;
-        	//TZ = A1*B2-A2*B1;
-
-        	//NORM = sqrt(TX*TX+TY*TY+TZ*TZ);
-
-        	//NX = d_C180_sign[atom]*TX/NORM;
-        	//NY = d_C180_sign[atom]*TY/NORM;
-        	//NZ = d_C180_sign[atom]*TZ/NORM;
 
         	float X = d_X[rank*192+atom];
         	float Y = d_Y[rank*192+atom];
@@ -310,10 +270,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	float FZ_ext = 0.f;
 
         	int nnAtomInd;
-        
 
-        	//  Spring Force calculation within cell
-        	//  go through three nearest neighbors
 
         	for ( int i = 0; i < 3 ; ++i ) // Better to open this loop
         	{
@@ -377,7 +334,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	NooflocalNN = 0;
         
 
-
         	int posX = (int)((X - Subdivision_min.x)/DL);
         	if ( posX < 0 ) posX = 0;
         	if ( posX > Xdiv-1 ) posX = Xdiv-1;
@@ -391,7 +347,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	int posZ = (int)((Z - Subdivision_min.z)/DL);
         	if ( posZ < 0 ) posZ = 0;
         	if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
-        
         
 
         	int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
@@ -418,7 +373,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	            ++NooflocalNN;
 
-	            //printf("NooflocalNN %d\n", NooflocalNN);
 
 	            if ( NooflocalNN > MAX_NN ){
 	                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
@@ -433,7 +387,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	        	nn_rank =localNNs[i];
         	    	nnAtomInd = nn_rank*192;
 
-            		for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            		for (int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             		{
                		 nnAtomInd += nn_atom;
 
@@ -449,12 +403,11 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
                		 R = sqrt(R);
 
-               		 if ( R < attraction_range )
-               		 {
-               		     contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
-               		     contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
-               		     contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
-               		 }
+               		 contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+               		 contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+               		 contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+
+
                		 if ( R <= repulsion_range )
                		 {
                		     //if (R < (repulsion_range-0.01)) R = repulsion_range-0.01; 
@@ -492,7 +445,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	            		if ( NooflocalNN > MAX_NN ){
 	                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-	                		//printf("posX:	%d, posy:	%d, posz:	%d\n", posX, posY,posZ);
 	                		continue;
 	            		}
 
@@ -505,7 +457,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	        		nn_rank =localNNs[i];
         	    		nnAtomInd = nn_rank*192;
 
-            			for ( nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+            			for (int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             			{
                			
                			nnAtomInd += nn_atom;
@@ -574,47 +526,112 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 #endif
         	// add forces from simulation box if needed:
-        	float gap1, gap2; 
+        	
+        	if (useRigidSimulationBox){
+        	
+        		float gap1, gap2; 
 
-        	gap1 = X - BoxMin.x;
-       	gap2 = boxMax.x - X; 
+        		gap1 = X - BoxMin.x;
+       		gap2 = boxMax.x - X; 
 
-        	if (gap1 < threshDist){
-            		FX += -100*Youngs_mod*(gap1 - threshDist);
-            		FX_ext += -100*Youngs_mod*(gap1 - threshDist);
-        	}
+        		if (gap1 < threshDist){
+            			FX += -100*Youngs_mod*(gap1 - threshDist);
+            			FX_ext += -100*Youngs_mod*(gap1 - threshDist);
+        		}
 
-        	if (gap2 < threshDist){
-            		FX += 100*Youngs_mod*(gap2 - threshDist);
-            		FX_ext += 100*Youngs_mod*(gap2 - threshDist);
-        	}
+        		if (gap2 < threshDist){
+            			FX += 100*Youngs_mod*(gap2 - threshDist);
+            			FX_ext += 100*Youngs_mod*(gap2 - threshDist);
+        		}
             
-        	gap1 = Y - BoxMin.y;
-        	gap2 = boxMax.y - Y;
+        		gap1 = Y - BoxMin.y;
+        		gap2 = boxMax.y - Y;
 
-        	if (gap1 < threshDist){
-            		FY += -100*Youngs_mod*(gap1 - threshDist);
-            		FY_ext += -100*Youngs_mod*(gap1 - threshDist);
-        	}
+        		if (gap1 < threshDist){
+            			FY += -100*Youngs_mod*(gap1 - threshDist);
+            			FY_ext += -100*Youngs_mod*(gap1 - threshDist);
+        		}
 
-        	if (gap2 < threshDist){
-            		FY += 100*Youngs_mod*(gap2 - threshDist);
-            		FY_ext += 100*Youngs_mod*(gap2 - threshDist);
-        	}
+        		if (gap2 < threshDist){
+            			FY += 100*Youngs_mod*(gap2 - threshDist);
+            			FY_ext += 100*Youngs_mod*(gap2 - threshDist);
+        		}
 
-        	gap1 = Z - BoxMin.z;
-        	gap2 = boxMax.z - Z;
+        		gap1 = Z - BoxMin.z;
+        		gap2 = boxMax.z - Z;
 	
-        	if (gap1 < threshDist){
-            		FZ += -100*Youngs_mod*(gap1 - threshDist);
-            		FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
-        	}
+        		if (gap1 < threshDist){
+            			FZ += -100*Youngs_mod*(gap1 - threshDist);
+            			FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
+        		}
 	
-        	if (gap2 < threshDist){
-            		FZ += 100*Youngs_mod*(gap2 - threshDist);
-            		FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
-        	}
+        		if (gap2 < threshDist){
+            			FZ += 100*Youngs_mod*(gap2 - threshDist);
+            			FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
+        		}
+	
+		} else {
+		
+		        if (useRigidBoxZ){
+            
+            			float gap1, gap2; 
 
+            			gap1 = Z;
+            			gap2 = boxMax.z - Z;
+
+            			if (gap1 < threshDist){
+               			FZ += -100*Youngs_mod*(gap1 - threshDist);
+                			FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
+            			}
+
+            			if (gap2 < threshDist){
+                			FZ += 100*Youngs_mod*(gap2 - threshDist);
+                			FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
+            			}
+
+        		}
+        
+        		if (useRigidBoxY){
+        
+            			float gap1, gap2; 
+
+            			gap1 = Y;
+            			gap2 = boxMax.y - Y;
+
+            			if (gap1 < threshDist){
+                			FY += -100*Youngs_mod*(gap1 - threshDist);
+               			FY_ext += -100*Youngs_mod*(gap1 - threshDist);
+                
+            			}
+
+            			if (gap2 < threshDist){
+                			FY += 100*Youngs_mod*(gap2 - threshDist);
+                			FY_ext += 100*Youngs_mod*(gap2 - threshDist);
+            			}
+
+        		}
+        
+        		if (useRigidBoxX){
+        
+            			float gap1, gap2; 
+
+            			gap1 = X;
+            			gap2 = boxMax.x - X;
+
+            			if (gap1 < threshDist){
+                			FX += -100*Youngs_mod*(gap1 - threshDist);
+                			FX_ext += -100*Youngs_mod*(gap1 - threshDist);
+                
+            			}
+
+            			if (gap2 < threshDist){
+                			FX += 100*Youngs_mod*(gap2 - threshDist);
+                			FX_ext += 100*Youngs_mod*(gap2 - threshDist);
+            			}
+
+        	       }
+		
+		}
         
 
         	d_forceList.x[atomInd] = FX;
@@ -626,6 +643,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
        	d_ExtForces.z[atomInd] = FZ_ext;
    	}
 }
+
 
 
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -675,15 +693,15 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
     {
     
     
-    int NooflocalNN;
-    int localNNs[5];
-    float deltaX, deltaY, deltaZ;
-    float R;
-    int N1;
+    	int NooflocalNN;
+    	int localNNs[6];
+    	float deltaX, deltaY, deltaZ;
+    	float R;
+    	int N1;
     
-    float Pressure = d_pressList[rank]; 
-    float stiffness = d_stiffness[rank];
-    float Scale = d_ScaleFactor[rank];
+    	float Pressure = d_pressList[rank]; 
+    	float stiffness = d_stiffness[rank];
+    	float Scale = d_ScaleFactor[rank];
     
         if (isnan(d_X[rank*192+atom]) ||
             isnan(d_Y[rank*192+atom]) || 
@@ -709,10 +727,6 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
 
         int nnAtomInd;
         
-
-
-        //  Spring Force calculation within cell
-        //  go through three nearest neighbors
 
         for ( int i = 0; i < 3 ; ++i ) // Better to open this loop
         {
@@ -1072,12 +1086,10 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
                            	float threshDist, 
                            	float3 BoxMin, float Youngs_mod, 
                            	bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
-                           	bool useRigidBoxZ, bool useRigidBoxY,bool impurity, float f_range)
+                           	bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX, bool impurity, float f_range)
 {
-    // __shared__ curandState rngState;
-    // if (threadIdx.x == 0){
-    //     rngState = rngStates[threadIdx.x + blockDim.x*blockIdx.x];
-    // }
+
+
 #ifdef FORCE_DEBUG
         __shared__ float FX_sum;
         __shared__ float FY_sum;
@@ -1106,7 +1118,7 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
     
     
     	int NooflocalNN;
-    	int localNNs[5];
+    	int localNNs[6];
     	float deltaX, deltaY, deltaZ;
    	float R;
     	int N1;
@@ -1178,6 +1190,7 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
         FZ += gForce.z; 
 
         if (constrainAngles){
+            
             float3 t = CalculateAngleForce(atom, d_C180_nn,
                                            d_X, d_Y, d_Z,
                                            d_theta0, 1000 /*Youngs_mod*/, rank);
@@ -1249,7 +1262,7 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
 
             if ( NooflocalNN > MAX_NN ){
                 printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-                printf("posx:		%d, posy:	%d, posz:	%d\n",posX,posY,posZ);
+                //printf("posx:		%d, posy:	%d, posz:	%d\n",posX,posY,posZ);
                 continue;
             }
 
@@ -1414,7 +1427,7 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
             }
 
         }
-        
+         
         if (useRigidBoxY){
         
             float gap1, gap2; 
@@ -1431,6 +1444,26 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
             if (gap2 < threshDist){
                 FY += 100*Youngs_mod*(gap2 - threshDist);
                 FY_ext += 100*Youngs_mod*(gap2 - threshDist);
+            }
+
+        }
+        
+        if (useRigidBoxX){
+        
+            float gap1, gap2; 
+
+            gap1 = X;
+            gap2 = boxMax.x - X;
+
+            if (gap1 < threshDist){
+                FX += -100*Youngs_mod*(gap1 - threshDist);
+                FX_ext += -100*Youngs_mod*(gap1 - threshDist);
+                
+            }
+
+            if (gap2 < threshDist){
+                FX += 100*Youngs_mod*(gap2 - threshDist);
+                FX_ext += 100*Youngs_mod*(gap2 - threshDist);
             }
 
         }
@@ -1505,7 +1538,7 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
     {
 
     int NooflocalNN;
-    int localNNs[5];
+    int localNNs[6];
     float deltaX, deltaY, deltaZ;
     float R;
     int N1;
@@ -2038,7 +2071,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	//int nnAtomInd = 0;
         
         	int NooflocalNN = 0;
-        	int localNNs[5];
+        	int localNNs[6];
 
         
         	int posX = 0;    
@@ -2260,7 +2293,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
         //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
-        int localNNs[5];
+        int localNNs[6];
         float range = f_range;
         
 
@@ -2459,7 +2492,7 @@ __global__ void CalculateDisForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
                                    	int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
                                    	int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    	float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   	R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range){
+                                   	R3Nptrs d_fDisList, bool impurity, float f_range){
                                    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
@@ -2520,7 +2553,7 @@ __global__ void CalculateDisForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
         //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
-        int localNNs[5];
+        int localNNs[6];
         float range = f_range;
         
 
@@ -2741,7 +2774,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
         //int nnAtomInd = 0;
         
         int NooflocalNN = 0;
-        int localNNs[5];
+        int localNNs[6];
         float range = f_range;
         
 

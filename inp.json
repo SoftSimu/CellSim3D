@@ -111,6 +111,7 @@
         "useLEbc": 0,
         "useRigidBoxZ": 1,
         "useRigidBoxY": 1,
+        "useRigidBoxX": 1,
         "threshDist": 0.01,
         "box_len_x": 500.0,
         "box_len_y": 500.0,

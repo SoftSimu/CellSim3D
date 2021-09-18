@@ -644,6 +644,7 @@ __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz
 		
 	}
 
+
 }
 
 __global__ void makeNNlistPBCPin(int impurityNum, float *CMx, float *CMy,float *CMz,
@@ -879,8 +880,7 @@ __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float 
 
 __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
-					  float3 boxMax)
+					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang)
 {
 
 
@@ -920,7 +920,7 @@ __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy
 __global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
 					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
-					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY)
+					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX)
 {
 
 
@@ -936,14 +936,9 @@ __global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *
 			float R;
 		
 		
-			deltaX = CMxNNlist[fullerene] - CMx[fullerene];
-			//deltaX = deltaX - nearbyint( deltaX / boxMax.x) * boxMax.x;
-			 
+			deltaX = CMxNNlist[fullerene] - CMx[fullerene];	 
 			deltaY = CMyNNlist[fullerene] - CMy[fullerene];
-			//if (!useRigidBoxY)deltaY = deltaY - nearbyint( deltaY / boxMax.y) * boxMax.y;
-			
 			deltaZ = CMzNNlist[fullerene] - CMz[fullerene];
-			//if (!useRigidBoxZ) deltaZ = deltaZ - nearbyint( deltaZ / boxMax.z) * boxMax.z;
 			
 		
 			R  = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
@@ -1519,7 +1514,7 @@ __global__ void migrated_cells_finderPBC(int No_of_C180s, float *d_CM,
       		float C = d_CM[fullerene];
       		
       			
-      		if ( C < Sub_min - 0.1 ) {
+      		if ( C < Sub_min ) {
 	
 	  			int index = atomicAdd(d_counter_mc_l,1);
 	 			d_migrated_cells_ind_L[index] = fullerene;
@@ -1528,7 +1523,7 @@ __global__ void migrated_cells_finderPBC(int No_of_C180s, float *d_CM,
 	  	}
 	  	
 	  		
-	  	if ( C > Sub_max + 0.1 ) {
+	  	if ( C > Sub_max ) {
 	  		
 	  			int index = atomicAdd(d_counter_mc_r,1);
 	 			d_migrated_cells_ind_R[index] = fullerene;
@@ -1709,7 +1704,7 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
 }  
 
 
-__global__ void migrated_Cells_Remove_PackPBC_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+__global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -1886,7 +1881,7 @@ __global__ void migrated_Cells_Remove_PackPBC_X(int No_of_C180s, int No_of_migra
 
 
 
-__global__ void migrated_Cells_Remove_PackPBC_Y(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+__global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -2061,7 +2056,7 @@ __global__ void migrated_Cells_Remove_PackPBC_Y(int No_of_C180s, int No_of_migra
 }  
 
 
-__global__ void migrated_Cells_Remove_PackPBC_Z(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
+__global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -2235,6 +2230,182 @@ __global__ void migrated_Cells_Remove_PackPBC_Z(int No_of_C180s, int No_of_migra
 		
 }  
 
+__global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter, float Pshift, float Vshift,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+   						float *d_X,  float *d_Y,  float *d_Z,
+                               		float* d_velListX, float* d_velListY, float* d_velListZ,
+                               		float* d_CMx, float* d_CMy, float* d_CMz,
+                               		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                               		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
+                               		float* d_Apo_rate, float* d_squeeze_rate,
+						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
+                               		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
+                               		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
+                               		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
+                               		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics){
+
+	
+	
+	int migrated_cell = d_migrated_cells_ind[blockIdx.x];
+	
+	int tid = threadIdx.x;	
+	int cell = blockIdx.x;	
+	
+	if( cell < No_of_migration_cells_buffer ) {
+
+		__shared__ float Cx, Cy;
+		
+		if(tid == 0) {
+
+			Cx = d_CMx[migrated_cell];
+			Cy = d_CMy[migrated_cell]; 
+		
+		}
+		
+		__syncthreads();
+		
+		
+		 int ModifierCx = floor( Cx/boxMax.x);
+		 int ModifierCy = floor((Cy - ModifierCx*Pshift)/boxMax.y); 
+		
+		if( migrated_cell < No_of_C180s - No_of_migration_cells_buffer ){
+		
+			
+			__shared__ int moving_Cell;
+		
+			if (tid == 0){
+
+				int index = atomicAdd(d_counter,1);
+				moving_Cell = No_of_C180s - index - 1;			
+		
+				while ( d_cell_mig[moving_Cell] == 1 ){
+				
+					index = atomicAdd(d_counter,1);
+					moving_Cell = No_of_C180s - index - 1;
+				}
+	
+			}
+	
+			
+			__syncthreads();
+			 
+			
+			d_X_mc_buffer[cell*192 + tid] = d_X[192*migrated_cell + tid] - ModifierCx*boxMax.x;
+			d_X[migrated_cell*192 + tid] = d_X[192*moving_Cell + tid];
+			
+			d_Y_mc_buffer[cell*192 + tid] = d_Y[192*migrated_cell + tid] - ModifierCx*Pshift - ModifierCy*boxMax.y;
+			d_Y[migrated_cell*192 + tid] = d_Y[192*moving_Cell + tid];
+			
+			d_Z_mc_buffer[cell*192 + tid] = d_Z[192*migrated_cell + tid];
+			d_Z[migrated_cell*192 + tid] = d_Z[192*moving_Cell + tid];
+			
+
+			d_velListX_mc_buffer[cell*192 + tid] = d_velListX[192*migrated_cell + tid];
+			d_velListX[migrated_cell*192 + tid] = d_velListX[192*moving_Cell + tid];
+			
+			d_velListY_mc_buffer[cell*192 + tid] = d_velListY[192*migrated_cell + tid] - ModifierCx*Vshift;
+			d_velListY[migrated_cell*192 + tid] = d_velListY[192*moving_Cell + tid];
+			
+			
+			d_velListZ_mc_buffer[cell*192 + tid] = d_velListZ[192*migrated_cell + tid]; 
+			d_velListZ[migrated_cell*192 + tid] = d_velListZ[192*moving_Cell + tid];
+			
+			
+			
+			if(tid == 0){
+			
+				
+				d_CMx_mc_buffer[cell] = Cx - ModifierCx*boxMax.x;
+				d_CMx[migrated_cell] = d_CMx[moving_Cell];
+				
+				d_CMy_mc_buffer[cell] = Cy - ModifierCx*Pshift - ModifierCy*boxMax.y;
+				d_CMy[migrated_cell] = d_CMy[moving_Cell];
+				
+				d_CMz_mc_buffer[cell] = d_CMz[migrated_cell];
+				d_CMz[migrated_cell] = d_CMz[moving_Cell];
+
+				d_Youngs_mod_mc_buffer[cell]  = d_Youngs_mod[migrated_cell];
+				d_Youngs_mod[migrated_cell]  = d_Youngs_mod[moving_Cell];
+				
+				d_ScaleFactor_mc_buffer[cell] = d_ScaleFactor[migrated_cell];
+				d_ScaleFactor[migrated_cell] = d_ScaleFactor[moving_Cell];
+				
+				d_gamma_env_mc_buffer[cell] = d_gamma_env[migrated_cell];
+				d_gamma_env[migrated_cell] = d_gamma_env[moving_Cell];
+				
+				d_viscotic_damp_mc_buffer[cell] = d_viscotic_damp[migrated_cell];
+				d_viscotic_damp[migrated_cell] = d_viscotic_damp[moving_Cell];
+
+				d_pressList_mc_buffer[cell] = d_pressList[migrated_cell];
+				d_pressList[migrated_cell] = d_pressList[moving_Cell];
+				
+				d_CellINdex_mc_buffer[cell] = d_CellINdex[migrated_cell];
+				d_CellINdex[migrated_cell] = d_CellINdex[moving_Cell];
+
+				if(!colloidal_dynamics) {
+								
+					d_Growth_rate_mc_buffer[cell] = d_Growth_rate[migrated_cell];
+					d_Growth_rate[migrated_cell] = d_Growth_rate[moving_Cell];
+				
+					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
+					d_DivisionVolume[migrated_cell] = d_DivisionVolume[moving_Cell];
+								
+					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
+					d_Apo_rate[migrated_cell] = d_Apo_rate[moving_Cell];
+				
+					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+					d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
+		
+		
+				}		
+		
+		
+			}
+		
+		
+		} else {
+
+	
+			d_X_mc_buffer[cell*192 + tid] = d_X[192*migrated_cell + tid] - ModifierCx*boxMax.x;
+			d_Y_mc_buffer[cell*192 + tid] = d_Y[192*migrated_cell + tid] - ModifierCx*Pshift - ModifierCy*boxMax.y;
+			d_Z_mc_buffer[cell*192 + tid] = d_Z[192*migrated_cell + tid];
+	
+			d_velListX_mc_buffer[cell*192 + tid] = d_velListX[192*migrated_cell + tid];
+			d_velListY_mc_buffer[cell*192 + tid] = d_velListY[192*migrated_cell + tid] - ModifierCx*Vshift;
+			d_velListZ_mc_buffer[cell*192 + tid] = d_velListZ[192*migrated_cell + tid]; 
+		
+		
+			if(tid == 0){
+			
+				d_CMx_mc_buffer[cell] = Cx - ModifierCx*boxMax.x;
+				d_CMy_mc_buffer[cell] = Cy - ModifierCx*Pshift - ModifierCy*boxMax.y;
+				d_CMz_mc_buffer[cell] = d_CMz[migrated_cell];
+				d_Youngs_mod_mc_buffer[cell]  = d_Youngs_mod[migrated_cell];
+				d_ScaleFactor_mc_buffer[cell] = d_ScaleFactor[migrated_cell];
+				d_gamma_env_mc_buffer[cell] = d_gamma_env[migrated_cell];
+				d_viscotic_damp_mc_buffer[cell] = d_viscotic_damp[migrated_cell];
+				d_pressList_mc_buffer[cell] = d_pressList[migrated_cell];
+				d_CellINdex_mc_buffer[cell] = d_CellINdex[migrated_cell];
+				
+				if(!colloidal_dynamics) {
+					
+					d_Growth_rate_mc_buffer[cell] = d_Growth_rate[migrated_cell];
+					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
+					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
+					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+				}
+		
+			}			
+
+
+	
+		}
+	
+	
+	}
+		
+}  
 
 
 __global__ void ghost_cells_finder_Auxiliary(int No_of_C180s, int All_Cells, float *d_CM , 
@@ -2310,6 +2481,69 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
 	}	
 	
 }  
+
+
+
+__global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+					float Pshift, float Vshift,
+					float *d_X,  float *d_Y,  float *d_Z,
+                               	float* d_velListX, float* d_velListY, float* d_velListZ,
+                               	float* d_CMx, float* d_CMy, float* d_CMz,
+					float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
+                              	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
+                              	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer)
+{
+
+	
+	int ghost_cell = d_Ghost_Cells_ind[blockIdx.x];
+	
+	int tid = threadIdx.x;	
+	int cell = blockIdx.x;	
+	
+	if( cell < No_of_Ghost_cells_buffer ) {
+		
+		__shared__ float Cx, Cy;
+		
+		
+		if(tid == 0) {
+			
+			Cx = d_CMx[ghost_cell]; 
+			Cy = d_CMy[ghost_cell];
+		}
+		
+		__syncthreads();
+		
+		
+		int ModifierCx = floor( (Cx - R_ghost_buffer - 0.2)/boxMax.x);
+		if( cell < No_of_Ghost_cells_buffer_R ) ModifierCx = floor( (Cx + R_ghost_buffer + 0.2)/boxMax.x);
+		
+		
+		int ModifierCy = floor((Cy - ModifierCx*Pshift)/boxMax.y);
+			
+			
+		d_X_gc_buffer[cell*192 + tid] = d_X[192*ghost_cell + tid] - ModifierCx*boxMax.x;
+		d_Y_gc_buffer[cell*192 + tid] = d_Y[192*ghost_cell + tid] - ModifierCx*Pshift - ModifierCy*boxMax.y;
+		d_Z_gc_buffer[cell*192 + tid] = d_Z[192*ghost_cell + tid];
+	
+	
+		d_velListX_gc_buffer[cell*192 + tid] = d_velListX[192*ghost_cell + tid];
+		d_velListY_gc_buffer[cell*192 + tid] = d_velListY[192*ghost_cell + tid] - ModifierCx*Vshift;
+		d_velListZ_gc_buffer[cell*192 + tid] = d_velListZ[192*ghost_cell + tid]; 
+		
+		
+		if(tid == 0){
+			
+			d_CMx_gc_buffer[cell] = Cx - ModifierCx*boxMax.x;
+			d_CMy_gc_buffer[cell] = Cy - ModifierCx*Pshift - ModifierCy*boxMax.y;
+			d_CMz_gc_buffer[cell] = d_CMz[ghost_cell];
+		
+		
+		}
+		
+	
+	}	
+	
+} 
 
 
 __global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax,  float R_ghost_buffer,
