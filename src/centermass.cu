@@ -186,10 +186,15 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 
   	if ( tid == 0 )
 	{
-		*d_sysCM.x = sysCmx[0]/No_of_C180s;
-		*d_sysCM.y = sysCmy[0]/No_of_C180s;
-		*d_sysCM.z = sysCmz[0]/No_of_C180s;
+
+		*d_sysCM.x = sysCmx[0];
+		*d_sysCM.y = sysCmy[0];
+		*d_sysCM.z = sysCmz[0];
+
+
 	}
+
+
 
 }
 

@@ -96,12 +96,21 @@
     "ColloidParams":{
     
 	"colloidal_dynamics": 1,
-	"dispersity": 1,
-	"rand_vel": 1,    	
+	"dispersity": 0,
+	"rand_vel": 1,
+	"Two_Components": 1,
+	"SizeFactor": 0.7,
+	"Friction": 0.1,
+	"Fraction": 0.3,    	
     	"Xratio": 1.0,
     	"Yratio": 1.0,
     	"Zratio": 1.0,
-    	"RandInitDir": 0
+    	"RandInitDir": 0,
+    	"ReadInitialConf" : 0,
+    	"Compressor": 0,
+    	"Compress_Value_X": 0.001,
+    	"Compress_Value_Y": 0.001,
+    	"Compress_Value_Z": 0.001,
        
     },
 

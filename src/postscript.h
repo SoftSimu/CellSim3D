@@ -188,21 +188,24 @@ void write_vel(int t_step, FILE* velFile,int frameCount);
 void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount,int rank);
 void WriteBinaryTrajPin(int t_step, FILE* trajFile, int frameCount);
 void write_trajPin(int t_step, FILE* trajfile);
+void WriteCMBinary(int t_step, FILE* cmFile,int frameCount);
 
 // read and write restart function
 int writeRestartFile(int t_step, int frameCount);
 int ReadRestartFile();
 int ReadPinFile();
-
+void WriteCMFile();
 
 // Function to get the indeces of dividing cells
 inline void count_and_get_div();
 inline void count_and_die();
 inline void initialize_Plane( int MaxNoofC180s);
+inline void SetupBoxParams(int t_step);
 
 
 int DispersityFunc(int Orig_No_of_C180s);
 int SecondCell (int Orig_No_of_C180s);
+int SecondColloid (int Orig_No_of_C180s);
 void ShapeScaler (float* initx,float* inity,float* initz);
 void RotationMatrix(float* RMat,float* axis,float* theta);
 inline void calc_sys_CM();
@@ -234,11 +237,11 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
 
 void writeForces(FILE* forceFile, int t_step, int num_cells);
 
-__global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
-                                 R3Nptrs d_sysCM, float3 BoxCen, long int numParts);
+__global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, float* d_Z,
+                                 R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, float3 BoxCen, long int numParts);
 
-__global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_sysVCM, long int numParts);
+__global__ void CorrectCoMVelocity(int No_cells_All, float* d_velListX, float* d_velListY, float* d_velListZ,
+                                   R3Nptrs d_sysVCM, R3Nptrs d_sysCM_All, long int numParts);
 
 __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz, 
 			   float* SysCx, float* SysCy, float* SysCz);
@@ -526,8 +529,7 @@ void Send_Recv_ghost_cells( int No_of_Ghost_cells_buffer, int No_of_Ghost_cells,
 			     float* X_gc_buffer, float* Y_gc_buffer, float* Z_gc_buffer, float* velListX_gc_buffer, float* velListY_gc_buffer, float* velListZ_gc_buffer,
 			     float* CMx_gc_buffer, float* CMy_gc_buffer, float* CMz_gc_buffer,
 			     float* X_gc, float* Y_gc, float* Z_gc, float* velListX_gc, float* velListY_gc, float* velListZ_gc, float* CMx_gc,
-			     float* CMy_gc, float* CMz_gc , float* d_X, float* d_Y, float* d_Z, float* d_velListX, float* d_velListY, float* d_velListZ,
-			     float* d_CMx, float* d_CMy, float* d_CMz );
+			     float* CMy_gc, float* CMz_gc);
 
 void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrated_cells, int receiver, int sender, int tag, MPI_Comm cart_comm, 
 			     int shift_sender, int shift_receiver,

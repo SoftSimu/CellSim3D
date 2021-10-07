@@ -983,8 +983,8 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
     	}
 }
 
-__global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
-                                 R3Nptrs d_sysCM, float3 BoxCen, long int numParts){
+__global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, float* d_Z,
+                                 R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, float3 BoxCen, long int numParts){
     
     
     __shared__ float Cmx;
@@ -995,7 +995,11 @@ __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
     long int partInd = blockIdx.x*blockDim.x + threadIdx.x;
     
     if (tid == 0){
-    
+	
+	*d_sysCM.x = *d_sysCM_All.x/No_cells_All;
+	*d_sysCM.y = *d_sysCM_All.y/No_cells_All;
+	*d_sysCM.z = *d_sysCM_All.z/No_cells_All;    
+    	
     	Cmx = *d_sysCM.x - BoxCen.x;
     	Cmy = *d_sysCM.y - BoxCen.y;
     	Cmz = *d_sysCM.z - BoxCen.z;
@@ -1017,8 +1021,8 @@ __global__ void CorrectCoMMotion(float* d_X, float* d_Y, float* d_Z,
 
 
 
-__global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_sysVCM, long int numParts){
+__global__ void CorrectCoMVelocity(int No_cells_All, float* d_velListX, float* d_velListY, float* d_velListZ,
+                                   R3Nptrs d_sysVCM, R3Nptrs d_sysCM_All, long int numParts){
 
     __shared__ float VCmx;
     __shared__ float VCmy;
@@ -1029,6 +1033,10 @@ __global__ void CorrectCoMVelocity(float* d_velListX, float* d_velListY, float* 
     
     if (tid == 0){
     
+    	*d_sysVCM.x = *d_sysCM_All.x/No_cells_All;
+    	*d_sysVCM.y = *d_sysCM_All.y/No_cells_All;
+    	*d_sysVCM.z = *d_sysCM_All.z/No_cells_All;
+    	
     	VCmx = *d_sysVCM.x;
     	VCmy = *d_sysVCM.y;
     	VCmz = *d_sysVCM.z;

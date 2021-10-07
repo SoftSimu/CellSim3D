@@ -23,8 +23,7 @@ void Send_Recv_ghost_cells( int No_of_Ghost_cells_buffer, int No_of_Ghost_cells,
 			     float* X_gc_buffer, float* Y_gc_buffer, float* Z_gc_buffer, float* velListX_gc_buffer, float* velListY_gc_buffer, float* velListZ_gc_buffer,
 			     float* CMx_gc_buffer, float* CMy_gc_buffer, float* CMz_gc_buffer,
 			     float* X_gc, float* Y_gc, float* Z_gc, float* velListX_gc, float* velListY_gc, float* velListZ_gc, float* CMx_gc,
-			     float* CMy_gc, float* CMz_gc , float* d_X, float* d_Y, float* d_Z, float* d_velListX, float* d_velListY, float* d_velListZ,
-			     float* d_CMx, float* d_CMy, float* d_CMz )
+			     float* CMy_gc, float* CMz_gc)
 {
 
 			
@@ -80,7 +79,7 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 		    	//printf("I am here, migaration\n");
 		    	
 		    	MPI_Sendrecv( X_mc_buffer + shift_sender*192, 192*No_of_migrated_cells_buffer, MPI_FLOAT, receiver, tag,
-                 			X_mc + 192*shift_receiver, No_of_migrated_cells*192, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
+                 			X_mc + 192*shift_receiver  , No_of_migrated_cells*192, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
                  	
                  	MPI_Sendrecv( Y_mc_buffer + shift_sender*192, 192*No_of_migrated_cells_buffer, MPI_FLOAT, receiver, tag,
                  			Y_mc + 192*shift_receiver, No_of_migrated_cells*192, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);

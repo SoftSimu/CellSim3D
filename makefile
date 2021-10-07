@@ -5,30 +5,39 @@ oflags = $(arch) -Xptxas="-v" -I inc -dc -lmpi
 objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
-objects = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
-	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
-linkObjects = $(patsubst %, $(objDir)%, $(objects))
 
-eflags = $(arch) -o $(objDir)/"CellDiv" $(linkObjects) -lm -lcurand -lmpi
+objects1 = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
+	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
+
+objects2 = GPUbounce-CudaAwareMPI.o centermass.o postscriptinit.o PressureKernels.o\
+	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
+
+
+linkObjects1 = $(patsubst %, $(objDir)%, $(objects1))
+linkObjects2 = $(patsubst %, $(objDir)%, $(objects2))
+
+eflags1 = $(arch) -o $(objDir)/"CellDiv" $(linkObjects1) -lm -lcurand -lmpi
+eflags2 = $(arch) -o $(objDir)/"CellDiv_CudaAwareMPI" $(linkObjects2) -lm -lcurand -lmpi
 opt = -O3
 
 debug: opt= -O0
 debug: oflags += $(debug)
-debug: eflags += $(debug)
+debug: eflags1 += $(debug)
+debug: eflags2 += $(debug)
 debug: CellDiv
+debug: CellDiv_CudaAwareMPI
 
 oflags += $(opt)
-eflags += $(opt)
+eflags1 += $(opt)
+eflags2 += $(opt)
 
 # $(objects): bin/%.o : src/%.cu
 # 	@mkdir -p $(@D)
 # 	$(compiler) $(oflags) -c $< -o $@
 
+
 $(objDir)centermass.o: src/centermass.cu src/postscript.h
 	$(compiler) $(oflags) -c src/centermass.cu -o $(objDir)centermass.o
-
-# NeighbourSearch.o: src/NeighbourSearch.cu
-# 	$(compiler) $(oflags) -c src/NeighbourSearch.o
 
 $(objDir)postscriptinit.o: src/postscriptinit.cu
 	$(compiler) $(oflags) -c src/postscriptinit.cu -o $(objDir)postscriptinit.o
@@ -51,8 +60,15 @@ $(objDir)BondKernels.o : src/BondKernels.cu
 $(objDir)GPUbounce.o : src/GPUbounce.cu src/postscript.h
 	$(compiler) $(oflags) -c src/GPUbounce.cu -o $(objDir)GPUbounce.o
 
-CellDiv: $(linkObjects)
-	$(compiler) $(eflags)
+$(objDir)GPUbounce-CudaAwareMPI.o : src/GPUbounce-CudaAwareMPI.cu src/postscript.h
+	$(compiler) $(oflags) -c src/GPUbounce-CudaAwareMPI.cu -o $(objDir)GPUbounce-CudaAwareMPI.o
+
+
+CellDiv: $(linkObjects1)
+	$(compiler) $(eflags1)
+
+CellDiv_CudaAwareMPI: $(linkObjects2)
+	$(compiler) $(eflags2)
 
 # Third party libraries
 $(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
@@ -60,4 +76,4 @@ $(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
 
 .PHONY: clean
 clean:
-	rm -f $(objDir)/CellDiv $(linkObjects)
+	rm -f $(objDir)/CellDiv $(linkObjects1)
