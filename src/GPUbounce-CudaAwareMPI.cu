@@ -67,6 +67,7 @@ float repulsion_strength, attraction_strength;     //  ST1, ST2
 float viscotic_damping, internal_damping;          //  C, DMP    
 float divVol;
 float ApoVol;
+float angleConstant;
 float gamma_visc;
 float shear_rate;
 float Pshift;
@@ -647,8 +648,11 @@ int main(int argc, char *argv[])
         shapeLim = Zratio;
   }
 
-  if(!colloidal_dynamics) shapeLim = 1.0f;
-  
+  angleConstant = 10000;
+  if(!colloidal_dynamics){
+  	shapeLim = 1.0f;
+  	angleConstant = 1000;
+  }
   f_range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
   if( colloidal_dynamics ) f_range = (attraction_range + 0.6*shapeLim) * (attraction_range + 0.6*shapeLim);
   
@@ -2606,7 +2610,7 @@ int main(int argc, char *argv[])
                                                      		Xdiv, Ydiv, Zdiv, boxMax,
                                                      		d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                      		threshDist,
-									BoxMin, Subdivision_min, Youngs_mod,
+									BoxMin, Subdivision_min, Youngs_mod, angleConstant,
                                                      		constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                                      		impurity,f_range,
                                                      		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX); 
@@ -4246,7 +4250,7 @@ int main(int argc, char *argv[])
                                		                      	Xdiv, Ydiv, Zdiv, boxMax,
                                		                      	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                		                      	threshDist,
-									BoxMin, Subdivision_min, Youngs_mod,
+									BoxMin, Subdivision_min, Youngs_mod, angleConstant,
                                		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                		                      	impurity,f_range,
                                		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX); 
@@ -4877,6 +4881,11 @@ int main(int argc, char *argv[])
   
   }
 
+
+  if (nprocs > 1)    	
+     MPI_Reduce(&No_of_C180s, &No_of_C180s_All, 1, MPI_INT, MPI_SUM, 0, cart_comm);
+  else         	
+     No_of_C180s_All = No_of_C180s;
   
   if (rank ==0) {
   
@@ -4888,7 +4897,7 @@ int main(int argc, char *argv[])
         
        	cmFile = fopen("CM.xyz", "r+");
        	fseek(cmFile, 0, SEEK_SET);
-      		fwrite(&No_of_C180s, sizeof(int), 1, cmFile);  
+      		fwrite(&No_of_C180s_All, sizeof(int), 1, cmFile);  
        	fseek(cmFile, 8, SEEK_SET);
        	fwrite(&t, sizeof(int), 1, cmFile);
        
@@ -4900,7 +4909,7 @@ int main(int argc, char *argv[])
         
        	velFile = fopen("velocity.xyz", "r+");
        	fseek(velFile, 0, SEEK_SET);
-      		fwrite(&No_of_C180s, sizeof(int), 1, velFile);  
+      		fwrite(&No_of_C180s_All, sizeof(int), 1, velFile);  
        	fseek(velFile, 8, SEEK_SET);
        	fwrite(&t, sizeof(int), 1, velFile);
        
@@ -4912,7 +4921,7 @@ int main(int argc, char *argv[])
       
       		trajfile = fopen (trajFileName, "r+");
       		fseek(trajfile, 0, SEEK_SET);
-      		fwrite(&No_of_C180s, sizeof(int), 1, trajfile);    
+      		fwrite(&No_of_C180s_All, sizeof(int), 1, trajfile);    
       		fseek(trajfile, 8, SEEK_SET);
       		fwrite(&t, sizeof(int), 1, trajfile);
   	}
@@ -6299,7 +6308,7 @@ int SecondCell(int Orig_No_of_C180s){
 	  		ranmar(rands, 1);
                 	int i = round(rands[0]*No_of_C180s );
 
-			if ( ScaleFactor[i] == SizeFactor ||  youngsModArray[i] == Stiffness2) continue;                 
+			if ( CellINdex[i] <  0 ) continue;                 
 		
 			ScaleFactor[i] = SizeFactor;
 			youngsModArray[i] = Stiffness2;
@@ -6377,7 +6386,7 @@ int SecondColloid(int Orig_No_of_C180s){
 	  ranmar(rands, 1);
           int i = round(rands[0]*No_of_C180s );
 
-	  if ( ScaleFactor[i] == SizeFactor_Colloids ||  viscotic_damp[i] == gVis_Colloids) continue;                 
+	  if ( CellINdex[i] <  0 ) continue;                 
 		
 		ScaleFactor[i] = SizeFactor_Colloids;
 		viscotic_damp[i] = gVis_Colloids;
@@ -7546,8 +7555,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 				//if (c >= No_of_C180s) r = 1; 
             			//fwrite(&r, sizeof(int), 1, trajFile);
             			
-            			fwrite(&i, sizeof(int), 1, trajFile);
-            			//fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
+            			//fwrite(&i, sizeof(int), 1, trajFile);
+            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
 							
 				fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -7555,8 +7564,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1){
             			
-            			fwrite(&i, sizeof(int), 1, trajFile);
-            			//fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			//fwrite(&i, sizeof(int), 1, trajFile);
+            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 

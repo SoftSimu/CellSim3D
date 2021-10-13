@@ -111,7 +111,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin,  float DL, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float3 Subdivision_min, float Youngs_mod, 
+                           float3 BoxMin, float3 Subdivision_min, float Youngs_mod, float angleConstant, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
                            bool impurity, float f_range,
                            bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX);
