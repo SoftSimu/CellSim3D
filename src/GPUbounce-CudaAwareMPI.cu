@@ -5278,9 +5278,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
               			bool farEnough = true;
               
               
-              			farEnough = !(CM.x + ScaleFactor[c]*rCheck*shapeLim > boxMax.x || CM.x-ScaleFactor[c]*rCheck*shapeLim < BoxMin.x ||
-                       		     CM.y + ScaleFactor[c]*rCheck*shapeLim > boxMax.y || CM.y-ScaleFactor[c]*rCheck*shapeLim < BoxMin.y ||
-                       		     CM.z + ScaleFactor[c]*rCheck*shapeLim > boxMax.z || CM.z-ScaleFactor[c]*rCheck*shapeLim < BoxMin.z );
+              			farEnough = !(CM.x + rCheck*shapeLim > boxMax.x + 0.1 || CM.x - rCheck*shapeLim < BoxMin.x - 0.1 ||
+                       		     CM.y + rCheck*shapeLim > boxMax.y + 0.1 || CM.y - rCheck*shapeLim < BoxMin.y - 0.1 ||
+                       		     CM.z + rCheck*shapeLim > boxMax.z + 0.1 || CM.z - rCheck*shapeLim < BoxMin.z - 0.1 );
               
               
               			for (int nInd = 0; nInd < c; ++nInd){
@@ -5325,9 +5325,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
         	      			bool farEnough = true;
               
               
-        	      			farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        	      		        	      CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        	      		        	      CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z);
+        	      			farEnough = !(CM.x+rCheck > boxMax.x + 0.1 || CM.x-rCheck < BoxMin.x - 0.1 ||
+        	      		        	      CM.y+rCheck > boxMax.y + 0.1 || CM.y-rCheck < BoxMin.y - 0.1||
+        	      		        	      CM.z+rCheck > boxMax.z + 0.1 || CM.z-rCheck < BoxMin.z- 0.1 );
               
               
         	      			for (int nInd = 0; nInd < c; ++nInd){
@@ -5369,9 +5369,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 
         					bool farEnough = true;
         	      
-        					farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      			    	CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			            			CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        					farEnough = !(CM.x+rCheck > boxMax.x + 0.1 || CM.x-rCheck < BoxMin.x - 0.1 ||
+        			      			    	CM.y+rCheck > boxMax.y + 0.1 || CM.y-rCheck < BoxMin.y - 0.1 ||
+        			            			CM.z+rCheck > boxMax.z + 0.1 || CM.z-rCheck < BoxMin.z - 0.1 );
               	
         					for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			        		  if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -5433,9 +5433,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	      		
         			      		bool farEnough = true;
         	      
-        			      		farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      	        	      CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			               	       CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        			      		farEnough = !(CM.x+rCheck > boxMax.x + 0.1 || CM.x-rCheck < BoxMin.x - 0.1 ||
+        			      	        	      CM.y+rCheck > boxMax.y + 0.1 || CM.y-rCheck < BoxMin.y - 0.1 ||
+        			               	       CM.z+rCheck > boxMax.z + 0.1 || CM.z-rCheck < BoxMin.z - 0.1 );
               	
         			     		for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			          		if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -5511,9 +5511,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	      		
         					bool farEnough = true;
         	      
-        					farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      			    	CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			            			CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        					farEnough = !(CM.x+rCheck > boxMax.x + 0.1 || CM.x-rCheck < BoxMin.x - 0.1 ||
+        			      			    	CM.y+rCheck > boxMax.y + 0.1 || CM.y-rCheck < BoxMin.y - 0.1 ||
+        			            			CM.z+rCheck > boxMax.z + 0.1 || CM.z-rCheck < BoxMin.z - 0.1 );
               	
         					for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			        		  if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -5579,9 +5579,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	      		
         			      		bool farEnough = true;
         	      
-        			      		farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      	        	    CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			               	     CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        			      		farEnough = !(CM.x+rCheck > boxMax.x + 0.1 || CM.x-rCheck < BoxMin.x - 0.1 ||
+        			      	        	    CM.y+rCheck > boxMax.y + 0.1 || CM.y-rCheck < BoxMin.y - 0.1 ||
+        			               	     CM.z+rCheck > boxMax.z + 0.1 || CM.z-rCheck < BoxMin.z - 0.1 );
               	
         			     		for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			          		if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -5848,9 +5848,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   	     					
   	     						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
                   
-               	   					X[c*192 + nodeInd] = ScaleFactor[cellInd]*initx[nodeInd] + allCMs[cellInd].x;
-               	   					Y[c*192 + nodeInd] = ScaleFactor[cellInd]*inity[nodeInd] + allCMs[cellInd].y;
-               	   					Z[c*192 + nodeInd] = ScaleFactor[cellInd]*initz[nodeInd] + allCMs[cellInd].z;
+               	   					X[c*192 + nodeInd] = ScaleFactor[c]*initx[nodeInd] + allCMs[cellInd].x;
+               	   					Y[c*192 + nodeInd] = ScaleFactor[c]*inity[nodeInd] + allCMs[cellInd].y;
+               	   					Z[c*192 + nodeInd] = ScaleFactor[c]*initz[nodeInd] + allCMs[cellInd].z;
   	     
   	     						}
   	     						
@@ -8082,6 +8082,28 @@ int writeRestartFile(int t_step, int frameCount){
          CudaErrorCheck();
         
         
+        
+        if (colloidal_dynamics && Compressor){
+        	
+        	for (int c = 0; c < No_of_C180s; c++){
+        						
+			CMx[c] -= BoxMin.x;
+			CMy[c] -= BoxMin.y;
+        		CMz[c] -= BoxMin.z;
+        
+        	}
+        	for (int c = 0; c < No_of_C180s*192; c++){
+        						
+			X[c] -= BoxMin.x;
+			Y[c] -= BoxMin.y;
+        		Z[c] -= BoxMin.z;
+        
+        	}
+        
+        }
+        
+        
+        
         int No_of_C180s_All, NumApoCell_All, NumRemoveCell_All;
         int Num_Cell_OtherGPU;
           
@@ -8802,9 +8824,9 @@ int ReadRestartFile(){
 void SetDeviceBeforeInit()
 {
 
-    //int rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+    int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
     
-    int local_rank = atoi(getenv("PMIX_RANK"));
+    //int local_rank = atoi(getenv("PMIX_RANK"));
     idev = local_rank; 
     printf("local rank=%d: and idev %d\n", local_rank, idev);
 

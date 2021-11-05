@@ -64,7 +64,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 96 )
+			  		if ( index > 128 )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -73,7 +73,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 96*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -195,7 +195,7 @@ __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, floa
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 96 )
+			  		if ( index > 128 )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -204,7 +204,7 @@ __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, floa
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 96*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -320,7 +320,7 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 96 )
+			  		if ( index > 128 )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -329,7 +329,7 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 96*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -518,7 +518,7 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float
 					int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 			  		
 #ifdef PRINT_TOO_SHORT_ERROR
-					if ( index > 96 )
+					if ( index > 128 )
 					{
                 				printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                       				 // for ( int k = 0; k < 32; ++k )
@@ -527,7 +527,7 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float
 						continue;
 					}
 #endif
-					d_NNlist[ 96*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 				}
 			}
 		}

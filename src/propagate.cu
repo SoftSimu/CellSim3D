@@ -356,7 +356,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
 	        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
 	        {
-	            nn_rank = d_NNlist[96*index+nn_rank1-1];
+	            nn_rank = d_NNlist[128*index+nn_rank1-1];
 	            
 	            if ( nn_rank == rank )
 	                continue;
@@ -746,7 +746,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         	{
-        	    nn_rank = d_NNlist[96*index+nn_rank1-1]; 
+        	    nn_rank = d_NNlist[128*index+nn_rank1-1]; 
         	    if ( nn_rank == cellInd ) continue;
 
 

@@ -626,15 +626,15 @@ int main(int argc, char *argv[])
    
   MPI_Allreduce(&MaxArea, &MaxArea_All, 1, MPI_FLOAT, MPI_MAX, cart_comm);
 
-  BufferSize = 2*ceil(MaxArea_All);
+  BufferSize = 3*ceil(MaxArea_All);
   //BufferSize = 1000;
-
+  if(rank == 0) printf("   Buffer Size is: %d \n",BufferSize);
 
   BufferDistance = 0.2;
   if(rank == 0) printf("   Buffer_Distance is: %f \n",BufferDistance);
 
-  R_ghost_buffer = 1.5;
-  if( colloidal_dynamics ) R_ghost_buffer = 1.0;
+  R_ghost_buffer = 1.6;
+  if( colloidal_dynamics ) R_ghost_buffer = 1.1;
   if(rank == 0) printf("   Ghost_Buffer_Distance is: %f \n",R_ghost_buffer);	
 
   IndexShifter = rank * MaxNoofC180s + 1;
@@ -1282,7 +1282,7 @@ int main(int argc, char *argv[])
 
 
 
-  if (Restart == 0) {	
+  if (Restart == 0){	
 
 
   	for (int cell = 0; cell < MaxNoofC180s; cell++){
@@ -1344,11 +1344,11 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_velListY, velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_velListZ, velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
-  cudaMemcpy(d_Youngs_mod, youngsModArray, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Youngs_mod, youngsModArray, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
-  cudaMemcpy(d_Growth_rate, Growth_rate, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_Growth_rate, Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
-  cudaMemcpy(d_CellINdex, CellINdex, MaxNoofC180s*sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_CellINdex, CellINdex, No_of_C180s*sizeof(int), cudaMemcpyHostToDevice);
   CudaErrorCheck(); 
   cudaMemcpy(d_pressList, pressList, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
@@ -1476,7 +1476,7 @@ int main(int argc, char *argv[])
   	if (Restart == 0){
     		 forceFile = fopen(forces_file, "w");
   	}else{
-   	 	forceFile = fopen(forces_file, "a");
+   	 	 forceFile = fopen(forces_file, "a");
   	}
   	
   	if (Restart == 0){
@@ -1502,10 +1502,10 @@ int main(int argc, char *argv[])
   bool growthDone = false;
   
 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*96*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*128*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,    Xdiv*Ydiv*Zdiv*sizeof(int))) return(-1);
   
-  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*96*sizeof(int)); 
+  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*128*sizeof(int)); 
   cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int)); 
   
   CudaErrorCheck();
@@ -1536,8 +1536,8 @@ int main(int argc, char *argv[])
 
   GPUMemory = totalGPUMem - freeGPUMem;
 
-  printf("   Total amount of GPU memory used =    %8.2lf MB\n",GPUMemory/(1024*1024.0));
-  printf("   Total amount of CPU memory used =    %8.2lf MB\n",CPUMemory/(1024*1024.0));
+  printf("   Rank %d, Total amount of GPU memory used =    %8.2lf MB\n", rank, GPUMemory/(1024*1024.0));
+  printf("   Rank %d, Total amount of CPU memory used =    %8.2lf MB\n", rank, CPUMemory/(1024*1024.0));
   
   
   if(impurity){	
@@ -2869,6 +2869,7 @@ int main(int argc, char *argv[])
         		
         		CudaErrorCheck();
         	}	
+		
 		No_of_C180s += Received_New_cell;
 		
 		// UP-DOWN Migration
@@ -3446,70 +3447,127 @@ int main(int argc, char *argv[])
   
   	CudaErrorCheck();
   
-  }
+    }
 	
-  int t = MaxNoofC180s;	
-
-  
-  if (Restart ==0){
-  
-  
+    
+    int lentrajfile, lenforceFile, lenvelFile, lencmFile; 
+    
+    if(rank == 0) {
+    
+    	fseek(trajfile, 0, SEEK_END);
+    	lentrajfile = ftell(trajfile);
+    	
+    	fseek(forceFile, 0, SEEK_END);
+  	lenforceFile = ftell(forceFile);
+  	
+  	fseek(velFile, 0, SEEK_END);
+  	lenvelFile = ftell(velFile);
+  	
+  	fseek(cmFile, 0, SEEK_END);
+  	lencmFile = ftell(cmFile);
+    
+    }
+    
+    
+    if (nprocs > 1) {
+    	
+    	MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
+    	
+    	MPI_Bcast(&lentrajfile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenforceFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenvelFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lencmFile , 1, MPI_INT, 0, cart_comm);
+    
+    }
+    	
     cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    
-    if (nprocs > 1) MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
+    CudaErrorCheck();
     
     
     if(rank ==0 ){ 
         
+    	int t = nprocs*MaxNoofC180s;	
         
         
-  	if (binaryOutput){
-      		
-      		fwrite(&t, sizeof(int), 1, trajfile);
-      
-      		t = (int)useDifferentCell;
-      		fwrite(&t, sizeof(int), 1, trajfile);
-      
-      		t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      		fwrite(&t, sizeof(int), 1, trajfile);      
+    	if (binaryOutput){
+	
+        	if( lentrajfile == 0 ) {
+      			
+      			
+      			fwrite(&t, sizeof(int), 1, trajfile);
+      	
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, trajfile);
+      	
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, trajfile);      
     
-     		WriteBinaryTraj(0, trajfile, 1, rank); 
+     			if (Restart ==0) 
+     				WriteBinaryTraj(0, trajfile, 1, rank);
+     			else 
+     				WriteBinaryTraj(Laststep, trajfile, Lastframe, rank); 
+  		
   	
-  	}else{
+  		}
+  			
+  
+     	} else {
+     	
+	
+        	if( lentrajfile == 0 ) {
   	
-      		fprintf(trajfile, "Header Start:\n");
-      		fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+      			fprintf(trajfile, "Header Start:\n");
+      			fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+	
+      			fprintf(trajfile, "Using variable stiffness:\n");
+      			if (useDifferentCell) 
+        	 		fprintf(trajfile, "True\n");
+      			else
+        	  		fprintf(trajfile, "False\n");
 
-      		fprintf(trajfile, "Using variable stiffness:\n");
-      		if (useDifferentCell) 
-          		fprintf(trajfile, "True\n");
-      		else
-          		fprintf(trajfile, "False\n");
-
-      		fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
-     	 	fprintf(trajfile, "Header End\n");
-      		write_traj(0, trajfile);
+      			fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
+     	 		fprintf(trajfile, "Header End\n");
+      		
   	
+  	     		if (Restart ==0) 
+     				write_traj(0, trajfile);
+     			else 
+     				write_traj(Laststep, trajfile);
+  	
+  	
+  		}
+  
   	}
-  	
+  		
   	if (write_cont_force){
   
-      		fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
-      
+      		
       		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		CudaErrorCheck();
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-
+		CudaErrorCheck();
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		CudaErrorCheck();
       		
-      		writeForces(forceFile, 0, No_of_C180s);
+
+        	if( lenforceFile == 0 ) {
+      		
+      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
+      
+      			if (Restart ==0) 
+     				writeForces(forceFile, 0, No_of_C180s);
+     			else 
+     				writeForces(forceFile, Laststep, No_of_C180s);
+  		}
+  	
   	}
   	
   	if(write_vel_file){
@@ -3517,20 +3575,28 @@ int main(int argc, char *argv[])
                cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
                cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
                cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+               CudaErrorCheck();
                
-               t = MaxNoofC180s;
-               fwrite(&t, sizeof(int), 1, velFile);
-      
-      		t = (int)useDifferentCell;
-      		fwrite(&t, sizeof(int), 1, velFile);
-      
-      		t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      		fwrite(&t, sizeof(int), 1, velFile);
+
+        	if( lenvelFile == 0 ) {       
                
-               write_vel(0, velFile,1);
+               	t = nprocs*MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, velFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, velFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, velFile);
+               
+               	if (Restart ==0) 
+     				write_vel(0, velFile,1);
+     			else 
+     				write_vel(Laststep, velFile, Lastframe);
+    
+       	}
        }
-  	
-		  	
+  	  	
        if(write_cm_file){
        
        
@@ -3539,52 +3605,68 @@ int main(int argc, char *argv[])
        	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
        	CudaErrorCheck();
        	
-       	t = MaxNoofC180s;
-               fwrite(&t, sizeof(int), 1, cmFile);
-      
-      		t = (int)useDifferentCell;
-      		fwrite(&t, sizeof(int), 1, cmFile);
-      
-      		t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      		fwrite(&t, sizeof(int), 1, cmFile);
+        	if( lencmFile == 0 ) {
        	
-       	WriteCMBinary(0, cmFile, 1);
+       		t = MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, cmFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, cmFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, cmFile);
+       		
+       		if (Restart ==0)
+       			WriteCMBinary(0, cmFile, 1);
+       		else
+       			WriteCMBinary(Laststep, cmFile, Lastframe);
        
-       
-       }
+       	}
+    	}
     
     } else if (nprocs > 1){   	
     	
     	
-    	MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    	MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    	MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    	MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    	if( lentrajfile == 0 ){
+    	
+    		MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    	
+    	}
+    	
     	
     	if (write_cont_force){
     		      		
     		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		CudaErrorCheck();
+      		
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-
+		CudaErrorCheck();
+		
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		CudaErrorCheck();
       		
-      		MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		if( lenforceFile == 0 ) {
+      		
+      			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		
-    		MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-      			
+    			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+      		}	
     	
     	}
     	
@@ -3594,11 +3676,14 @@ int main(int argc, char *argv[])
     		cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     		cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
     		CudaErrorCheck();
-    		   	
-    		MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		
+    		if( lenvelFile == 0 ) {   	
+    			
+    			MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
     	
     	}
     	
@@ -3609,16 +3694,18 @@ int main(int argc, char *argv[])
        	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
        	CudaErrorCheck();
        	
-       	MPI_Send(CMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+       	if( lencmFile == 0 ) {
+       		
+       		MPI_Send(CMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
     	
     	} 	
 
+    
     }
-  
-  }
 
   //return 0;
 
@@ -6644,7 +6731,7 @@ int main(int argc, char *argv[])
   
   if (rank ==0) {
   
-  	t = (Time_steps+equiStepCount+Laststep+1) / trajWriteInt; 
+  	int t = (Time_steps+equiStepCount+Laststep+1) / trajWriteInt; 
 
   	if(write_cm_file){
        
@@ -7069,6 +7156,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
      	
     				fclose(infil);
   
+  			
   			} else {
   			
   				while (true){
@@ -7087,9 +7175,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
               				bool farEnough = true;
               
               
-              				farEnough = !(CM.x + ScaleFactor[c]*rCheck*shapeLim > boxMax.x || CM.x-ScaleFactor[c]*rCheck*shapeLim < BoxMin.x ||
-                       			     CM.y + ScaleFactor[c]*rCheck*shapeLim > boxMax.y || CM.y-ScaleFactor[c]*rCheck*shapeLim < BoxMin.y ||
-                       			     CM.z + ScaleFactor[c]*rCheck*shapeLim > boxMax.z || CM.z-ScaleFactor[c]*rCheck*shapeLim < BoxMin.z );
+              				farEnough = !(CM.x + rCheck*shapeLim > boxMax.x - 0.1 || CM.x - rCheck*shapeLim < BoxMin.x + 0.1 ||
+                       			      CM.y + rCheck*shapeLim > boxMax.y - 0.1 || CM.y - rCheck*shapeLim < BoxMin.y + 0.1 ||
+                       			      CM.z + rCheck*shapeLim > boxMax.z - 0.1 || CM.z - rCheck*shapeLim < BoxMin.z + 0.1 );
               
               
               				for (int nInd = 0; nInd < c; ++nInd){
@@ -7135,9 +7223,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
         	      			bool farEnough = true;
               
               
-        	      			farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        	      		        	      CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        	      		        	      CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z);
+        	      			farEnough = !(CM.x+rCheck > boxMax.x - 0.1 || CM.x-rCheck < BoxMin.x + 0.1 ||
+        	      		        	      CM.y+rCheck > boxMax.y - 0.1 || CM.y-rCheck < BoxMin.y + 0.1 ||
+        	      		        	      CM.z+rCheck > boxMax.z - 0.1 || CM.z-rCheck < BoxMin.z + 0.1);
               
               
         	      			for (int nInd = 0; nInd < c; ++nInd){
@@ -7179,9 +7267,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 
         					bool farEnough = true;
         	      
-        					farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      			    	CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			            			CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        					farEnough = !(CM.x+rCheck > boxMax.x - 0.1 || CM.x-rCheck < BoxMin.x + 0.1 ||
+        			      			    	CM.y+rCheck > boxMax.y - 0.1 || CM.y-rCheck < BoxMin.y + 0.1||
+        			            			CM.z+rCheck > boxMax.z - 0.1|| CM.z-rCheck < BoxMin.z + 0.1 );
               	
         					for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			        		  if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -7243,9 +7331,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	      		
         			      		bool farEnough = true;
         	      
-        			      		farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      	        	      CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			               	       CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        			      		farEnough = !(CM.x+rCheck > boxMax.x - 0.1 || CM.x-rCheck < BoxMin.x + 0.1 ||
+        			      	        	      CM.y+rCheck > boxMax.y - 0.1 || CM.y-rCheck < BoxMin.y + 0.1 ||
+        			               	      CM.z+rCheck > boxMax.z - 0.1 || CM.z-rCheck < BoxMin.z + 0.1 );
               	
         			     		for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			          		if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -7321,9 +7409,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	      		
         					bool farEnough = true;
         	      
-        					farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      			    	CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			            			CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        					farEnough = !( CM.x+rCheck > boxMax.x - 0.1 || CM.x-rCheck < BoxMin.x + 0.1 ||
+        			      			    	CM.y+rCheck > boxMax.y - 0.1 || CM.y-rCheck < BoxMin.y + 0.1 ||
+        			            			CM.z+rCheck > boxMax.z - 0.1 || CM.z-rCheck < BoxMin.z + 0.1 );
               	
         					for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			        		  if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -7389,9 +7477,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 	      		
         			      		bool farEnough = true;
         	      
-        			      		farEnough = !(CM.x+rCheck > boxMax.x || CM.x-rCheck < BoxMin.x ||
-        			      	        	    CM.y+rCheck > boxMax.y || CM.y-rCheck < BoxMin.y ||
-        			               	     CM.z+rCheck > boxMax.z || CM.z-rCheck < BoxMin.z );
+        			      		farEnough = !(CM.x+rCheck > boxMax.x - 0.1 || CM.x-rCheck < BoxMin.x + 0.1 ||
+        			      	        	    CM.y+rCheck > boxMax.y - 0.1 || CM.y-rCheck < BoxMin.y + 0.1 ||
+        			               	     CM.z+rCheck > boxMax.z - 0.1 || CM.z-rCheck < BoxMin.z + 0.1 );
               	
         			     		for (int nInd = 0; nInd < Orig_Cells; ++nInd){
         			          		if (mag(allCMs[nInd] - CM) < 2*rCheck){
@@ -7658,10 +7746,13 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   	     					
   	     						for(int nodeInd = 0; nodeInd < 180; ++nodeInd){
                   
-               	   					X[c*192 + nodeInd] = ScaleFactor[cellInd]*initx[nodeInd] + allCMs[cellInd].x;
-               	   					Y[c*192 + nodeInd] = ScaleFactor[cellInd]*inity[nodeInd] + allCMs[cellInd].y;
-               	   					Z[c*192 + nodeInd] = ScaleFactor[cellInd]*initz[nodeInd] + allCMs[cellInd].z;
-  	     
+               	   					X[c*192 + nodeInd] = ScaleFactor[c]*initx[nodeInd] + allCMs[cellInd].x;
+               	   					Y[c*192 + nodeInd] = ScaleFactor[c]*inity[nodeInd] + allCMs[cellInd].y;
+               	   					Z[c*192 + nodeInd] = ScaleFactor[c]*initz[nodeInd] + allCMs[cellInd].z;
+				
+  	     						
+  	     						
+  	     						
   	     						}
   	     						
   	     						c++;  	     					
@@ -8113,59 +8204,61 @@ int SecondCell(int Orig_No_of_C180s){
           	float rands[1];
 	  	int coun;
 	  	coun = c;	
-	  	while(true){
+	  	if(c>0){
+	  		
+	  		while(true){
 			
-	  		ranmar(rands, 1);
-                	int i = round(rands[0]*No_of_C180s );
+	  			ranmar(rands, 1);
+                		int i = round(rands[0]*No_of_C180s );
 
-			if ( CellINdex[i] < 0 ) continue;                 
+				if ( CellINdex[i] < 0 ) continue;                 
 		
-			ScaleFactor[i] = SizeFactor;
-			youngsModArray[i] = Stiffness2;
-			Growth_rate[i] = gRate;
-			DivisionVolume[i] = divisionV;
-			Apo_rate[i] = Apo_rate2;
-			squeeze_rate[i] = squeeze_rate2;
-			gamma_env[i] = gEnv;
-			viscotic_damp[i] = gVis;
-			CellINdex[i] = - CellINdex[i];
+				ScaleFactor[i] = SizeFactor;
+				youngsModArray[i] = Stiffness2;
+				Growth_rate[i] = gRate;
+				DivisionVolume[i] = divisionV;
+				Apo_rate[i] = Apo_rate2;
+				squeeze_rate[i] = squeeze_rate2;
+				gamma_env[i] = gEnv;
+				viscotic_damp[i] = gVis;
+				CellINdex[i] = - CellINdex[i];
 			
-                  	for (int j =0; j < 180; ++j){
+                  		for (int j =0; j < 180; ++j){
       				
-      				sumx += X[i*192 + j]; 
-      				sumy += Y[i*192 + j]; 
-      				sumz += Z[i*192 + j]; 
-  			}
+      					sumx += X[i*192 + j]; 
+      					sumy += Y[i*192 + j]; 
+      					sumz += Z[i*192 + j]; 
+  				}
 
-  			sumx /= 180.0; 
-  			sumy /= 180.0; 
-  			sumz /= 180.0;
+  				sumx /= 180.0; 
+  				sumy /= 180.0; 
+  				sumz /= 180.0;
 
 
-  			for (int j =0; j < 180; ++j){
-      				X[i*192 + j] -= sumx; 
-      				Y[i*192 + j] -= sumy; 
-      				Z[i*192 + j] -= sumz; 
-  			}
+  				for (int j =0; j < 180; ++j){
+      					X[i*192 + j] -= sumx; 
+      					Y[i*192 + j] -= sumy; 
+      					Z[i*192 + j] -= sumz; 
+  				}
                   		
 		
-			for(int j = 0; j < 180; ++j){
-       	           	X[i*192 + j] = SizeFactor*X[i*192 + j] + sumx;
-       	           	Y[i*192 + j] = SizeFactor*Y[i*192 + j] + sumy;
-       	           	Z[i*192 + j] = SizeFactor*Z[i*192 + j] + sumz;
-       		}
+				for(int j = 0; j < 180; ++j){
+       	        	   	X[i*192 + j] = SizeFactor*X[i*192 + j] + sumx;
+       	        	   	Y[i*192 + j] = SizeFactor*Y[i*192 + j] + sumy;
+       	        	   	Z[i*192 + j] = SizeFactor*Z[i*192 + j] + sumz;
+       			}
 
-			sumx = 0;
-			sumy = 0;
-			sumz = 0;
+				sumx = 0;
+				sumy = 0;
+				sumz = 0;
 			
-			coun--;
+				coun--;
 			
 			
-			if (coun == 0 ) break;
+				if (coun == 0 ) break;
 
-	      }
-
+	      		}
+		}
 	}	      
 
 	return 0;
@@ -8180,69 +8273,77 @@ int SecondColloid(int Orig_No_of_C180s){
   float sumy = 0; 
   float sumz = 0;
 	  
-  printf("Choosing second Colloid randomly\n");
+  
   int c;
   c = round(fractionOfColloids*(float)Orig_No_of_C180s);
+  
+  printf("Choosing second Colloid randomly\n");
   
   //printf("num of cells:	%d, num of second cells is:	%d\n", Orig_No_of_C180s, c);
   
   if (c > Orig_No_of_C180s){
+  	
   	printf("ERROR: Too many different Colloids requested\n");
         return 12517;
+  
   }
 	 
   float rands[1];
   int coun;
   coun = c;	
-  while(true){
+  
+  if(c > 0 ){
+  
+  	while(true){
 			
-	  ranmar(rands, 1);
-          int i = round(rands[0]*Orig_No_of_C180s);
+	  	ranmar(rands, 1);
+          	int i = round(rands[0]*Orig_No_of_C180s);
 
-	  if ( CellINdex[i] < 0 ) continue;                 
+	  	if ( CellINdex[i] < 0 ) continue;                 
 		
-		ScaleFactor[i] = SizeFactor_Colloids;
-		viscotic_damp[i] = gVis_Colloids;
-		CellINdex[i] = - CellINdex[i];
+			ScaleFactor[i] = SizeFactor_Colloids;
+			viscotic_damp[i] = gVis_Colloids;
+			CellINdex[i] = - CellINdex[i];
 			
-               for (int j =0; j < 180; ++j){
+               	for (int j =0; j < 180; ++j){
       				
-      			sumx += X[i*192 + j]; 
-      			sumy += Y[i*192 + j]; 
-      			sumz += Z[i*192 + j]; 
-  		}
+      				sumx += X[i*192 + j]; 
+      				sumy += Y[i*192 + j]; 
+      				sumz += Z[i*192 + j]; 
+  			}
 
-  		sumx /= 180.0; 
-  		sumy /= 180.0; 
-  		sumz /= 180.0;
+  			sumx /= 180.0; 
+  			sumy /= 180.0; 
+  			sumz /= 180.0;
 
 
-  		for (int j =0; j < 180; ++j){
+  			for (int j =0; j < 180; ++j){
       				
-      			X[i*192 + j] -= sumx; 
-      			Y[i*192 + j] -= sumy; 
-      			Z[i*192 + j] -= sumz; 
-  		}
+      				X[i*192 + j] -= sumx; 
+      				Y[i*192 + j] -= sumy; 
+      				Z[i*192 + j] -= sumz; 
+  			}
                   		
 		
-		for(int j = 0; j < 180; ++j){
+			for(int j = 0; j < 180; ++j){
        	           	
-       	           X[i*192 + j] = SizeFactor_Colloids*X[i*192 + j] + sumx;
-       	           Y[i*192 + j] = SizeFactor_Colloids*Y[i*192 + j] + sumy;
-       	           Z[i*192 + j] = SizeFactor_Colloids*Z[i*192 + j] + sumz;
-       	}
+       		           X[i*192 + j] = SizeFactor_Colloids*X[i*192 + j] + sumx;
+       		           Y[i*192 + j] = SizeFactor_Colloids*Y[i*192 + j] + sumy;
+       		           Z[i*192 + j] = SizeFactor_Colloids*Z[i*192 + j] + sumz;
+       		}
 
-		sumx = 0;
-		sumy = 0;
-		sumz = 0;
+			sumx = 0;
+			sumy = 0;
+			sumz = 0;
 			
-		coun--;
+			coun--;
 			
 			
-		if (coun == 0 ) break;
+			if (coun == 0 ) break;
    
-   }	      
-
+   	}	      
+   }	
+   
    return 0;
 
 
@@ -9395,6 +9496,77 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 }
 
 
+void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
+
+       
+       int No_of_All_Cells = 0;
+    
+       if (nprocs > 1){
+    		for (int i = 0; i < nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
+       } else {
+		No_of_All_Cells = No_of_C180s;
+    		numberofCells_InGPUs[0] = No_of_C180s;
+       }
+    
+       int Num_Cell_OtherGPU;
+       float Cx, Cy, Cz;	
+
+       fwrite(&t_step, sizeof(int), 1, cmFile);
+       fwrite(&frameCount, sizeof(int), 1, cmFile); 
+       fwrite(&No_of_All_Cells, sizeof(int), 1, cmFile);
+	
+	for (int i = 0; i < nprocs; i++){
+    	
+		if (i !=0 && nprocs > 1) {        
+    			
+    			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		
+    			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    
+    		}
+	
+		for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
+				
+				
+			if (i == 0) {
+					
+				Cx = CMx[c];
+				Cy = CMy[c];
+        			Cz = CMz[c];
+        				
+        			fwrite(&CellINdex[c], sizeof(int), 1, cmFile);
+        			fwrite(&Cx, sizeof(float), 1, cmFile); 
+        			fwrite(&Cy, sizeof(float), 1, cmFile); 
+        			fwrite(&Cz, sizeof(float), 1, cmFile);
+        	
+        			
+        		 } else if (nprocs > 1) {
+        				
+        			Cx = CmX_OtherGPU[c];
+				Cy = CmY_OtherGPU[c];
+        			Cz = CmZ_OtherGPU[c];
+        				
+        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, cmFile);
+        			fwrite(&Cx, sizeof(float), 1, cmFile); 
+        			fwrite(&Cy, sizeof(float), 1, cmFile); 
+        			fwrite(&Cz, sizeof(float), 1, cmFile);
+
+        			
+        		}
+			
+	      }
+	
+	}
+
+}
+
 int ReadPinFile(){
 
 	
@@ -9549,79 +9721,6 @@ int ReadPinFile(){
 
 
 }
-
-
-void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
-
-       
-       int No_of_All_Cells = 0;
-    
-       if (nprocs > 1){
-    		for (int i = 0; i < nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
-       } else {
-		No_of_All_Cells = No_of_C180s;
-    		numberofCells_InGPUs[0] = No_of_C180s;
-       }
-    
-       int Num_Cell_OtherGPU;
-       float Cx, Cy, Cz;	
-
-       fwrite(&t_step, sizeof(int), 1, cmFile);
-       fwrite(&frameCount, sizeof(int), 1, cmFile); 
-       fwrite(&No_of_All_Cells, sizeof(int), 1, cmFile);
-	
-	for (int i = 0; i < nprocs; i++){
-    	
-		if (i !=0 && nprocs > 1) {        
-    			
-    			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
-    		
-    			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		
-    
-    		}
-	
-		for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
-				
-				
-			if (i == 0) {
-					
-				Cx = CMx[c] - BoxMin.x;
-				Cy = CMy[c] - BoxMin.y;
-        			Cz = CMz[c] - BoxMin.z;
-        				
-        			fwrite(&CellINdex[c], sizeof(int), 1, cmFile);
-        			fwrite(&Cx, sizeof(float), 1, cmFile); 
-        			fwrite(&Cy, sizeof(float), 1, cmFile); 
-        			fwrite(&Cz, sizeof(float), 1, cmFile);
-        	
-        			
-        		 } else if (nprocs > 1) {
-        				
-        			Cx = CmX_OtherGPU[c] - BoxMin.x;
-				Cy = CmY_OtherGPU[c] - BoxMin.y;
-        			Cz = CmZ_OtherGPU[c] - BoxMin.z;
-        				
-        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, cmFile);
-        			fwrite(&Cx, sizeof(float), 1, cmFile); 
-        			fwrite(&Cy, sizeof(float), 1, cmFile); 
-        			fwrite(&Cz, sizeof(float), 1, cmFile);
-
-        			
-        		}
-			
-	      }
-	
-	}
-
-}
-
 
 void write_vel(int t_step, FILE* velFile,int frameCount){
     
@@ -9895,6 +9994,25 @@ int writeRestartFile(int t_step, int frameCount){
          cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
          CudaErrorCheck();
         
+        if (colloidal_dynamics && Compressor){
+        	
+        	for (int c = 0; c < No_of_C180s; c++){
+        						
+			CMx[c] -= BoxMin.x;
+			CMy[c] -= BoxMin.y;
+        		CMz[c] -= BoxMin.z;
+        
+        	}
+        	for (int c = 0; c < No_of_C180s*192; c++){
+        						
+			X[c] -= BoxMin.x;
+			Y[c] -= BoxMin.y;
+        		Z[c] -= BoxMin.z;
+        
+        	}
+        
+        }
+        
         
         int No_of_C180s_All, NumApoCell_All, NumRemoveCell_All;
         int Num_Cell_OtherGPU;
@@ -9995,6 +10113,8 @@ int writeRestartFile(int t_step, int frameCount){
 	}		
 	
 	if (rank == 0){
+		
+		
 		
 		for (int i = 0; i < nprocs; i++){
     	
