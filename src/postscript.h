@@ -185,10 +185,13 @@ void ranmar(float rvec[], int len);
 // Function to write the trajectory
 void write_traj(int t_step, FILE* trajfile);
 void write_vel(int t_step, FILE* velFile,int frameCount);
+void write_force(int t_step, FILE* velFile,int frameCount);
 void WriteBinaryTraj(int t_step, FILE* trajfile, int frameCount,int rank);
 void WriteBinaryTrajPin(int t_step, FILE* trajFile, int frameCount);
 void write_trajPin(int t_step, FILE* trajfile);
 void WriteCMBinary(int t_step, FILE* cmFile,int frameCount);
+void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount);
+void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount);
 
 // read and write restart function
 int writeRestartFile(int t_step, int frameCount);

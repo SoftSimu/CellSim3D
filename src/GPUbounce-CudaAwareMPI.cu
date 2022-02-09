@@ -93,7 +93,13 @@ float c1 = 0; float c2 = 0;
 
 bool write_cont_force=false;
 bool write_vel_file = false;
+bool write_traj_file = false;
 bool write_cm_file = false;
+bool write_vcm_file = false;
+bool write_fcm_file = false;
+bool write_for_file = false;
+
+
 char forces_file[256];
 int   overWriteMitInd; // 0 No, 1 yes
 const char* ptrajFileName;
@@ -252,12 +258,17 @@ bool correct_Vcom = false;
 int reductionblocks;
 
 float *d_CMxPin, *d_CMyPin, *d_CMzPin;
-float *d_CMx, *d_CMy, *d_CMz;
 float *d_CMxNNlist, *d_CMzNNlist, *d_CMyNNlist;
 
+float *d_CMx, *d_CMy, *d_CMz;
 float *CMx, *CMy, *CMz;
+
 float *d_VCMx, *d_VCMy, *d_VCMz;
 float *VCMx, *VCMy, *VCMz;
+
+float *d_FCMx, *d_FCMy, *d_FCMz;
+float *FCMx, *FCMy, *FCMz;
+
 float *d_SysCx, *d_SysCy, *d_SysCz; 
 
 R3Nptrs h_sysCM;
@@ -590,6 +601,9 @@ int main(int argc, char *argv[])
   FILE* forceFile;
   FILE* velFile;
   FILE* cmFile;
+  FILE* VcmFile;
+  FILE* FcmFile;
+  FILE* forFile;
   
   cudaError_t myError;
 
@@ -741,6 +755,9 @@ int main(int argc, char *argv[])
   VCMx = (float *)calloc(MaxNoofC180s, sizeof(float));
   VCMy = (float *)calloc(MaxNoofC180s, sizeof(float));
   VCMz = (float *)calloc(MaxNoofC180s, sizeof(float));
+  FCMx = (float *)calloc(MaxNoofC180s, sizeof(float));
+  FCMy = (float *)calloc(MaxNoofC180s, sizeof(float));
+  FCMz = (float *)calloc(MaxNoofC180s, sizeof(float));
   h_sysCM.x = (float *)calloc(1, sizeof(float));
   h_sysCM.y = (float *)calloc(1, sizeof(float));
   h_sysCM.z = (float *)calloc(1, sizeof(float));
@@ -843,6 +860,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMx ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMy ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_VCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_FCMx ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_FCMy ,          MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_FCMz ,          MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_area ,       MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div ,     MaxNoofC180s*sizeof(char))) return(-1);  
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_div_inds, MaxNoofC180s*sizeof(int))) return(-1);
@@ -995,6 +1015,11 @@ int main(int argc, char *argv[])
   cudaMemset(d_VCMx, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_VCMy, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_VCMz, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+  
+  cudaMemset(d_FCMx, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_FCMy, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_FCMz, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
   
   cudaMemset(d_CMxNNlist, 0, MaxNoofC180s*sizeof(float));
@@ -1350,8 +1375,9 @@ int main(int argc, char *argv[])
 
 
   // open trajectory file
+ // open trajectory file
   if (rank == 0){
-  
+  		
   	if (Restart == 0){
   		trajfile = fopen (trajFileName, "w");
   	}else{
@@ -1368,7 +1394,7 @@ int main(int argc, char *argv[])
   	if (Restart == 0){
     		 forceFile = fopen(forces_file, "w");
   	}else{
-   	 	forceFile = fopen(forces_file, "a");
+   	 	 forceFile = fopen(forces_file, "a");
   	}
   	
   	if (Restart == 0){
@@ -1381,6 +1407,24 @@ int main(int argc, char *argv[])
     		 cmFile = fopen("CM.xyz", "w");
   	}else{
    		 cmFile = fopen("CM.xyz", "a+");
+  	}
+  	
+  	if (Restart == 0){
+    		 VcmFile = fopen("VCM.xyz", "w");
+  	}else{
+   		 VcmFile = fopen("VCM.xyz", "a+");
+  	}
+  	
+  	if (Restart == 0){
+    		 FcmFile = fopen("FCM.xyz", "w");
+  	}else{
+   		 FcmFile = fopen("FCM.xyz", "a+");
+  	}
+  	
+  	if (Restart == 0){
+    		 forFile = fopen("Force.xyz", "w");
+  	}else{
+   		 forFile = fopen("Force.xyz", "a+");
   	}	
    
    }
@@ -2647,84 +2691,209 @@ int main(int argc, char *argv[])
   
   }
 	
-  int t = MaxNoofC180s;	
+    
+    int lentrajfile, lenforceFile, lenvelFile, lencmFile, lenvcmFile, lenfcmFile, lenforFile ; 
+    
+    if(rank == 0) {
+    
+    	fseek(trajfile, 0, SEEK_END);
+    	lentrajfile = ftell(trajfile);
+    	
+    	fseek(forceFile, 0, SEEK_END);
+  	lenforceFile = ftell(forceFile);
+  	
+  	fseek(velFile, 0, SEEK_END);
+  	lenvelFile = ftell(velFile);
+  	
+  	fseek(cmFile, 0, SEEK_END);
+  	lencmFile = ftell(cmFile);
+  	
+  	fseek(VcmFile, 0, SEEK_END);
+  	lenvcmFile = ftell(VcmFile);
+  	
+  	fseek(FcmFile, 0, SEEK_END);
+  	lenfcmFile = ftell(FcmFile);
+  	
+  	fseek(forFile, 0, SEEK_END);
+  	lenforFile = ftell(forFile);
+    
+    }
+    
+    
+    if (nprocs > 1) {
+    	
+    	MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
+    	
+    	MPI_Bcast(&lentrajfile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenforceFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenvelFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lencmFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenvcmFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenfcmFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lenforFile , 1, MPI_INT, 0, cart_comm);
+    
+    }
+    	
 
-  
-  if (Restart ==0){
-  
-  
-    cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    
-    if (nprocs > 1) MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
-    
+    if(write_fcm_file){
+       
+       		
+       	if (No_of_C180s > 0 ){
+     
+      			CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                	d_fConList.x, d_fConList.y, d_fConList.z,
+        	                                	d_FCMx, d_FCMy, d_FCMz);
+      			CudaErrorCheck();
+       		
+       	}
+          
+    }
     
     if(rank ==0 ){ 
         
-  	if (binaryOutput){
-      		
-      		fwrite(&t, sizeof(int), 1, trajfile);
-      
-      		t = (int)useDifferentCell;
-      		fwrite(&t, sizeof(int), 1, trajfile);
-      
-      		t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      		fwrite(&t, sizeof(int), 1, trajfile);      
+    	int t = nprocs*MaxNoofC180s;	
+        
+        if(write_traj_file){
+        
+            	cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		CudaErrorCheck();
+    		
+    		if (binaryOutput){
+	
+        		if( lentrajfile == 0 ) {
+      			
+      			
+      				fwrite(&t, sizeof(int), 1, trajfile);
+      	
+      				t = (int)useDifferentCell;
+      				fwrite(&t, sizeof(int), 1, trajfile);
+      	
+      				t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      				fwrite(&t, sizeof(int), 1, trajfile);      
     
-     		WriteBinaryTraj(0, trajfile, 1, rank); 
+     				if (Restart ==0) 
+     					WriteBinaryTraj(0, trajfile, 1, rank);
+     				else 
+     					WriteBinaryTraj(Laststep, trajfile, Lastframe, rank); 
+  		
   	
-  	} else {
+  			}
+  			
+  
+     		} else {
+     	
+	
+        		if( lentrajfile == 0 ) {
   	
-      		fprintf(trajfile, "Header Start:\n");
-      		fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+      				fprintf(trajfile, "Header Start:\n");
+      				fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+	
+      				fprintf(trajfile, "Using variable stiffness:\n");
+      				if (useDifferentCell) 
+        		 		fprintf(trajfile, "True\n");
+      				else
+        		  		fprintf(trajfile, "False\n");
 
-      		fprintf(trajfile, "Using variable stiffness:\n");
-      		if (useDifferentCell) 
-          		fprintf(trajfile, "True\n");
-      		else
-          		fprintf(trajfile, "False\n");
-
-      		fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
-     	 	fprintf(trajfile, "Header End\n");
-      		write_traj(0, trajfile);
+      				fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
+     	 			fprintf(trajfile, "Header End\n");
+      		
+  		
+  	     			if (Restart ==0) 
+     					write_traj(0, trajfile);
+     				else 
+     					write_traj(Laststep, trajfile);
   	
-  	}
+  	
+  			}
+  
+  		}
+  	
+  	}	
   	if (write_cont_force){
   
-      		fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
-      
+      		
       		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		CudaErrorCheck();
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-
+		CudaErrorCheck();
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		CudaErrorCheck();
       		
-      		writeForces(forceFile, 0, No_of_C180s);
+
+        	if( lenforceFile == 0 ) {
+      		
+      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
+      
+      			if (Restart ==0) 
+     				writeForces(forceFile, 0, No_of_C180s);
+     			else 
+     				writeForces(forceFile, Laststep, No_of_C180s);
+  		}
+  	
   	}
+  	
   	if(write_vel_file){
   	          
                cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
                cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
                cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+               CudaErrorCheck();
                
-               t = MaxNoofC180s;
-               fwrite(&t, sizeof(int), 1, velFile);
-      
-      		t = (int)useDifferentCell;
-      		fwrite(&t, sizeof(int), 1, velFile);
-      
-      		t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      		fwrite(&t, sizeof(int), 1, velFile);
+
+        	if( lenvelFile == 0 ) {       
                
-               write_vel(0, velFile,1);
+               	t = nprocs*MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, velFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, velFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, velFile);
+               
+               	if (Restart ==0) 
+     				write_vel(0, velFile,1);
+     			else 
+     				write_vel(Laststep, velFile, Lastframe);
+    
+       	}
        }
+  	
+  	if(write_for_file){
+  	          
+      		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		CudaErrorCheck();
+
+        	if( lenforFile == 0 ) {       
+               
+               	t = nprocs*MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, forFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, forFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, forFile);
+               
+               	if (Restart ==0) 
+     				write_force(0, forFile,1);
+     			else 
+     				write_force(Laststep, forFile, Lastframe);
+    
+       	}
        
+       }
+  	  	
        if(write_cm_file){
        
        
@@ -2733,53 +2902,129 @@ int main(int argc, char *argv[])
        	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
        	CudaErrorCheck();
        	
-       	t = MaxNoofC180s;
-               fwrite(&t, sizeof(int), 1, cmFile);
-      
-      		t = (int)useDifferentCell;
-      		fwrite(&t, sizeof(int), 1, cmFile);
-      
-      		t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      		fwrite(&t, sizeof(int), 1, cmFile);
+        	if( lencmFile == 0 ){
        	
-       	WriteCMBinary(0, cmFile, 1);
+       		t = MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, cmFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, cmFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, cmFile);
+       		
+       		if (Restart ==0)
+       			WriteCMBinary(0, cmFile, 1);
+       		else
+       			WriteCMBinary(Laststep, cmFile, Lastframe);
+       
+       	}
+    	
+    	}
+    	
+    	if(write_vcm_file){
        
        
-       }
-  	
-		  	
+       	cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	CudaErrorCheck();
+       	
+        	if( lenvcmFile == 0 ) {
+       	
+       		t = MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, VcmFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, VcmFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, VcmFile);
+       		
+       		if (Restart ==0)
+       			WriteVCMBinary(0, VcmFile, 1);
+       		else
+       			WriteVCMBinary(Laststep, VcmFile, Lastframe);
+       
+       	}
+    	}
+    	
+    	if(write_fcm_file){
+       
+       	cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	CudaErrorCheck();
+       	
+        	if( lenfcmFile == 0 ) {
+       	
+       		t = MaxNoofC180s;
+               	fwrite(&t, sizeof(int), 1, FcmFile);
+      
+      			t = (int)useDifferentCell;
+      			fwrite(&t, sizeof(int), 1, FcmFile);
+      
+      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      			fwrite(&t, sizeof(int), 1, FcmFile);
+       		
+       		if (Restart ==0)
+       			WriteFCMBinary(0, FcmFile, 1);
+       		else
+       			WriteFCMBinary(Laststep, FcmFile, Lastframe);
+       
+       	}
+    	}
+    
     } else if (nprocs > 1){   	
     	
+    	if(write_traj_file){
+    		
+    		cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    		CudaErrorCheck();
+    		
+    		if( lentrajfile == 0 ){
     	
-    	MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    	MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    	MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    	MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    			MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    	
+    		}
+    	
+    	}
     	
     	if (write_cont_force){
     		      		
     		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		CudaErrorCheck();
+      		
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-
+		CudaErrorCheck();
+		
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		CudaErrorCheck();
       		
-      		MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-      		MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      		if( lenforceFile == 0 ) {
+      		
+      			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		
-    		MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-      			
+    			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+      		}	
     	
     	}
     	
@@ -2788,13 +3033,34 @@ int main(int argc, char *argv[])
     		cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     		cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     		cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
-    		   	
-    		MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		CudaErrorCheck();
+    		
+    		if( lenvelFile == 0 ) {   	
+    			
+    			MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
     	
-    	} 
+    	}
+    	
+    	if(write_for_file){
+    		
+      		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		CudaErrorCheck();
+    		
+    		if( lenforFile == 0 ){   	
+    			
+    			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
+    	
+    	}
     	
     	if(write_cm_file){
     	
@@ -2803,16 +3069,52 @@ int main(int argc, char *argv[])
        	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
        	CudaErrorCheck();
        	
-       	MPI_Send(CMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+       	if( lencmFile == 0 ) {
+       		
+       		MPI_Send(CMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
     	
-    	}	
+    	} 
+    	
+    	if(write_vcm_file){
+    	
+    		cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	CudaErrorCheck();
+       	
+       	if( lenvcmFile == 0 ) {
+       		
+       		MPI_Send(VCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(VCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(VCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
+    	
+    	} 
+    	
+    	if(write_fcm_file){
+    		
+    		cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       	CudaErrorCheck();
+       	
+       	if( lenfcmFile == 0 ) {
+       		
+       		MPI_Send(FCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(FCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(FCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
+    	
+    	} 	
 
+    
     }
-  
-  }
 
   //return 0;
 
@@ -4753,50 +5055,101 @@ int main(int argc, char *argv[])
       
    if ( step%trajWriteInt == 0 )
    {
+          
+          if(write_vcm_file){
+       
+       		
+       	if (No_of_C180s > 0 ){
+     
+      			VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                		d_velListX, d_velListY, d_velListZ,
+        	                                	  	d_VCMx, d_VCMy, d_VCMz);
+      			CudaErrorCheck();
+       		
+       	}
+          
+          }
+          
+          if(write_fcm_file){
+       
+       		
+       	if (No_of_C180s > 0 ){
+     
+      			CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                	d_fConList.x, d_fConList.y, d_fConList.z,
+        	                                	d_FCMx, d_FCMy, d_FCMz);
+      			CudaErrorCheck();
+       		
+       	}
+          
+          }
+          
+          
+          
           //printf("   Writing trajectory to traj.xyz...\n");
           
           frameCount++; 
-          cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
-          cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          
           cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
-          
-          //cudaMemcpy(X, d_X, 192*(No_of_C180s + All_Cells)*sizeof(float),cudaMemcpyDeviceToHost);
-          //cudaMemcpy(Y, d_Y, 192*(No_of_C180s + All_Cells)*sizeof(float),cudaMemcpyDeviceToHost);
-          //cudaMemcpy(Z, d_Z, 192*(No_of_C180s + All_Cells)*sizeof(float),cudaMemcpyDeviceToHost);
-          //cudaMemcpy(CellINdex, d_CellINdex, (No_of_C180s + All_Cells)*sizeof(int), cudaMemcpyDeviceToHost);
-          
+ 
           
           if (nprocs > 1) MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
           
           if(rank ==0){
           
-          	if (binaryOutput)
-              		WriteBinaryTraj(step + Laststep, trajfile, frameCount + Lastframe, rank);
-          	else
-              		write_traj(step + Laststep, trajfile);
-
+          
+          	if(write_traj_file){
+          		
+          		cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          		cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          		cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          		CudaErrorCheck();
+          	
+          		if (binaryOutput)
+              			WriteBinaryTraj(step + Laststep, trajfile, frameCount + Lastframe, rank);
+          		else
+              			write_traj(step + Laststep, trajfile);
+		
+		}
+          	
           	if (write_cont_force == true){
 
               		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              		CudaErrorCheck();
+              		
               		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              		CudaErrorCheck();
               
               		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+              		CudaErrorCheck();
                     
               		writeForces(forceFile, step + Laststep, No_of_C180s);
           	}
+          	
           	if(write_vel_file){
                          
                	cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
                	cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
                	cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+               	CudaErrorCheck();
+               	
           		write_vel(step + Laststep, velFile,frameCount + Lastframe);
+          	}
+          	
+          	if(write_for_file){
+                         
+              		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+              		CudaErrorCheck();
+               	
+          		write_force(step + Laststep, forFile,frameCount + Lastframe);
           	}
           	
           	if(write_cm_file){
@@ -4809,26 +5162,60 @@ int main(int argc, char *argv[])
        	
        		WriteCMBinary(step + Laststep, cmFile, frameCount + Lastframe);
        	}
+       	
+       	if(write_vcm_file){
+     
+       		
+       		cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		CudaErrorCheck();
+       	
+       		WriteVCMBinary(step + Laststep, VcmFile, frameCount + Lastframe);
+       	}
+       	
+       	if(write_fcm_file){
+     
+       		
+       		cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		CudaErrorCheck();
+       	
+       		WriteFCMBinary(step + Laststep, FcmFile, frameCount + Lastframe);
+       	}
           
           } else if (nprocs > 1) {
-          
-    		MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
-    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+          	
+          	if(write_traj_file){
+          		
+          		cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          		cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          		cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float),cudaMemcpyDeviceToHost);
+          		CudaErrorCheck();
+    		
+    			MPI_Send(X , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(Y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(Z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
     		
     		if (write_cont_force){
     		      		
     			cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       			cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       			cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			CudaErrorCheck();
+      			
       			cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       			cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
 
 			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       			cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       			cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      			CudaErrorCheck();
       		
       			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
@@ -4849,11 +5236,25 @@ int main(int argc, char *argv[])
     		    	
     		    	cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     			cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    			cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost); 
+    			cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+    			CudaErrorCheck(); 
     		    	
     			MPI_Send(velListX , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(velListY , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(velListZ , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    		}
+    		
+    		if(write_for_file){
+    		    	
+    			cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			CudaErrorCheck();
+    		    	
+    			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
     		}
     		
@@ -4870,9 +5271,39 @@ int main(int argc, char *argv[])
     			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
     	
     		}
+    		
+    		if(write_vcm_file){
+    	
+    			cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		CudaErrorCheck();
+       	
+       		MPI_Send(VCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(VCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(VCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    	
+    		}
+    	
+    	    	if(write_fcm_file){
+    	
+    			cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+       		CudaErrorCheck();
+       	
+       		MPI_Send(FCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(FCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(FCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    	
+    		}
+    	
     	}		   
       	
   } 
+
   myError = cudaGetLastError();
   if ( cudaSuccess != myError )
   {
@@ -4887,10 +5318,10 @@ int main(int argc, char *argv[])
   else         	
      No_of_C180s_All = No_of_C180s;
   
-  if (rank ==0) {
+if (rank ==0) {
   
-  	t = (Time_steps+equiStepCount+Laststep+1) / trajWriteInt; 
-  
+  	int t = (Time_steps+equiStepCount+Laststep+1) / trajWriteInt; 
+
   	if(write_cm_file){
        
        	fclose(cmFile);   
@@ -4900,6 +5331,30 @@ int main(int argc, char *argv[])
       		fwrite(&No_of_C180s_All, sizeof(int), 1, cmFile);  
        	fseek(cmFile, 8, SEEK_SET);
        	fwrite(&t, sizeof(int), 1, cmFile);
+       
+  	}
+  
+    	if(write_vcm_file){
+       
+       	fclose(VcmFile);   
+        
+       	VcmFile = fopen("VCM.xyz", "r+");
+       	fseek(VcmFile, 0, SEEK_SET);
+      		fwrite(&No_of_C180s_All, sizeof(int), 1, VcmFile);  
+       	fseek(VcmFile, 8, SEEK_SET);
+       	fwrite(&t, sizeof(int), 1, VcmFile);
+       
+  	}
+  	
+  	if(write_fcm_file){
+       
+       	fclose(FcmFile);   
+        
+       	FcmFile = fopen("FCM.xyz", "r+");
+       	fseek(FcmFile, 0, SEEK_SET);
+      		fwrite(&No_of_C180s_All, sizeof(int), 1, FcmFile);  
+       	fseek(FcmFile, 8, SEEK_SET);
+       	fwrite(&t, sizeof(int), 1, FcmFile);
        
   	}
   	
@@ -4914,20 +5369,34 @@ int main(int argc, char *argv[])
        	fwrite(&t, sizeof(int), 1, velFile);
        
   	}
-  
-    	if (binaryOutput){
-  
-      		fclose(trajfile);
-      
-      		trajfile = fopen (trajFileName, "r+");
-      		fseek(trajfile, 0, SEEK_SET);
-      		fwrite(&No_of_C180s_All, sizeof(int), 1, trajfile);    
-      		fseek(trajfile, 8, SEEK_SET);
-      		fwrite(&t, sizeof(int), 1, trajfile);
+  	
+  	if(write_vel_file){
+       
+       	fclose(forFile);   
+        
+       	forFile = fopen("Force.xyz", "r+");
+       	fseek(forFile, 0, SEEK_SET);
+      		fwrite(&No_of_C180s_All, sizeof(int), 1, forFile);  
+       	fseek(forFile, 8, SEEK_SET);
+       	fwrite(&t, sizeof(int), 1, forFile);
+       
   	}
-   
+  	
+  	if(write_traj_file){
+    		if (binaryOutput){
   
-      	if ( colloidal_dynamics && Compressor) {
+      			fclose(trajfile);
+      
+      			trajfile = fopen (trajFileName, "r+");
+      			fseek(trajfile, 0, SEEK_SET);
+      			fwrite(&No_of_C180s_All, sizeof(int), 1, trajfile);    
+      			fseek(trajfile, 8, SEEK_SET);
+      			fwrite(&t, sizeof(int), 1, trajfile);
+  		}
+   	}
+    	
+    	if ( colloidal_dynamics && Compressor) {
+    	
   		printf(" Final Box Max X: 	%f,Final Box Max Y: 	%f,  Final Box Max Z: 	%f\n", boxMax.x, boxMax.y, boxMax.z);
   		printf(" Final Box Min X: 	%f,Final Box Min Y: 	%f,  Final Box Min Z: 	%f\n", BoxMin.x, BoxMin.y, BoxMin.z);
   
@@ -4935,7 +5404,7 @@ int main(int argc, char *argv[])
   
   	printf("   Simulation done!\n");
 
-  } 
+  }  
 
   FILE* MitIndFile;
   std::fstream MitIndFile2;
@@ -5021,7 +5490,10 @@ int main(int argc, char *argv[])
   	fclose(trajfile);
   	fclose(forceFile);
   	fclose(velFile);
+  	fclose(forFile);
   	fclose(cmFile);
+  	fclose(VcmFile);
+  	fclose(FcmFile);
   }
   fclose(MitIndFile);
 #ifdef OUTPUT_ADP_ERROR
@@ -6737,7 +7209,11 @@ int read_json_params(const char* inpFile){
         doAdaptive_dt = coreParams["doAdaptive_dt"].asBool();
         write_cont_force = coreParams["write_cont_force"].asBool();
         write_vel_file = coreParams["write_vel_file"].asBool();
+        write_for_file = coreParams["write_for_file"].asBool();
+        write_traj_file = coreParams["write_traj_file"].asBool();
         write_cm_file = coreParams["write_cm_file"].asBool();
+        write_vcm_file = coreParams["write_vcm_file"].asBool();
+        write_fcm_file = coreParams["write_fcm_file"].asBool();
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
         correct_com = coreParams["correct_com"].asBool();
         correct_Vcom = coreParams["correct_Vcom"].asBool();
@@ -7460,6 +7936,71 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
 
 }
 
+void write_force(int t_step, FILE* forFile,int frameCount){
+    
+    
+    int No_of_All_Cells = 0;
+    
+    if (nprocs > 1){
+    	for (int i = 0; i<nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
+    } else {
+    	No_of_All_Cells = No_of_C180s;
+    	numberofCells_InGPUs[0] = No_of_C180s;
+    }    
+    
+    int Num_Cell_OtherGPU;
+    
+
+    fwrite(&t_step, sizeof(int), 1, forFile);
+    fwrite(&frameCount, sizeof(int), 1, forFile); 
+    fwrite(&No_of_C180s, sizeof(int), 1, forFile);
+    
+    for (int i = 0; i < nprocs; i++){
+    	
+	if (i !=0 && nprocs > 1) {        
+    		
+    		Num_Cell_OtherGPU = 192*numberofCells_InGPUs[i];
+    			
+    		h_contactForces_OtherGPU.x = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_contactForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_contactForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		
+    
+    		MPI_Recv(h_contactForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_contactForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_contactForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    
+    	}
+    
+    
+        
+       for (int c = 0; c < numberofCells_InGPUs[i]; c++){
+
+            	if(i == 0) {
+        
+            		fwrite(&CellINdex[c], sizeof(int), 1, forFile);
+            		fwrite(h_contactForces.x + (c*192), sizeof(float), 192, forFile); 
+           		fwrite(h_contactForces.y + (c*192), sizeof(float), 192, forFile); 
+            		fwrite(h_contactForces.z + (c*192), sizeof(float), 192, forFile);
+        			
+        	} else if (nprocs > 1){
+        			
+                	fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, forFile);
+            		fwrite(h_contactForces_OtherGPU.x + (c*192), sizeof(float), 192, forFile); 
+            		fwrite(h_contactForces_OtherGPU.y + (c*192), sizeof(float), 192, forFile); 
+            		fwrite(h_contactForces_OtherGPU.z + (c*192), sizeof(float), 192, forFile);
+        			
+        		
+    		}
+	}
+
+   }
+
+}
+
 void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
     
 
@@ -7807,6 +8348,150 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
 
 }
 
+
+void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
+
+       
+       int No_of_All_Cells = 0;
+    
+       if (nprocs > 1){
+    		for (int i = 0; i < nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
+       } else {
+		No_of_All_Cells = No_of_C180s;
+    		numberofCells_InGPUs[0] = No_of_C180s;
+       }
+    
+       int Num_Cell_OtherGPU;
+       float vCx, vCy, vCz;	
+
+       fwrite(&t_step, sizeof(int), 1, VcmFile);
+       fwrite(&frameCount, sizeof(int), 1, VcmFile); 
+       fwrite(&No_of_All_Cells, sizeof(int), 1, VcmFile);
+	
+	for (int i = 0; i < nprocs; i++){
+    	
+		if (i !=0 && nprocs > 1) {        
+    			
+    			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		
+    			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    
+    		}
+	
+		for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
+				
+				
+			if (i == 0) {
+					
+				vCx = VCMx[c];
+				vCy = VCMy[c];
+        			vCz = VCMz[c];
+        				
+        			fwrite(&CellINdex[c], sizeof(int), 1, VcmFile);
+        			fwrite(&vCx, sizeof(float), 1, VcmFile); 
+        			fwrite(&vCy, sizeof(float), 1, VcmFile); 
+        			fwrite(&vCz, sizeof(float), 1, VcmFile);
+        	
+        			
+        		 } else if (nprocs > 1) {
+        				
+        			vCx = CmX_OtherGPU[c];
+				vCy = CmY_OtherGPU[c];
+        			vCz = CmZ_OtherGPU[c];
+        				
+        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, VcmFile);
+        			fwrite(&vCx, sizeof(float), 1, VcmFile); 
+        			fwrite(&vCy, sizeof(float), 1, VcmFile); 
+        			fwrite(&vCz, sizeof(float), 1, VcmFile);
+
+        			
+        		}
+			
+	      }
+	
+	}
+
+}
+
+
+
+void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
+
+       
+       int No_of_All_Cells = 0;
+    
+       if (nprocs > 1){
+    		for (int i = 0; i < nprocs; i++) No_of_All_Cells += numberofCells_InGPUs[i];
+       } else {
+		No_of_All_Cells = No_of_C180s;
+    		numberofCells_InGPUs[0] = No_of_C180s;
+       }
+    
+       int Num_Cell_OtherGPU;
+       float fCx, fCy, fCz;	
+
+       fwrite(&t_step, sizeof(int), 1, FcmFile);
+       fwrite(&frameCount, sizeof(int), 1, FcmFile); 
+       fwrite(&No_of_All_Cells, sizeof(int), 1, FcmFile);
+	
+	for (int i = 0; i < nprocs; i++){
+    	
+		if (i !=0 && nprocs > 1) {        
+    			
+    			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		
+    			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    
+    		}
+	
+		for (int c = 0; c < numberofCells_InGPUs[i]; c++){	
+				
+				
+			if (i == 0) {
+					
+				fCx = FCMx[c];
+				fCy = FCMy[c];
+        			fCz = FCMz[c];
+        				
+        			fwrite(&CellINdex[c], sizeof(int), 1, FcmFile);
+        			fwrite(&fCx, sizeof(float), 1, FcmFile); 
+        			fwrite(&fCy, sizeof(float), 1, FcmFile); 
+        			fwrite(&fCz, sizeof(float), 1, FcmFile);
+        	
+        			
+        		 } else if (nprocs > 1) {
+        				
+        			fCx = CmX_OtherGPU[c];
+				fCy = CmY_OtherGPU[c];
+        			fCz = CmZ_OtherGPU[c];
+        				
+        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, FcmFile);
+        			fwrite(&fCx, sizeof(float), 1, FcmFile); 
+        			fwrite(&fCy, sizeof(float), 1, FcmFile); 
+        			fwrite(&fCz, sizeof(float), 1, FcmFile);
+
+        			
+        		}
+			
+	      }
+	
+	}
+
+}
 
 
 void write_vel(int t_step, FILE* velFile,int frameCount){
