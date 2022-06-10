@@ -18,6 +18,7 @@
         "Restart": 1,
         "trajWriteInt": 2000,
         "non_div_time_steps": 0,
+        "MaxNeighList": 128,
         "trajFileName": "inp.xyz",
         "binaryOutput": 1,
         "maxPressure": 65.0,
@@ -106,6 +107,8 @@
     
 	"colloidal_dynamics": 1,
 	"dispersity": 0,
+	"dispersity_max": 1,
+	"dispersity_min": 0.7,
 	"rand_vel": 0,
 	"Two_Components": 1,
 	"SizeFactor": 0.9,

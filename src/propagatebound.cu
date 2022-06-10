@@ -9,8 +9,9 @@
 
 
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
-                           int *d_NoofNNlist, int *d_NNlist, float DL)
+                           int Xdiv, int Ydiv, int Zdiv, double3 BoxMin,
+                           int *d_NoofNNlist, int *d_NNlist, float DL, 
+                           int MaxNeighList)
 {
 
 
@@ -64,7 +65,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 128 )
+			  		if ( index > MaxNeighList )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -73,7 +74,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[ MaxNeighList*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -92,16 +93,17 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 }
 
 __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
                            int* d_Ghost_Cells_ind_EAST, int* d_Ghost_Cells_ind_WEST, int* d_Ghost_Cells_ind_NORTH, int* d_Ghost_Cells_ind_SOUTH,
-                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN )
+                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN,
+                           int MaxNeighList )
 {
 
 
 	int fullerene = blockIdx.x*blockDim.x+threadIdx.x;
-//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
+	//  printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, fullerene, No_of_C180s);
 
 
 	if ( fullerene < No_of_C180s )
@@ -195,7 +197,7 @@ __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, floa
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 128 )
+			  		if ( index > MaxNeighList )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -204,7 +206,7 @@ __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, floa
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[MaxNeighList*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -222,11 +224,12 @@ __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, floa
 }
 
 __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
                            int* d_Ghost_Cells_ind_EAST, int* d_Ghost_Cells_ind_WEST, int* d_Ghost_Cells_ind_NORTH, int* d_Ghost_Cells_ind_SOUTH,
-                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN )
+                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN,
+                           int MaxNeighList)
 {
 
 
@@ -244,7 +247,8 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 	 	if( Cx >  Subdivision_max.x - R_ghost_buffer){
 	 			
 	 		int index = atomicAdd(d_counter_gc_e,1);
-	 		d_Ghost_Cells_ind_EAST[index] = fullerene;	 			
+	 		d_Ghost_Cells_ind_EAST[index] = fullerene;
+	 			 			
 	 	}
 	 	
 	 	
@@ -320,7 +324,7 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 
 			  		int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 #ifdef PRINT_TOO_SHORT_ERROR
-			  		if ( index > 128 )
+			  		if ( index > MaxNeighList )
 					{
                          			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                                   			// for ( int k = 0; k < 32; ++k )
@@ -329,7 +333,7 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 						 continue;
 					}
 #endif
-			  		d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+			  		d_NNlist[MaxNeighList*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 					
 				}
 	
@@ -464,7 +468,8 @@ __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy
 
 __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float *d_CMx, float *d_CMy,float *d_CMz,
                            		int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
-                           		int *d_NoofNNlist, int *d_NNlist, float DL){
+                           		int *d_NoofNNlist, int *d_NNlist, float DL,
+                           		int MaxNeighList){
                            
 	
 	int atom = blockIdx.x*blockDim.x+threadIdx.x;
@@ -518,7 +523,7 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float
 					int index = atomicAdd( &d_NoofNNlist[j3*Xdiv*Ydiv+j2*Xdiv+j1] , 1); //returns old
 			  		
 #ifdef PRINT_TOO_SHORT_ERROR
-					if ( index > 128 )
+					if ( index > MaxNeighList )
 					{
                 				printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
                       				 // for ( int k = 0; k < 32; ++k )
@@ -527,7 +532,7 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float
 						continue;
 					}
 #endif
-					d_NNlist[ 128*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
+					d_NNlist[ MaxNeighList*(j3*Xdiv*Ydiv+j2*Xdiv+j1)+index] = fullerene;
 				}
 			}
 		}
@@ -741,7 +746,7 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
 
 
 __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -762,7 +767,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
 	int tid = threadIdx.x;	
 	int cell = blockIdx.x;	
 	
-	if( cell < No_of_migration_cells_buffer ) {
+	if( cell < No_of_migration_cells_buffer ){
 
 		__shared__ float C;
 		
@@ -918,7 +923,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
 
 
 __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1094,7 +1099,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migr
 
 
 __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1269,7 +1274,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migr
 }  
 
 __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter, float Pshift, float Vshift,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1522,7 +1527,7 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
 	
 }  
 
-__global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax,  float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax,  float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
                                	float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1576,7 +1581,7 @@ __global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_G
 	
 } 
 
-__global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax,  float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax,  float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
                                	float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1631,7 +1636,7 @@ __global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_G
 } 
 
 
-__global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax, float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
                                	float* d_CMx, float* d_CMy, float* d_CMz,
@@ -1682,7 +1687,7 @@ __global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_G
 }
 
 
-__global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax, float R_ghost_buffer,
 					float Pshift, float Vshift,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,

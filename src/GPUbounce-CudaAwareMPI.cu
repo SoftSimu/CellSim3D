@@ -174,9 +174,9 @@ float cellFoodRel; // Food released when cell dies (should < total consumed food
 float maxPop;
  
 
-float3 boxMax;
-float3 BoxMin;
-float3 BoxCen;
+double3 boxMax;
+double3 BoxMin;
+double3 BoxCen;
 float3 Subdivision_Cen;
 float3 Subdivision_min;
 float3 Subdivision_max;
@@ -285,6 +285,7 @@ int  No_of_C180s_in;     // the number of C180s near the center of mass of the s
 int MaxNoofC180s;
 int NewCellInd; 
 int non_divided_cells;
+int MaxNeighList;
 
 float *ran2;             // host: ran2[]
 float *d_ran2;           // device: ran2[], used in celldivision
@@ -316,6 +317,8 @@ unsigned int *d_seeds_Apo;
 
 bool colloidal_dynamics;
 bool dispersity;
+float dispersity_max;
+float dispersity_min;
 bool rand_vel;
 float Xratio;
 float Yratio;
@@ -627,7 +630,7 @@ int main(int argc, char *argv[])
    
   MPI_Allreduce(&MaxArea, &MaxArea_All, 1, MPI_FLOAT, MPI_MAX, cart_comm);
 
-  BufferSize = 2*ceil(MaxArea_All);
+  BufferSize = ceil(8*MaxArea_All);
   //BufferSize = 1000;
 
 
@@ -667,9 +670,17 @@ int main(int argc, char *argv[])
   	shapeLim = 1.0f;
   	angleConstant = 1000;
   }
-  f_range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
-  if( colloidal_dynamics ) f_range = (attraction_range + 0.6*shapeLim) * (attraction_range + 0.6*shapeLim);
   
+  //f_range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
+  //if( colloidal_dynamics ) f_range = (attraction_range + 0.6*shapeLim) * (attraction_range + 0.6*shapeLim);
+  
+  f_range =  0.9*shapeLim;
+  if( colloidal_dynamics ) {
+  	
+  	f_range = 0.6*shapeLim;
+  	if(dispersity) f_range = dispersity_max*shapeLim;
+  
+  }
   	
   if ( line ) {
   
@@ -1438,10 +1449,10 @@ int main(int argc, char *argv[])
   bool growthDone = false;
   
 
-  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*96*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist ,    Xdiv*Ydiv*Zdiv*MaxNeighList*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist ,    Xdiv*Ydiv*Zdiv*sizeof(int))) return(-1);
   
-  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*96*sizeof(int)); 
+  cudaMemset(d_NNlist, 0, Xdiv*Ydiv*Zdiv*MaxNeighList*sizeof(int)); 
   cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int)); 
   
   CudaErrorCheck();
@@ -1905,7 +1916,8 @@ int main(int argc, char *argv[])
         						Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
         						d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
         						d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
-        						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);        
+        						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN,
+        						MaxNeighList);        
         
         	CudaErrorCheck(); 
         		
@@ -2082,7 +2094,8 @@ int main(int argc, char *argv[])
    		All_Cells += All_Cells_UD;
    			
    		if( All_Cells > 0) UpdateNNlistWithGhostCells<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
-        									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL); 
+        									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
+        									MaxNeighList); 
         		
         	All_Cells -= All_Cells_UD;   				
 		
@@ -2091,7 +2104,8 @@ int main(int argc, char *argv[])
         
         	makeNNlist<<<No_of_C180s/512+1,512>>>(No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
                            				Xdiv, Ydiv, Zdiv, BoxMin,
-                           				d_NoofNNlist, d_NNlist, DL); 
+                           				d_NoofNNlist, d_NNlist, DL,
+                           				MaxNeighList); 
         
         }	
    
@@ -2410,7 +2424,8 @@ int main(int argc, char *argv[])
         						Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
         						d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
         						d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
-        						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);        
+        						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN, 
+        						MaxNeighList);        
         
         	CudaErrorCheck(); 
         		
@@ -2614,7 +2629,8 @@ int main(int argc, char *argv[])
    		All_Cells += All_Cells_UD;
    			
    		if( All_Cells > 0) UpdateNNlistWithGhostCells<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
-        									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL); 
+        									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
+        									MaxNeighList); 
 		
 		CudaErrorCheck();
 		
@@ -2657,7 +2673,8 @@ int main(int argc, char *argv[])
 									BoxMin, Subdivision_min, Youngs_mod, angleConstant,
                                                      		constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                                      		impurity,f_range,
-                                                     		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX); 
+                                                     		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
+                                                     		MaxNeighList); 
                                                      	
         CudaErrorCheck();
                                                      	
@@ -2668,11 +2685,12 @@ int main(int argc, char *argv[])
         		                                             	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
         	                                                	internal_damping,
         	                                                	attraction_range,
-        	                                                	d_viscotic_damp,
+        	                                                	d_viscotic_damp, d_ScaleFactor,
         	                                                	Xdiv, Ydiv, Zdiv, Subdivision_min,
         	                                                	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
         	                                                	d_velListX, d_velListY, d_velListZ,
-        	                                                	d_fDisList,impurity,f_range);
+        	                                                	d_fDisList,impurity,f_range,
+        	                                                	MaxNeighList);
                                                         
                                                         
         CudaErrorCheck();                                                  
@@ -3565,10 +3583,11 @@ int main(int argc, char *argv[])
 			
 			
       				makeNNlistMultiGpu<<<No_of_C180s/512+1,512>>>( No_of_C180s, R_ghost_buffer, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-        			Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
-        			d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
-        			d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
-        			d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);        
+        									Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
+        									d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
+        									d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
+        									d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN,
+        									MaxNeighList);        
         
         			CudaErrorCheck(); 
         		
@@ -3749,7 +3768,8 @@ int main(int argc, char *argv[])
    				All_Cells += All_Cells_UD;
    			
    				if( All_Cells > 0) UpdateNNlistWithGhostCells<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
-        									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL); 
+        									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
+        									MaxNeighList); 
         		
         			All_Cells -= All_Cells_UD;   				
        		
@@ -3758,7 +3778,8 @@ int main(int argc, char *argv[])
        		        makeNNlist<<<No_of_C180s/512+1,512>>>(No_of_C180s, d_CMx, d_CMy, d_CMz,
        		        					d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
                            						Xdiv, Ydiv, Zdiv, BoxMin,
-                           						d_NoofNNlist, d_NNlist, DL);
+                           						d_NoofNNlist, d_NNlist, DL,
+                           						MaxNeighList);
 
        		}
        	
@@ -4082,7 +4103,8 @@ int main(int argc, char *argv[])
         								Xdiv, Ydiv, Zdiv, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist, d_NNlist, DL,
         								d_counter_gc_e, d_counter_gc_w, d_counter_gc_n, d_counter_gc_s, d_counter_gc_u, d_counter_gc_d,
         								d_Ghost_Cells_ind_EAST, d_Ghost_Cells_ind_WEST, d_Ghost_Cells_ind_NORTH, d_Ghost_Cells_ind_SOUTH,
-        								d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);        
+        								d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN,
+        								MaxNeighList);        
         
         		CudaErrorCheck(); 
         		
@@ -4284,7 +4306,8 @@ int main(int argc, char *argv[])
    			All_Cells += All_Cells_UD;
    			
    			if( All_Cells > 0) UpdateNNlistWithGhostCells<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
-        											Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL); 
+        											Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
+        											MaxNeighList); 
         		
         		All_Cells -= All_Cells_UD;
         		   				
@@ -4555,7 +4578,8 @@ int main(int argc, char *argv[])
 									BoxMin, Subdivision_min, Youngs_mod, angleConstant,
                                		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                		                      	impurity,f_range,
-                               		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX); 
+                               		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
+                               		                      	MaxNeighList); 
                                                      	
        CudaErrorCheck();
                                                      	
@@ -4566,11 +4590,12 @@ int main(int argc, char *argv[])
                        	                              	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
                        	                                 	internal_damping,
                        	                                 	attraction_range,
-                       	                                 	d_viscotic_damp,
+                       	                                 	d_viscotic_damp, d_ScaleFactor,
                        	                                 	Xdiv, Ydiv, Zdiv, Subdivision_min,
                        	                                 	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                        	                                 	d_velListX, d_velListY, d_velListZ,
-                       	                                 	d_fDisList,impurity,f_range);
+                       	                                 	d_fDisList,impurity,f_range, 
+                       	                                 	MaxNeighList);
                        	                                 
                                                         
         CudaErrorCheck();                                                  
@@ -4604,11 +4629,12 @@ int main(int argc, char *argv[])
                	                                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                        	
                	                                         	internal_damping,
                	                                         	attraction_range,
-               	                                         	d_viscotic_damp,
+               	                                         	d_viscotic_damp, d_ScaleFactor,
                	                                         	Xdiv, Ydiv, Zdiv, Subdivision_min,
                	                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                	                                         	d_velListX, d_velListY, d_velListZ,
-               	                                         	d_fDisList, impurity,f_range);
+               	                                         	d_fDisList, impurity,f_range,
+               	                                         	MaxNeighList);
                                                         
        	CudaErrorCheck();                                                  
   		
@@ -5525,7 +5551,9 @@ inline void SetupBoxParams(int t_step)
       		if ((boxMax.z - BoxMin.z) < divVol){
       			DL = divisionV;
       		} else {
-      		if( colloidal_dynamics ) DL = 1.2; 
+      			
+      			//if( colloidal_dynamics ) DL = 1.2; 
+      			if( colloidal_dynamics ) DL = 1.5*0.6*dispersity_max;
       			DL = 1.4;
       		}
       
@@ -5585,7 +5613,9 @@ inline void SetupBoxParams(int t_step)
     		if ((boxMax.z - BoxMin.z) < divVol){
       			DL = divisionV; 
     		} else {
-    			if( colloidal_dynamics ) DL = 1.2;
+    			
+    			//if( colloidal_dynamics ) DL = 1.2;
+      			if( colloidal_dynamics ) DL = 1.5*0.6*dispersity_max;
       			DL = 1.4;
     		}
     
@@ -6914,10 +6944,12 @@ int DispersityFunc(int Orig_No_of_C180s){
 	
 		float rands[1];
 		
+		float a = dispersity_max - dispersity_min;
+		
 		for (int cell = 0; cell < Orig_No_of_C180s; ++cell )
 		{
 			ranmar(rands,1);
-			ScaleFactor[cell] = rands[0]*0.35 + 0.65 ;
+			ScaleFactor[cell] = rands[0]*a +  dispersity_min;
 		}
 
 	}
@@ -7193,10 +7225,9 @@ int read_json_params(const char* inpFile){
         Restart = coreParams["Restart"].asInt();
         trajWriteInt = coreParams["trajWriteInt"].asInt();
         equiStepCount = coreParams["non_div_time_steps"].asInt();
-
+	MaxNeighList = coreParams["MaxNeighList"].asInt();
         std::strcpy (trajFileName, coreParams["trajFileName"].asString().c_str());
         binaryOutput = coreParams["binaryOutput"].asBool(); 
-
         maxPressure = coreParams["maxPressure"].asFloat();
         minPressure = coreParams["minPressure"].asFloat();
         gamma_visc = coreParams["gamma_visc"].asFloat();
@@ -7315,6 +7346,8 @@ int read_json_params(const char* inpFile){
     
         colloidal_dynamics = ColloidParams["colloidal_dynamics"].asBool();
     	dispersity = ColloidParams["dispersity"].asBool();
+    	dispersity_max = ColloidParams["dispersity_max"].asFloat();
+    	dispersity_min = ColloidParams["dispersity_min"].asFloat();
     	rand_vel = ColloidParams["rand_vel"].asBool();
     	Two_Components = ColloidParams["Two_Components"].asBool();
         SizeFactor_Colloids = ColloidParams["SizeFactor"].asFloat();
@@ -7326,9 +7359,9 @@ int read_json_params(const char* inpFile){
         RandInitDir = ColloidParams["RandInitDir"].asBool();
         ReadInitialConf = ColloidParams["ReadInitialConf"].asBool();
         Compressor = ColloidParams["Compressor"].asBool();
-        CompressValue.x = ColloidParams["Compress_Value_X"].asFloat();
-        CompressValue.y = ColloidParams["Compress_Value_Y"].asFloat();
-        CompressValue.z = ColloidParams["Compress_Value_Z"].asFloat();
+        CompressValue.x = ColloidParams["Compress_Value_X"].asDouble();
+        CompressValue.y = ColloidParams["Compress_Value_Y"].asDouble();
+        CompressValue.z = ColloidParams["Compress_Value_Z"].asDouble();
     
     }
   
@@ -7346,12 +7379,12 @@ int read_json_params(const char* inpFile){
         useRigidBoxY = boxParams["useRigidBoxY"].asBool();
         useRigidBoxX = boxParams["useRigidBoxX"].asBool();
         threshDist = boxParams["threshDist"].asFloat();
-        boxMax.x = boxParams["box_len_x"].asFloat();
-        boxMax.y = boxParams["box_len_y"].asFloat(); 
-        boxMax.z = boxParams["box_len_z"].asFloat();
-        BoxMin.x = boxParams["BoxMin_x"].asFloat();
-        BoxMin.y = boxParams["BoxMin_y"].asFloat(); 
-        BoxMin.z = boxParams["BoxMin_z"].asFloat();
+        boxMax.x = boxParams["box_len_x"].asDouble();
+        boxMax.y = boxParams["box_len_y"].asDouble(); 
+        boxMax.z = boxParams["box_len_z"].asDouble();
+        BoxMin.x = boxParams["BoxMin_x"].asDouble();
+        BoxMin.y = boxParams["BoxMin_y"].asDouble(); 
+        BoxMin.z = boxParams["BoxMin_z"].asDOuble();
         flatbox = boxParams["flatbox"].asBool();
         LineCenter = boxParams["LineCenter"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
@@ -7507,12 +7540,12 @@ int read_json_params(const char* inpFile){
       return -1;
     }	
     
-    if (Two_Components && dispersity) {
+    //if (Two_Components && dispersity) {
     
-          printf ("Please choose one of the Sizing options for colloid.... \n");
-          return -1;
+    //      printf ("Please choose one of the Sizing options for colloid.... \n");
+   //       return -1;
     
-    }
+    //}
     
     if ( line && rand_pos && plane){
   

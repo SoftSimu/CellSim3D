@@ -6,7 +6,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/fill.h>
 
-#define MAX_NN 6
+#define MAX_NN 16
 
 struct angles3{
     float aij, ajk, aik;

@@ -25,8 +25,9 @@ __global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
 
 
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
-                           int *d_NoofNNlist, int *d_NNlist, float DL);
+                           int Xdiv, int Ydiv, int Zdiv, double3 BoxMin,
+                           int *d_NoofNNlist, int *d_NNlist, float DL,
+                           int MaxNeighList);
 
 __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
@@ -38,30 +39,32 @@ __global__ void makeNNlistPBCPin(int impurityNum, float *CMx, float *CMy,float *
 
                            
 __global__ void makeNNlistLEbcPin(int impurityNum, float *CMx, float *CMy,float *CMz,
-                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float Pshift,bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX);
 
 
 __global__ void makeNNlistMultiGpu(int No_of_C180s, float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
                            int* d_Ghost_Cells_ind_EAST, int* d_Ghost_Cells_ind_WEST, int* d_Ghost_Cells_ind_NORTH, int* d_Ghost_Cells_ind_SOUTH,
-                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN);
+                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN,
+                           int MaxNeighList);
 
 __global__ void makeNNlistPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ,bool useRigidBoxY);
 
 __global__ void makeNNlistMultiGpuPBC( int No_of_C180s, float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, float3 BoxMin, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
                            int* d_counter_gc_n, int* d_counter_gc_s, int* d_counter_gc_u, int* d_counter_gc_d,
                            int* d_Ghost_Cells_ind_EAST, int* d_Ghost_Cells_ind_WEST, int* d_Ghost_Cells_ind_NORTH, int* d_Ghost_Cells_ind_SOUTH,
-                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN );
+                           int* d_Ghost_Cells_ind_UP, int* d_Ghost_Cells_ind_DOWN,
+                           int MaxNeighList);
                            
 __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           float attrac, int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           float attrac, int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
@@ -108,13 +111,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin,  float DL, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float3 Subdivision_min, float Youngs_mod, float angleConstant, 
+                           double3 BoxMin, float3 Subdivision_min, float Youngs_mod, float angleConstant, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
                            bool impurity, float f_range,
-                           bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX);
+                           bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX,
+                           int MaxNeighList);
 
                            
 
@@ -127,10 +131,10 @@ __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax, float3 Subdivision_min,
+                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax, float3 Subdivision_min,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float Youngs_mod, 
+                           double3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
                            bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
 
@@ -143,10 +147,10 @@ __global__ void CalculateConForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
                            	float attraction_strength, float attraction_range,
                            	float repulsion_strength, float repulsion_range,
                            	float* d_viscotic_damp,
-                           	int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
+                           	int Xdiv, int Ydiv, int Zdiv,double3 boxMax, float3 Subdivision_min,
                            	int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            	float threshDist, 
-                           	float3 BoxMin, float Youngs_mod, 
+                           	double3 BoxMin, float Youngs_mod, 
                            	bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            	bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX, bool impurity, float f_range);
                            
@@ -159,10 +163,10 @@ __global__ void CalculateConForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                            float threshDist,  
-                           float3 BoxMin, float Youngs_mod, 
+                           double3 BoxMin, float Youngs_mod, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList,
                            float Pshift , bool useRigidBoxZ, bool impurity, float f_range);
 
@@ -241,7 +245,7 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
 void writeForces(FILE* forceFile, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, float* d_Z,
-                                 R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, float3 BoxCen, long int numParts);
+                                 R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, double3 BoxCen, long int numParts);
 
 __global__ void CorrectCoMVelocity(int No_cells_All, float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_sysVCM, R3Nptrs d_sysCM_All, long int numParts);
@@ -268,11 +272,12 @@ __global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_s
                                    float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
                                    float gamma_int,
                                    float attraction_range,
-                                   float* d_viscotic_damp,
+                                   float* d_viscotic_damp, float* d_ScaleFactor,
                                    int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool impurity, float f_range);
+                                   R3Nptrs d_fDisList, bool impurity, float f_range,
+                                   int MaxNeighList);
                                    
 
 __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -283,7 +288,7 @@ __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C1
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
+                                   int Xdiv, int Ydiv, int Zdiv,double3 boxMax, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList, bool useRigidBoxZ, bool useRigidBoxY, bool impurity, float f_range);
@@ -297,7 +302,7 @@ __global__ void CalculateDisForceMultiGPUPBC( int No_of_C180s, int d_C180_nn[], 
                                    	float gamma_int,
                                    	float attraction_range,
                                    	float* d_viscotic_damp,
-                                   	int Xdiv, int Ydiv, int Zdiv,float3 boxMax, float3 Subdivision_min,
+                                   	int Xdiv, int Ydiv, int Zdiv,double3 boxMax, float3 Subdivision_min,
                                    	int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    	float* d_velListX, float* d_velListY, float* d_velListZ,
                                    	R3Nptrs d_fDisList, bool impurity, float f_range);
@@ -310,7 +315,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp,
-                                   int Xdiv, int Ydiv, int Zdiv,float3 boxMax,
+                                   int Xdiv, int Ydiv, int Zdiv,double3 boxMax,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float3 DLp, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, bool impurity, float f_range);
@@ -321,13 +326,13 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
                                float *d_CMx, float *d_CMy, float *d_CMz,
-                               float3 boxMax, float divVol,int numCells,
+                               double3 boxMax, float divVol,int numCells,
                                bool useRigidBoxZ, bool useRigidBoxY );
                                
 __global__ void UpdateLEbc (float *d_X, float *d_Y, float *d_Z, 
                                float* d_VX, float* d_VY, float* d_VZ,
                                float *d_CMx, float *d_CMy, float *d_CMz,
-                               float3 boxMax, float divVol, int numCells,
+                               double3 boxMax, float divVol, int numCells,
                                float Pshift, float Vshift,bool useRigidBoxZ );
                                
 __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
@@ -345,27 +350,27 @@ __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy
 __global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
 					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
-					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX);
+					  double3 boxMax, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX);
 					  
                               
 __global__ void DangerousParticlesFinderLEbc(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
 					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang,
-					  float3 boxMax, bool useRigidBoxZ, bool useRigidBoxY); 
+					  double3 boxMax, bool useRigidBoxZ, bool useRigidBoxY); 
 
 __global__ void UpdateNNlistDivision(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz,
 					float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           		int Xdiv, int Ydiv, int Zdiv, float3 BoxMin,
+                           		int Xdiv, int Ydiv, int Zdiv, double3 BoxMin,
                            		int *d_NoofNNlist, int *d_NNlist, float DL); 
 
                            	
 __global__ void UpdateNNlistDivisionPBC(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           		 int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           		 int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            		 int *d_NoofNNlist, int *d_NNlist, float3 DLp, bool useRigidBoxZ, bool useRigidBoxY);
 
 
 __global__ void UpdateNNlistDivisionLEbc(int No_of_C180s, int non_divided_cells, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-                           		   int Xdiv, int Ydiv, int Zdiv, float3 boxMax,
+                           		   int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
                            		   int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);   
 
 __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter,
@@ -393,7 +398,7 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
                               float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
                               float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
 
-__global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax, float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
                                	float* d_CMx, float* d_CMy, float* d_CMz,
@@ -401,7 +406,7 @@ __global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_G
                               	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
                               	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
                             
-__global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax, float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
                                	float* d_CMx, float* d_CMy, float* d_CMz,
@@ -409,7 +414,7 @@ __global__ void Ghost_Cells_Pack_PBC_Y(int No_of_Ghost_cells_buffer, int No_of_G
                               	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
                               	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
                               	
-__global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax, float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
                                	float* d_CMx, float* d_CMy, float* d_CMz,
@@ -417,7 +422,7 @@ __global__ void Ghost_Cells_Pack_PBC_Z(int No_of_Ghost_cells_buffer, int No_of_G
                               	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
                               	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
 
-__global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, float3 boxMax, float R_ghost_buffer,
+__global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax, float R_ghost_buffer,
 					float Pshift, float Vshift,
 					float *d_X,  float *d_Y,  float *d_Z,
                                	float* d_velListX, float* d_velListY, float* d_velListZ,
@@ -428,10 +433,11 @@ __global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_
                               
 __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
-                           int *d_NoofNNlist, int *d_NNlist, float DL); 
+                           int *d_NoofNNlist, int *d_NNlist, float DL,
+                           int MaxNeighList); 
                              
 __global__ void UpdateNNlistWithGhostCellsPBC(int No_of_C180s, int All_Cells, float *d_CMx, float *d_CMy,float *d_CMz,
-                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 boxMax,
+                           int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL);
 
 __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
@@ -450,7 +456,7 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
                                		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
 
 __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -465,7 +471,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
                                		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
                                		
 __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -480,7 +486,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migr
                                		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
 
 __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,
@@ -495,7 +501,7 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migr
                                		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);      
 
 __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter, float Pshift, float Vshift,
-					 	int* d_migrated_cells_ind, char* d_cell_mig, float3 boxMax,
+					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
    						float *d_X,  float *d_Y,  float *d_Z,
                                		float* d_velListX, float* d_velListY, float* d_velListZ,
                                		float* d_CMx, float* d_CMy, float* d_CMz,

@@ -197,13 +197,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv,float3 boxMax, 
+                           int Xdiv, int Ydiv, int Zdiv,double3 boxMax, 
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
-                           float3 BoxMin, float3 Subdivision_min, float Youngs_mod,  float angleConstant, 
+                           double3 BoxMin, float3 Subdivision_min, float Youngs_mod,  float angleConstant, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            bool impurity, float f_range,
-                           bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX)
+                           bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX,
+                           int MaxNeighList)
 {
 
 
@@ -234,15 +235,12 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     	if ( rank < No_of_C180s && atom < 180 )
     	{
 
-
-    		int NooflocalNN;
-    		int localNNs[6];
     		float deltaX, deltaY, deltaZ;
     		float R;
     		int N1;
     		int nn_rank;
     		float R0=0;
-    		
+    		float range;
     		float Pressure = d_pressList[rank];
     		float stiffness = d_stiffness[rank];
     		float Scale = d_ScaleFactor[rank];
@@ -331,8 +329,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	// interfullerene attraction and repulsion
         
-        	NooflocalNN = 0;
-        
 
         	int posX = (int)((X - Subdivision_min.x)/DL);
         	if ( posX < 0 ) posX = 0;
@@ -354,46 +350,34 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	        float3 contactForce = make_float3(0.f, 0.f, 0.f);
         
-	        for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
+	        for ( int nn_rank1 = 1; nn_rank1 <= d_NoofNNlist[index]; ++nn_rank1 )
 	        {
-	            nn_rank = d_NNlist[128*index+nn_rank1-1];
 	            
-	            if ( nn_rank == rank )
-	                continue;
+	            	nn_rank = d_NNlist[MaxNeighList*index + nn_rank1 - 1];
+	            
+	            	if ( nn_rank == rank )
+	                	continue;
                 
-                
-	            deltaX  = X - d_CMx[nn_rank];
-	            deltaY  = Y - d_CMy[nn_rank];                
-	            deltaZ  = Z - d_CMz[nn_rank];
-
-
+	            	deltaX  = X - d_CMx[nn_rank];
+	            	deltaY  = Y - d_CMy[nn_rank];                
+	            	deltaZ  = Z - d_CMz[nn_rank];
+	            
+		    	//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
+		    	range = f_range + attraction_range;	
                     
-	            if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
-	                continue;
+	            	if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ >  range*range)
+	            	    continue;
+		    
+		    	
+		    	nnAtomInd = nn_rank*192;
+		    	for (int nn_atom = 0; nn_atom < 180; ++nn_atom )
+            	    	{
+               		 
+               		 //nnAtomInd += nn_atom;
 
-	            ++NooflocalNN;
-
-
-	            if ( NooflocalNN > MAX_NN ){
-	                printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-	                continue;
-	            }
-
-	            localNNs[NooflocalNN-1] = nn_rank;
-	        }
-
-	        for ( int i = 0; i < NooflocalNN; ++i )
-	        {
-	        	nn_rank =localNNs[i];
-        	    	nnAtomInd = nn_rank*192;
-
-            		for (int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
-            		{
-               		 nnAtomInd += nn_atom;
-
-               		 deltaX = X - d_X[nn_rank*192+nn_atom];
-               		 deltaY = Y - d_Y[nn_rank*192+nn_atom];
-               		 deltaZ = Z - d_Z[nn_rank*192+nn_atom];
+               		 deltaX = X - d_X[nnAtomInd+nn_atom];
+               		 deltaY = Y - d_Y[nnAtomInd+nn_atom];
+               		 deltaZ = Z - d_Z[nnAtomInd+nn_atom];
         
             
                		 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
@@ -415,56 +399,39 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                		     contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
                		     contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
                		 }
-
-           		 }
-
-        	}
-        	
+            	    
+            	    	}
+	        
+	        
+	        }      	
         	
         	if (impurity){
         	
-        		NooflocalNN = 0;
         		
-        		for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        		for ( int nn_rank1 = 1; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
 	        	{
+	        
 	            		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
-                
                 
 	            		deltaX  = X - d_CMxPin[nn_rank];
 	            		deltaY  = Y - d_CMyPin[nn_rank];                
 	            		deltaZ  = Z - d_CMzPin[nn_rank];
 
-
+				range = f_range + attraction_range;
                
-	            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
+	            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range*range )
 	                		continue;
 
-	            		++NooflocalNN;
 
-	           		//printf("NooflocalNN %d\n", NooflocalNN);
-
-	            		if ( NooflocalNN > MAX_NN ){
-	                		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-	                		continue;
-	            		}
-
-	            		localNNs[NooflocalNN-1] = nn_rank;
-	        	}
-
-	        	for ( int i = 0; i < NooflocalNN; ++i )
-	        	{
-	        		
-	        		nn_rank =localNNs[i];
         	    		nnAtomInd = nn_rank*192;
-
             			for (int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
             			{
                			
-               			nnAtomInd += nn_atom;
+               			//nnAtomInd += nn_atom;
 	
-               			deltaX = X - d_XPin[nn_rank*192+nn_atom];
-               			deltaY = Y - d_YPin[nn_rank*192+nn_atom];
-               			deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];
+               			deltaX = X - d_XPin[nnAtomInd+nn_atom];
+               			deltaY = Y - d_YPin[nnAtomInd+nn_atom];
+               			deltaZ = Z - d_ZPin[nnAtomInd+nn_atom];
         
             
                		 	R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
@@ -492,8 +459,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         		}
         	
         	}
-        	
-        	
         	
         	FX += contactForce.x;
         	FY += contactForce.y;
@@ -642,6 +607,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	d_ExtForces.y[atomInd] = FY_ext;
        	d_ExtForces.z[atomInd] = FZ_ext;
    	}
+
 }
 
 
@@ -652,11 +618,13 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            	    float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                                   
                                    float gamma_int,
                                    float attraction_range,
-                                   float* d_viscotic_damp,
+                                   float* d_viscotic_damp, float* d_ScaleFactor,
                                    int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool impurity, float f_range){
+                                   R3Nptrs d_fDisList, bool impurity, float f_range,
+                                   int MaxNeighList){
+    
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
     
@@ -668,7 +636,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     	
         	size_t globalNodeInd = cellInd*192 + nodeInd;
         	size_t N = 0;
-
+		float range;
         	
         	float3 force = make_float3(0, 0, 0);
         	float3 nodeVelocity = make_float3(d_velListX[globalNodeInd],
@@ -716,14 +684,9 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	float deltaY = 0;
         	float deltaZ = 0;
         	float R = 0;
-
         	int nn_rank = 0;
-        	//int nnAtomInd = 0;
-        
-        	int NooflocalNN = 0;
-        	int localNNs[6];
+        	int nnAtomInd = 0;
 
-        
         	int posX = 0;    
         	int posY = 0;
         	int posZ = 0;
@@ -746,67 +709,58 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
         	{
-        	    nn_rank = d_NNlist[128*index+nn_rank1-1]; 
-        	    if ( nn_rank == cellInd ) continue;
+        	    	
+        	    	nn_rank = d_NNlist[MaxNeighList*index+nn_rank1-1]; 
+        	    	
+        	    	if ( nn_rank == cellInd ) continue;
 
+        	    	deltaX  = X - d_CMx[nn_rank];
+        	    	deltaY  = Y - d_CMy[nn_rank];            
+        	    	deltaZ  = Z - d_CMz[nn_rank];
 
-        	    deltaX  = X - d_CMx[nn_rank];
-        	    deltaY  = Y - d_CMy[nn_rank];            
-        	    deltaZ  = Z - d_CMz[nn_rank];
-
-        	    if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
-        	        continue;
-
-        	    ++NooflocalNN;
-
-        	    if ( NooflocalNN > MAX_NN ){
-        	    
-        	        printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-        	        
-        	        continue;
-        	    }
-        	    localNNs[NooflocalNN-1] = nn_rank;
-        	}
-
-        	for ( int i = 0; i < NooflocalNN; ++i )
-        	{
-        	    nn_rank =localNNs[i];
-
-        	    for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
-        	    {
+		    	//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
+		    	range = f_range + attraction_range;
+		    	
+        		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range*range )
+        	        	continue;
+        		
+        		
+			nnAtomInd = nn_rank*192;
+        	    	for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+        	    	{
                 
-                
-        	        deltaX = X - d_X[nn_rank*192+nn_atom];   
-        	        deltaY = Y - d_Y[nn_rank*192+nn_atom];
-        	        deltaZ = Z - d_Z[nn_rank*192+nn_atom];                
+                		//nnAtomInd += nn_atom;
+                		
+                		deltaX = X - d_X[nnAtomInd+nn_atom];   
+        	        	deltaY = Y - d_Y[nnAtomInd+nn_atom];
+        	        	deltaZ = Z - d_Z[nnAtomInd+nn_atom];                
                 
 
-        	        R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
+        	        	R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
 	
 	
-        	        if ( R > attraction_range*attraction_range )
-        	            continue;
+        	        	if ( R > attraction_range*attraction_range )
+        	        	    continue;
 	
-        	        neighVelocity = make_float3(d_velListX[nn_rank*192+nn_atom],
-        	                                    d_velListY[nn_rank*192+nn_atom],
-        	                                    d_velListZ[nn_rank*192+nn_atom]);
+        	        	neighVelocity = make_float3(d_velListX[nnAtomInd+nn_atom],
+        	        	                            d_velListY[nnAtomInd+nn_atom],
+        	        	                            d_velListZ[nnAtomInd+nn_atom]);
 
 	
-			float3 v_ij = nodeVelocity - neighVelocity;
+				float3 v_ij = nodeVelocity - neighVelocity;
 		
-		
-        	        // Tangential component of relative velocity
-        	        float3 vTau = v_ij - dot(v_ij, normal)*normal;
-        	        force = force - d_viscotic_damp[cellInd]*vTau;
-        	    }
+        	        	// Tangential component of relative velocity
+        	        	float3 vTau = v_ij - dot(v_ij, normal)*normal;
+        	        	force = force - d_viscotic_damp[cellInd]*vTau;
+        	    	
+        	    	}
 
-        	}
         	
+        	}
         	
         	if (impurity){
 	
 			
-			NooflocalNN = 0;
 			for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
         		{
         	    		
@@ -816,49 +770,39 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	    		deltaY  = Y - d_CMyPin[nn_rank];            
         	    		deltaZ  = Z - d_CMzPin[nn_rank];
 
-        	    		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > f_range )
+				range = f_range + attraction_range;
+				
+        	    		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range*range )
         	        		continue;
 
-        	    		++NooflocalNN;
-
-        	    		if ( NooflocalNN > MAX_NN ){
-        	        		printf("Recoverable error: NooflocalNN = %d, should be < %d\n",NooflocalNN , MAX_NN);
-        	        		continue;
-        	    		}
-        	    		localNNs[NooflocalNN-1] = nn_rank;
-        		}
-
-
-        		for ( int i = 0; i < NooflocalNN; ++i )
-        		{
-        	    		nn_rank =localNNs[i];
-
-        	    		for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
-        	    		{
-                
-                
-        	        		deltaX = X - d_XPin[nn_rank*192+nn_atom];   
-        	        		deltaY = Y - d_YPin[nn_rank*192+nn_atom];
-        	        		deltaZ = Z - d_ZPin[nn_rank*192+nn_atom];                
+				nnAtomInd = nn_rank*192;
+	        	    	for ( int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+	        	    	{
+                			
+                			//nnAtomInd += nn_atom;
+                			
+	        	        	deltaX = X - d_XPin[nnAtomInd+nn_atom];   
+	        	        	deltaY = Y - d_YPin[nnAtomInd+nn_atom];
+	        	        	deltaZ = Z - d_ZPin[nnAtomInd+nn_atom];                
                 
 
-        	        		R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
+	        	        	R = deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ;
 	
 	
-        	        		if ( R > attraction_range*attraction_range )
-        	            			continue;
+	        	        	if ( R > attraction_range*attraction_range )
+	        	            		continue;
 		
 		
-        	        		// Tangential component of the node velocity
-        	        		float3 vTau = nodeVelocity - dot(nodeVelocity, normal)*normal;
-        	        		force = force - d_viscotic_damp[cellInd]*vTau;
-        	    		}
+	        	        	// Tangential component of the node velocity
+	        	        	float3 vTau = nodeVelocity - dot(nodeVelocity, normal)*normal;
+	        	        	force = force - d_viscotic_damp[cellInd]*vTau;
+	        	    	}
 
-        		}  	
+	        	}  	
         	
+
         	}
         	
-
         	// viscous drag  
         	force = force - d_gamma_env[cellInd]*nodeVelocity;
         
@@ -866,6 +810,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	d_fDisList.x[globalNodeInd] = force.x; 
         	d_fDisList.y[globalNodeInd] = force.y; 
         	d_fDisList.z[globalNodeInd] = force.z; 
+	
 	} 
 
 }
@@ -984,7 +929,7 @@ __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
 }
 
 __global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, float* d_Z,
-                                 R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, float3 BoxCen, long int numParts){
+                                 R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, double3 BoxCen, long int numParts){
     
     
     __shared__ float Cmx;
