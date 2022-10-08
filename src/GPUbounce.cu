@@ -397,6 +397,7 @@ int IndexShifter;
 int *CellINdex_OtherGPU;
 float R_ghost_buffer;
 int BufferSize;
+int Max_Buffer_Size;
 
 float *youngsModArray_OtherGPU, *Growth_rate_OtherGPU, *ScaleFactor_OtherGPU;
 float *DivisionVolume_OtherGPU, *Apo_rate_OtherGPU, *squeeze_rate_OtherGPU;
@@ -635,16 +636,7 @@ int main(int argc, char *argv[])
  
   SetupBoxParams(0);	
 
-  float MaxArea, MaxArea_All;  
-  MaxArea = Subdivision_Area.x;
-  if (Subdivision_Area.y > MaxArea) MaxArea = Subdivision_Area.y;
-  if (Subdivision_Area.z > MaxArea) MaxArea = Subdivision_Area.z;
-   
-  MPI_Allreduce(&MaxArea, &MaxArea_All, 1, MPI_FLOAT, MPI_MAX, cart_comm);
-
-  //BufferSize = ceil(8*MaxArea_All);
-  BufferSize = 1000;
-  if(rank == 0) printf("   Buffer Size is: %d \n",BufferSize);
+  
 
   BufferDistance = 0.3;
   if(rank == 0) printf("   Buffer_Distance is: %f \n",BufferDistance);
@@ -652,6 +644,18 @@ int main(int argc, char *argv[])
   R_ghost_buffer = 1.4;
   if( colloidal_dynamics ) R_ghost_buffer = 1.2;
   if(rank == 0) printf("   Ghost_Buffer_Distance is: %f \n",R_ghost_buffer);	
+
+
+  float MaxArea, MaxArea_All;  
+  MaxArea = Subdivision_Area.x;
+  if (Subdivision_Area.y > MaxArea) MaxArea = Subdivision_Area.y;
+  if (Subdivision_Area.z > MaxArea) MaxArea = Subdivision_Area.z;
+   
+  MPI_Allreduce(&MaxArea, &MaxArea_All, 1, MPI_FLOAT, MPI_MAX, cart_comm);
+  //BufferSize = ceil(8*MaxArea_All);
+  BufferSize = Max_Buffer_Size;
+  if(rank == 0) printf("   Buffer Size is: %d \n",BufferSize);	
+
 
   IndexShifter = rank * MaxNoofC180s + 1;
   
@@ -1298,14 +1302,72 @@ int main(int argc, char *argv[])
   //cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
 
-
-  if (colloidal_dynamics && rand_vel && !Restart ){
+  int No_cells_All;
+  //if (colloidal_dynamics && rand_vel && !Restart ){
+  if (colloidal_dynamics && rand_vel ){
+  
   	 
   	if ( initialize_Vel(Orig_No_of_C180s) != 0 ) return(-1);
   	cudaMemcpy(d_velListX, velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
       	cudaMemcpy(d_velListY, velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   	cudaMemcpy(d_velListZ, velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);	 
   	 
+  	
+  	if (No_of_C180s > 0 ){
+     
+      		VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                	  d_velListX, d_velListY, d_velListZ,
+        	                                	  d_VCMx, d_VCMy, d_VCMz);
+      		CudaErrorCheck();
+      
+      		reductionblocks = (No_of_C180s-1)/1024+1;
+      		SysCMpost<<<reductionblocks,1024>>> ( No_of_C180s, d_VCMx, d_VCMy, d_VCMz, 
+				   			d_SysCx, d_SysCy, d_SysCz);
+      		CudaErrorCheck(); 
+
+
+      		SysCM<<<1,1024>>> (No_of_C180s, reductionblocks,
+        			    d_SysCx, d_SysCy, d_SysCz,
+				    d_sysVCM);
+      
+     		CudaErrorCheck();
+      
+      } else {
+        
+        
+        	cudaMemset(d_sysVCM.x, 0, sizeof(float));
+  		cudaMemset(d_sysVCM.y, 0, sizeof(float));
+  		cudaMemset(d_sysVCM.z, 0, sizeof(float));
+  
+  	}
+             
+		
+	cudaMemcpy(h_sysVCM.x, d_sysVCM.x, sizeof(float), cudaMemcpyDeviceToHost);
+      	cudaMemcpy(h_sysVCM.y, d_sysVCM.y, sizeof(float), cudaMemcpyDeviceToHost);
+      	cudaMemcpy(h_sysVCM.z, d_sysVCM.z, sizeof(float), cudaMemcpyDeviceToHost);
+        
+
+        MPI_Allreduce(h_sysVCM.x, h_sysCM_All.x, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        MPI_Allreduce(h_sysVCM.y, h_sysCM_All.y, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        MPI_Allreduce(h_sysVCM.z, h_sysCM_All.z, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        MPI_Allreduce(&No_of_C180s, &No_cells_All, 1, MPI_INT, MPI_SUM, cart_comm);
+        
+        
+        cudaMemcpy(d_sysCM_All.x, h_sysCM_All.x, sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_sysCM_All.y, h_sysCM_All.y, sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_sysCM_All.z, h_sysCM_All.z, sizeof(float), cudaMemcpyHostToDevice); 
+        
+        
+      if (No_of_C180s > 0 ){
+      
+      		CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(No_cells_All, d_velListX, d_velListY, d_velListZ,
+               	                                                d_sysVCM, d_sysCM_All,
+               	                                                No_of_C180s*192);
+          
+     		 CudaErrorCheck(); 
+  	}  
+
+  
   }
 
 
@@ -1616,7 +1678,7 @@ int main(int argc, char *argv[])
   initialize_Plane(MaxNoofC180s);
   
  
-  int No_cells_All;
+  
   
   if (correct_com == true && !Restart){
   
@@ -4821,7 +4883,9 @@ int main(int argc, char *argv[])
 														d_counter_gc_u, d_counter_gc_d,
                	        		  								d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN);
    			
-   			
+   				CudaErrorCheck();
+   				
+   				
    				cudaMemcpy(&No_of_Ghost_cells_buffer[UP], d_counter_gc_u, sizeof(int), cudaMemcpyDeviceToHost);
 				cudaMemcpy(&No_of_Ghost_cells_buffer[DOWN], d_counter_gc_d, sizeof(int), cudaMemcpyDeviceToHost);
         			CudaErrorCheck();
@@ -8373,18 +8437,18 @@ inline void initialize_Plane(int MaxNoofC180s){
 int initialize_Vel(int Orig_No_of_C180s)
 {
 
-int cell;
-int atom;
-float rands[3];
-float3 Vcom;
+	int cell;
+	int atom;
+	float rands[3];
+	float3 Vcom;
 
-printf("      Initializing velocities for %d fullerenes...\n", Orig_No_of_C180s);
+	printf("      Initializing velocities for %d fullerenes...\n", Orig_No_of_C180s);
   
 	      
 	for ( cell= 0; cell < Orig_No_of_C180s; ++cell )
 	{	
 		ranmar(rands, 3);
-		Vcom = make_float3(rands[0]*6 - 3, rands[1]*6 - 3, rands[2]*6 - 3);
+		Vcom = make_float3(rands[0]*4 - 2, rands[1]*4 - 2, rands[2]*4 - 2);
 		if (flatbox == 1) Vcom.z = 0;
 			
                for ( atom = 0 ; atom < 180 ; ++atom)
@@ -9024,7 +9088,8 @@ int read_json_params(const char* inpFile){
         return -1;
     }
     else {
-        MaxNoofC180s = coreParams["MaxNoofC180s"].asInt(); 
+        MaxNoofC180s = coreParams["MaxNoofC180s"].asInt();
+        Max_Buffer_Size =  coreParams["MaxBuffer"].asInt();
         mass = coreParams["particle_mass"].asFloat();
         repulsion_range = coreParams["repulsion_range"].asFloat();
         attraction_range = coreParams["attraction_range"].asFloat();
@@ -9796,6 +9861,7 @@ void write_force(int t_step, FILE* forFile,int frameCount){
     }    
     
     int Num_Cell_OtherGPU;
+    int Ind;
     
 
     fwrite(&t_step, sizeof(int), 1, forFile);
@@ -9827,15 +9893,19 @@ void write_force(int t_step, FILE* forFile,int frameCount){
        for (int c = 0; c < numberofCells_InGPUs[i]; c++){
 
             	if(i == 0) {
-        
-            		fwrite(&CellINdex[c], sizeof(int), 1, forFile);
+        		
+        		Ind = CellINdex[c];
+        		
+            		fwrite(&Ind, sizeof(int), 1, forFile);
             		fwrite(h_contactForces.x + (c*192), sizeof(float), 192, forFile); 
            		fwrite(h_contactForces.y + (c*192), sizeof(float), 192, forFile); 
             		fwrite(h_contactForces.z + (c*192), sizeof(float), 192, forFile);
         			
         	} else if (nprocs > 1){
+        		
+        		Ind = CellINdex_OtherGPU[c];
         			
-                	fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, forFile);
+                	fwrite(&Ind, sizeof(int), 1, forFile);
             		fwrite(h_contactForces_OtherGPU.x + (c*192), sizeof(float), 192, forFile); 
             		fwrite(h_contactForces_OtherGPU.y + (c*192), sizeof(float), 192, forFile); 
             		fwrite(h_contactForces_OtherGPU.z + (c*192), sizeof(float), 192, forFile);
@@ -9863,7 +9933,8 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 
     }
     
-    int Num_Cell_OtherGPU;	 
+    int Num_Cell_OtherGPU;	
+    int Ind; 
 
     fwrite(&t_step, sizeof(int), 1, trajFile);
     fwrite(&frameCount, sizeof(int), 1, trajFile); 
@@ -9899,8 +9970,9 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 	
             		if (i == 0){
             			
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);
+            			
+            			Ind = CellINdex[c];
+            			fwrite(&Ind, sizeof(int), 1, trajFile);
             			
             			fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -9915,8 +9987,9 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1) {
             		
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			
+            			Ind = CellINdex_OtherGPU[c];
+            			fwrite(&Ind, sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
@@ -9939,12 +10012,10 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
 
             		if(i == 0) {
 				
-				//int r = 0;
-				//if (c >= No_of_C180s) r = 1; 
-            			//fwrite(&r, sizeof(int), 1, trajFile);
+				
+            			Ind = CellINdex[c];
             			
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex[c], sizeof(int), 1, trajFile);				
+            			fwrite(&Ind, sizeof(int), 1, trajFile);				
 							
 				fwrite(X + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y + (c*192), sizeof(float), 192, trajFile); 
@@ -9952,8 +10023,10 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		
             		} else if (nprocs > 1){
             			
-            			//fwrite(&i, sizeof(int), 1, trajFile);
-            			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, trajFile);
+            			
+            			Ind = CellINdex_OtherGPU[c];
+            			
+            			fwrite(&Ind, sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
@@ -9983,7 +10056,8 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
        }
 
        float Cx, Cy, Cz;	
-
+       int Ind;
+        	 
        fwrite(&t_step, sizeof(int), 1, cmFile);
        fwrite(&frameCount, sizeof(int), 1, cmFile); 
        fwrite(&No_of_All_Cells, sizeof(int), 1, cmFile);
@@ -10013,8 +10087,9 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
 				Cx = CMx[c];
 				Cy = CMy[c];
         			Cz = CMz[c];
+        			Ind = CellINdex[c];
         				
-        			fwrite(&CellINdex[c], sizeof(int), 1, cmFile);
+        			fwrite(&Ind, sizeof(int), 1, cmFile);
         			fwrite(&Cx, sizeof(float), 1, cmFile); 
         			fwrite(&Cy, sizeof(float), 1, cmFile); 
         			fwrite(&Cz, sizeof(float), 1, cmFile);
@@ -10025,8 +10100,9 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
         			Cx = CmX_OtherGPU[c];
 				Cy = CmY_OtherGPU[c];
         			Cz = CmZ_OtherGPU[c];
+        			Ind = CellINdex_OtherGPU[c];
         				
-        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, cmFile);
+        			fwrite(&Ind, sizeof(int), 1, cmFile);
         			fwrite(&Cx, sizeof(float), 1, cmFile); 
         			fwrite(&Cy, sizeof(float), 1, cmFile); 
         			fwrite(&Cz, sizeof(float), 1, cmFile);
@@ -10053,7 +10129,8 @@ void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
     		numberofCells_InGPUs[0] = No_of_C180s;
        }
     
-       float vCx, vCy, vCz;	
+       float vCx, vCy, vCz;
+       int Ind;	
 
        fwrite(&t_step, sizeof(int), 1, VcmFile);
        fwrite(&frameCount, sizeof(int), 1, VcmFile); 
@@ -10084,8 +10161,9 @@ void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
 				vCx = VCMx[c];
 				vCy = VCMy[c];
         			vCz = VCMz[c];
+        			Ind = CellINdex[c];
         				
-        			fwrite(&CellINdex[c], sizeof(int), 1, VcmFile);
+        			fwrite(&Ind, sizeof(int), 1, VcmFile);
         			fwrite(&vCx, sizeof(float), 1, VcmFile); 
         			fwrite(&vCy, sizeof(float), 1, VcmFile); 
         			fwrite(&vCz, sizeof(float), 1, VcmFile);
@@ -10096,8 +10174,9 @@ void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
         			vCx = CmX_OtherGPU[c];
 				vCy = CmY_OtherGPU[c];
         			vCz = CmZ_OtherGPU[c];
+        			Ind = CellINdex_OtherGPU[c];
         				
-        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, VcmFile);
+        			fwrite(&Ind, sizeof(int), 1, VcmFile);
         			fwrite(&vCx, sizeof(float), 1, VcmFile); 
         			fwrite(&vCy, sizeof(float), 1, VcmFile); 
         			fwrite(&vCz, sizeof(float), 1, VcmFile);
@@ -10126,6 +10205,7 @@ void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
        }
 
        float fCx, fCy, fCz;	
+       int Ind;
 
        fwrite(&t_step, sizeof(int), 1, FcmFile);
        fwrite(&frameCount, sizeof(int), 1, FcmFile); 
@@ -10156,8 +10236,9 @@ void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
 				fCx = FCMx[c];
 				fCy = FCMy[c];
         			fCz = FCMz[c];
+        			Ind = CellINdex[c];
         				
-        			fwrite(&CellINdex[c], sizeof(int), 1, FcmFile);
+        			fwrite(&Ind, sizeof(int), 1, FcmFile);
         			fwrite(&fCx, sizeof(float), 1, FcmFile); 
         			fwrite(&fCy, sizeof(float), 1, FcmFile); 
         			fwrite(&fCz, sizeof(float), 1, FcmFile);
@@ -10168,8 +10249,9 @@ void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
         			fCx = CmX_OtherGPU[c];
 				fCy = CmY_OtherGPU[c];
         			fCz = CmZ_OtherGPU[c];
+        			Ind = CellINdex_OtherGPU[c];
         				
-        			fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, FcmFile);
+        			fwrite(&Ind, sizeof(int), 1, FcmFile);
         			fwrite(&fCx, sizeof(float), 1, FcmFile); 
         			fwrite(&fCy, sizeof(float), 1, FcmFile); 
         			fwrite(&fCz, sizeof(float), 1, FcmFile);
@@ -10353,7 +10435,8 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
     
     int Num_Cell_OtherGPU;
     
-
+    int Ind;
+    	
     fwrite(&t_step, sizeof(int), 1, velFile);
     fwrite(&frameCount, sizeof(int), 1, velFile); 
     fwrite(&No_of_C180s, sizeof(int), 1, velFile);
@@ -10387,8 +10470,10 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
         	for (int c = 0; c < numberofCells_InGPUs[i]; c++){  
             		
             		if (i == 0){
-            		
-            			fwrite(&CellINdex[c], sizeof(int), 1, velFile);
+            			
+            			Ind = CellINdex[c];
+            			
+            			fwrite(&Ind, sizeof(int), 1, velFile);
             			fwrite(velListX + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListY + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListZ + (c*192), sizeof(float), 192, velFile);
@@ -10401,8 +10486,10 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
             			fwrite(&cellType, sizeof(int), 1, velFile);
             		
             		} else if (nprocs > 1){
-            		
-            		        fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, velFile);
+            			
+            			Ind = CellINdex_OtherGPU[c];
+            			
+            		        fwrite(&Ind, sizeof(int), 1, velFile);
             			fwrite(velListX_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListY_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListZ_OtherGPU + (c*192), sizeof(float), 192, velFile);
@@ -10423,15 +10510,17 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
                 for (int c = 0; c < numberofCells_InGPUs[i]; c++){
 
             		if(i == 0) {
-        
-            		        fwrite(&CellINdex[c], sizeof(int), 1, velFile);
+        			
+        			Ind = CellINdex[c];
+            		        fwrite(&Ind, sizeof(int), 1, velFile);
             			fwrite(velListX + (c*192), sizeof(float), 192, velFile); 
            			fwrite(velListY + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListZ + (c*192), sizeof(float), 192, velFile);
         			
         		} else if (nprocs > 1){
         			
-            		        fwrite(&CellINdex_OtherGPU[c], sizeof(int), 1, velFile);
+        			Ind = CellINdex_OtherGPU[c];
+            		        fwrite(&Ind, sizeof(int), 1, velFile);
             			fwrite(velListX_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListY_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListZ_OtherGPU + (c*192), sizeof(float), 192, velFile);
@@ -11090,13 +11179,17 @@ int ReadRestartFile(){
    		float MaxY = Subdivision_max.y;
    		float MaxZ = Subdivision_max.z;
    		
-   		if( Subdivision_min.x == 0) MinX -= 0.2;
-   		if( Subdivision_min.y == 0) MinY -= 0.2;
-   		if( Subdivision_min.z == 0) MinZ -= 0.2;
+   		float Max_X = boxMax.x;
+   		float Max_Y = boxMax.y;
+   		float Max_Z = boxMax.z;
+   		   		
+   		if( Subdivision_min.x == 0) MinX -= 0.3;
+   		if( Subdivision_min.y == 0) MinY -= 0.3;
+   		if( Subdivision_min.z == 0) MinZ -= 0.3;
    		
-   		if( Subdivision_max.x == boxMax.x) MaxX += 0.2;
-   		if( Subdivision_max.y == boxMax.y) MaxY += 0.2;
-   		if( Subdivision_max.z == boxMax.z) MaxZ += 0.2;
+   		if( Subdivision_max.x == Max_X) MaxX += 0.3;
+   		if( Subdivision_max.y == Max_Y) MaxY += 0.3;
+   		if( Subdivision_max.z == Max_Z) MaxZ += 0.3;
 
    		for (int c = 0; c < Orig_Cells; c++){
 
