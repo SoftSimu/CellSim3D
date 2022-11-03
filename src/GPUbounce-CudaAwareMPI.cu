@@ -246,9 +246,11 @@ int *NooflocalNN;
 int NNlistUpdater;
 int NNlistUpdaterAll;
 float BufferDistance;
-int* d_num_cell_dang; 
+int* d_num_cell_dang;
+int* d_num_cell_invalidator;  
 int* d_cell_dang_inds;
 int num_cell_dang; 
+int num_cell_invalidator; 
 int* cell_dang_inds;
 char* d_cell_dang;
 
@@ -634,7 +636,7 @@ int main(int argc, char *argv[])
   //BufferSize = 1000;
 
 
-  BufferDistance = 0.2;
+  BufferDistance = 0.05*DL*DL;
   if(rank == 0) printf("   Buffer_Distance is: %f \n",BufferDistance);
 
   R_ghost_buffer = 1.5;
@@ -882,9 +884,10 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_div,  32*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_Apo,  32*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_dang,  sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_num_cell_invalidator,  sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Num_shrink_Cell,  sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_counter, sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_dang_inds, 96*sizeof(int))) return(-1);          
+  if ( cudaSuccess != cudaMalloc( (void **)&d_cell_dang_inds, 512*sizeof(int))) return(-1);          
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_Apo ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_cell_mig ,     MaxNoofC180s*sizeof(char))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_C180_56,       92*7*sizeof(int))) return(-1);
@@ -1093,7 +1096,8 @@ int main(int argc, char *argv[])
   CudaErrorCheck();
   
   cudaMemset(d_num_cell_dang, 0, sizeof(int));
-  cudaMemset(d_cell_dang_inds, 0, 96*sizeof(int));
+  cudaMemset(d_num_cell_invalidator, 0, sizeof(int));
+  cudaMemset(d_cell_dang_inds, 0, 512*sizeof(int));
   cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));
   CudaErrorCheck();
   
@@ -3216,10 +3220,12 @@ int main(int argc, char *argv[])
 	
 		DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
 									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
-									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang);
+									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang, 
+									d_num_cell_invalidator, Subdivision_min, DL);
 		
       
 		cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
+		cudaMemcpy(&num_cell_invalidator, d_num_cell_invalidator , sizeof(int), cudaMemcpyDeviceToHost );
 
 
 		// ----------------------------------------- Begin Cell Death ------------	
@@ -3264,7 +3270,7 @@ int main(int argc, char *argv[])
 // ----------------------------------------- End Cell Death --------------
  
 
-	NNlistUpdater  = num_cell_Apo + num_cell_div + num_cell_dang;
+	NNlistUpdater  = num_cell_Apo + num_cell_div + num_cell_invalidator;
 	
 	
 	if (nprocs > 1){
@@ -3284,7 +3290,8 @@ int main(int argc, char *argv[])
 		NNlistUpdaterAll = 0;	
 			
 		cudaMemset(d_num_cell_dang, 0, sizeof(int));
-		cudaMemset(d_cell_dang_inds, 0, 96*sizeof(int));
+		cudaMemset(d_num_cell_invalidator, 0, sizeof(int));
+		cudaMemset(d_cell_dang_inds, 0, 512*sizeof(int));
 		cudaMemset(d_cell_dang, 0, MaxNoofC180s*sizeof(char));		
       		
       		num_cell_Apo = 0;

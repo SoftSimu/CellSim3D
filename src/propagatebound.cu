@@ -430,7 +430,8 @@ __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz
 
 __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
-					  float BufferDistance, int *num_cell_dang, int* cell_dang_inds, char* cell_dang)
+					  float BufferDistance, int *d_num_cell_dang, int* cell_dang_inds, char* cell_dang,
+					  int* d_num_cell_invalidator, float3 Subdivision_min, float DL)
 {
 
 
@@ -455,10 +456,38 @@ __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy
 			if (R >= BufferDistance){
 			
 				cell_dang[fullerene] = 1;
-				int index = atomicAdd(&num_cell_dang[0],1);   
-				cell_dang_inds[index] = fullerene;   
+				int index = atomicAdd(&d_num_cell_dang[0],1);   
+				//cell_dang_inds[index] = fullerene;   
 		
 			}
+		
+		} else {
+		
+			
+			int posOldx = (int)((CMxNNlist[fullerene] - Subdivision_min.x)/DL);
+	  		int posNewx = (int)((CMx[fullerene] - Subdivision_min.x)/DL);
+	  		
+	  		int posOldy = (int)((CMyNNlist[fullerene] - Subdivision_min.y)/DL);
+	  		int posNewy = (int)((CMy[fullerene] - Subdivision_min.y)/DL);
+	  		
+	   		int posOldz = (int)((CMzNNlist[fullerene] - Subdivision_min.z)/DL);
+	   		int posNewz = (int)((CMzNNlist[fullerene] - Subdivision_min.z)/DL);
+	   		
+			if ( posOldx != posNewx ){
+	  			
+	  			int index = atomicAdd(&d_num_cell_invalidator[0],1);	
+	  		
+	  		}else if (posOldy != posNewy){
+	  			
+	  			int index = atomicAdd(&d_num_cell_invalidator[0],1);
+	  		
+	  		}else if (posOldz != posNewz){
+	  		
+	  			int index = atomicAdd(&d_num_cell_invalidator[0],1);
+	  		}
+		
+		
+		
 		}
 
 
