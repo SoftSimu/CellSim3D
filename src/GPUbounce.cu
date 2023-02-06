@@ -4032,7 +4032,7 @@ int main(int argc, char *argv[])
   for ( step = 1; step < Time_steps+1 + equiStepCount; step++)
   {
 	 
-	Pshift += shear_rate*boxMax.x*delta_t;
+	if (useLEbc) Pshift += shear_rate*boxMax.x*delta_t;
 	
 	if( colloidal_dynamics && Compressor) {
 	
@@ -7201,7 +7201,7 @@ int main(int argc, char *argv[])
        
   	}
   	
-  	if(write_vel_file){
+  	if(write_for_file){
        
        	fclose(forFile);   
         
@@ -7214,6 +7214,7 @@ int main(int argc, char *argv[])
   	}
   	
   	if(write_traj_file){
+  	
     		if (binaryOutput){
   
       			fclose(trajfile);
@@ -10763,7 +10764,8 @@ int writeRestartFile(int t_step, int frameCount){
 		fwrite(&frameCount, sizeof(int), 1, Restartfile); 
 		fwrite(&No_of_C180s_All, sizeof(int), 1, Restartfile); 
 		fwrite(&NumApoCell_All, sizeof(int), 1, Restartfile);
-		fwrite(&NumRemoveCell_All, sizeof(int), 1, Restartfile);  
+		fwrite(&NumRemoveCell_All, sizeof(int), 1, Restartfile);
+		fwrite(&Pshift, sizeof(float), 1, Restartfile);  
 
 	
 		float *CmX_OtherGPU, *CmY_OtherGPU, *CmZ_OtherGPU;
@@ -11077,6 +11079,7 @@ int ReadRestartFile(){
   	int nCell;  
   	int NCA;
   	int NCR;
+  	float Ps;
   	 	
     	
   	printf("Reading Restart.xyz ...\n");
@@ -11091,7 +11094,7 @@ int ReadRestartFile(){
   	if ( fread(&s, sizeof(int),1,infil) != 1 ){ 
 		printf("Data missing from trajectory. \n");
 		return(-1);
- 	 } else printf("\nstep %d \n",s -1);
+ 	 } else printf("\n step %d \n",s -1);
 
   	if ( fread(&f, sizeof(int),1,infil) != 1 ){ 
 		printf("Data missing from trajectory. \n");
@@ -11114,6 +11117,10 @@ int ReadRestartFile(){
 		return(-1);
 	}
 
+	if ( fread(&Ps, sizeof(float),1,infil) != 1 ) { 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+	}
 
   	Laststep = s-1;
   	Lastframe = f-1;
@@ -11121,12 +11128,13 @@ int ReadRestartFile(){
  	No_of_C180s = nCell;
   	Orig_No_of_C180s = nCell;
   	NumApoCell = NCA;
-  	NumRemoveCell = NCR;  
+  	NumRemoveCell = NCR;
+  	Pshift = Ps;  
 
   	printf("Number of the initial Cells is: %d \n",Orig_No_of_C180s);
   	
   	Orig_Cells = Orig_No_of_C180s;
-  	Pshift = shear_rate*Laststep*boxMax.x*delta_t;
+  	//Pshift = shear_rate*Laststep*boxMax.x*delta_t;
   	
   }	
   
