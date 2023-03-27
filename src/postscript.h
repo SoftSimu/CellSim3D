@@ -345,7 +345,8 @@ __global__ void ShiftInf (float* d_X,float* d_Y,float* d_Z,
 __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
 					  float BufferDistance, int *d_num_cell_dang, int* cell_dang_inds, char* cell_dang,
-					  int* d_num_cell_invalidator, float3 Subdivision_min, float DL);
+					  int* d_num_cell_invalidator, 
+					  int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float DL);
 
                               
 __global__ void DangerousParticlesFinderPBC(int No_of_C180s, float *CMx, float *CMy,float *CMz,

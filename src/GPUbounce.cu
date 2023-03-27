@@ -640,11 +640,19 @@ int main(int argc, char *argv[])
 
   
 
-  BufferDistance = 0.05*DL*DL;
+  BufferDistance = 0.02*DL;
+  if (usePBCs || useLEbc) {
+  
+  	if ( ( (boxMax.x - BoxMin.x) < divVol ) && !useRigidBoxX ) BufferDistance = 0.01*DL;
+  	if ( ( (boxMax.y - BoxMin.y) < divVol ) && !useRigidBoxY ) BufferDistance = 0.01*DL;
+  	if ( ( (boxMax.z - BoxMin.z) < divVol ) && !useRigidBoxZ ) BufferDistance = 0.01*DL;
+  			
+  }
   if(rank == 0) printf("   Buffer_Distance is: %f \n",BufferDistance);
 
   R_ghost_buffer = 1.4;
-  if( colloidal_dynamics ) R_ghost_buffer = 1.2;
+  if( colloidal_dynamics ) R_ghost_buffer = 1.2;  
+  if ((boxMax.z - BoxMin.z) < divVol ) R_ghost_buffer = boxMax.z - BoxMin.z;
   if(rank == 0) printf("   Ghost_Buffer_Distance is: %f \n",R_ghost_buffer);	
 
 
@@ -4083,7 +4091,8 @@ int main(int argc, char *argv[])
 		DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
 									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
 									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang, 
-									d_num_cell_invalidator, Subdivision_min, DL);
+									d_num_cell_invalidator, 
+									Xdiv, Ydiv, Zdiv, Subdivision_min, DL);
 		
       
 		cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
@@ -7419,7 +7428,7 @@ inline void SetupBoxParams(int t_step)
 
     		if ((boxMax.z - BoxMin.z) < divVol){
       		
-      			DL = divisionV; 
+      			DL = boxMax.z - BoxMin.z; 
     		
     		} else {
     			
@@ -7633,7 +7642,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   
   			
   			} else {
-  			
+  				
+  				if(dispersity) rCheck = rCheck*dispersity_max;
+  				
   				while (true){
   	
               				ranmar(rands, 3);
