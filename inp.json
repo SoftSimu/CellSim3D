@@ -73,6 +73,25 @@
     },
 
 
+    "ECMparams":{
+
+        "ECM": 1,
+        "Max_ECM_nodes": 10000,
+        "Div_size": 1.0,
+        "Buffer_size": 1000,
+        "MaxNeighList": 512, 
+        "mass": 0.04,
+        "stiffness": 1.0,
+        "vis_damp": 0.01,
+        "gamma_env": 0.1,
+        "vis_ecm_cell": 0.05,
+        "attraction_range_ecm": 0.2,
+        "repulsion_range_ecm" : 0.1,
+        "attraction_strength_ecm": 0.4,
+        "repulsion_strength_ecm" : 100,
+        "write_traj_Ecm_file": 1
+    },
+
     "divParams":{
 
         "useDivPlaneBasis": 0,

@@ -21,7 +21,9 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 
 	if ( fullerene < No_of_C180s )
 	{
-	  
+	  	
+	  	//if (fullerene > 1) printf("nomber of cell: %d\n", No_of_C180s);
+	  	
 		int posx = 0;
 		int posy = 0;
 		int posz = 0;		
@@ -67,7 +69,7 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 #ifdef PRINT_TOO_SHORT_ERROR
 			  		if ( index > MaxNeighList )
 					{
-                         			printf("Fullerene %d, NN-list too short, atleast %d\n", fullerene, index);
+                         			//printf("Fullerene %d, NN-list too short, atleast %d, cells: %d\n", fullerene, index, No_of_C180s);
                                   			// for ( int k = 0; k < 32; ++k )
                                   			//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
                                  			// printf("\n");
@@ -91,6 +93,73 @@ __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, f
 	}
 
 }
+
+__global__ void makeNNlistECM(int Num_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           int Xdiv_ecm, int Ydiv_ecm, double3 BoxMin,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm,
+                           int MaxNeighList_ecm )
+{
+
+
+	int node = blockIdx.x*blockDim.x+threadIdx.x;
+  	
+//	printf("(%d, %d, %d) %d %d\n", blockIdx.x, blockDim.x, threadIdx.x, node, No_of_C180s);
+
+
+	if ( node < Num_ECM )
+	{	
+		
+
+	 	int posx = (int)((d_ECM_x[node] - BoxMin.x)/DL_ecm);
+	  	if ( posx < 0 ) posx = 0;
+	  	if ( posx > Xdiv_ecm - 1 ) posx = Xdiv_ecm - 1;
+	  	
+
+	  	int posy = (int)((d_ECM_y[node] - BoxMin.y)/DL_ecm);
+	  	if ( posy < 0 ) posy = 0;
+	  	if ( posy > Ydiv_ecm - 1 ) posy = Ydiv_ecm - 1;
+
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if(j1 < 0 || j1 > Xdiv_ecm-1) continue;
+			
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv_ecm-1) continue;
+				
+		
+
+			  		int index = atomicAdd( &d_NoofNNlist_ECM[j2*Xdiv_ecm+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > MaxNeighList_ecm )
+					{
+                         			printf("ECM node %d, NN-list too short, atleast %d\n", node, index);
+                                  			// for ( int k = 0; k < 32; ++k )
+                                  			//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                                 			// printf("\n");
+						 continue;
+					}
+#endif
+			  		d_NNlist_ECM[ MaxNeighList_ecm*(j2*Xdiv_ecm+j1)+index] = node;
+	
+			}
+		}	
+	
+	
+	}
+
+}
+
+
+
+
 
 __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
@@ -223,6 +292,106 @@ __global__ void makeNNlistMultiGpu( int No_of_C180s,  float R_ghost_buffer, floa
 
 }
 
+
+
+__global__ void makeNNlistECMMultiGpu(int Num_ECM, float R_ghost_buffer_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           int Xdiv_ecm, int Ydiv_ecm, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int* d_counter_ecm_e, int* d_counter_ecm_w,
+                           int* d_counter_ecm_n, int* d_counter_ecm_s,
+                           int* d_Ghost_ECM_ind_EAST, int* d_Ghost_ECM_ind_WEST, int* d_Ghost_ECM_ind_NORTH, int* d_Ghost_ECM_ind_SOUTH,
+                           int MaxNeighList_ecm)
+{
+
+
+	int ECM_node = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( ECM_node < Num_ECM )
+	{
+	  
+	  	
+	  	float Cx = d_ECM_x[ECM_node];
+		float Cy = d_ECM_y[ECM_node];
+	  
+	  
+	  	if( Cx >  Subdivision_max.x - R_ghost_buffer_ECM){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_e,1);
+	 		d_Ghost_ECM_ind_EAST[index] = ECM_node;	 			
+	 	}
+	 	
+	 	
+	 	if( Cx <  Subdivision_min.x + R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_w,1);
+	 		d_Ghost_ECM_ind_WEST[index] = ECM_node;
+	 		
+	 	}
+	 	
+	 		
+	 	if( Cy >  Subdivision_max.y - R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_n,1);
+	 		d_Ghost_ECM_ind_NORTH[index] = ECM_node;	 			
+	 	}
+
+	 		
+	 	if( Cy <  Subdivision_min.y + R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_s,1);
+	 		d_Ghost_ECM_ind_SOUTH[index] = ECM_node;
+	 	}
+
+
+	 	int posx = (int)((Cx - Subdivision_min.x)/DL_ecm);
+	  	if ( posx < 0 ) posx = 0;
+	  	if ( posx > Xdiv_ecm - 1 ) posx = Xdiv_ecm - 1;
+	  	
+
+	  	int posy = (int)((Cy - Subdivision_min.y)/DL_ecm);
+	  	if ( posy < 0 ) posy = 0;
+	  	if ( posy > Ydiv_ecm - 1 ) posy = Ydiv_ecm - 1;
+	  	
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if(j1 < 0 || j1 > Xdiv_ecm-1) continue;
+			
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv_ecm-1) continue;
+				
+		
+
+			  		int index = atomicAdd( &d_NoofNNlist_ECM[j2*Xdiv_ecm+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > MaxNeighList_ecm )
+					{
+                         			printf("ECM_node %d, NN-listPin too short, atleast %d\n", ECM_node, index);
+                                  			// for ( int k = 0; k < 32; ++k )
+                                  			//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                                 			// printf("\n");
+						 continue;
+					}
+#endif
+			  		d_NNlist_ECM[ MaxNeighList_ecm*(j2*Xdiv_ecm+j1)+index] = ECM_node;
+
+	
+			}
+		}	
+		
+	}
+
+
+}
+
+
 __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, float *d_CMx, float *d_CMy,float *d_CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL, int* d_counter_gc_e, int* d_counter_gc_w,
@@ -288,8 +457,7 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 
 	 	int posx = (int)((Cx - Subdivision_min.x)/DL);
 	  	if ( posx < 0 ) posx = 0;
-	  	else if ( posx > Xdiv - 1 ) posx = Xdiv - 1;
-	  	
+	  	else if ( posx > Xdiv - 1 ) posx = Xdiv - 1;	
 
 	  	int posy = (int)((Cy - Subdivision_min.y)/DL);
 	  	if ( posy < 0 ) posy = 0;
@@ -349,6 +517,104 @@ __global__ void makeNNlistMultiGpuPBC( int No_of_C180s,  float R_ghost_buffer, f
 	}
 
 }
+
+
+
+__global__ void makeNNlistECMMultiGpuPBC( int Num_ECM,  float R_ghost_buffer_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           int Xdiv_ecm, int Ydiv_ecm, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int* d_counter_ecm_e, int* d_counter_ecm_w,
+                           int* d_counter_ecm_n, int* d_counter_ecm_s,
+                           int* d_Ghost_ECM_ind_EAST, int* d_Ghost_ECM_ind_WEST, int* d_Ghost_ECM_ind_NORTH, int* d_Ghost_ECM_ind_SOUTH,
+                           int MaxNeighList_ecm)
+{
+
+
+	int node = blockIdx.x*blockDim.x+threadIdx.x;
+
+
+	if ( node < Num_ECM )
+	{	
+		
+		float Cx = d_ECM_x[node];
+		float Cy = d_ECM_y[node];
+		//float Cz = d_ECM_z[node];
+
+	 	
+	 	if( Cx >  Subdivision_max.x - R_ghost_buffer_ECM){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_e,1);
+	 		d_Ghost_ECM_ind_EAST[index] = node;
+	 			 			
+	 	}
+	 	
+	 	
+	 	if( Cx <  Subdivision_min.x + R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_w,1);
+	 		d_Ghost_ECM_ind_WEST[index] = node;
+	 	}
+	 	
+	 		
+	 	if( Cy >  Subdivision_max.y - R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_n,1);
+	 		d_Ghost_ECM_ind_NORTH[index] = node;	 			
+	 	}
+	 		
+	 	if( Cy <  Subdivision_min.y + R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_s,1);
+	 		d_Ghost_ECM_ind_SOUTH[index] = node;
+	 	}
+	 		
+
+	 	int posx = (int)((Cx - Subdivision_min.x)/DL_ecm);
+	  	if ( posx < 0 ) posx = 0;
+	  	else if ( posx > Xdiv_ecm - 1 ) posx = Xdiv_ecm - 1;	
+
+	  	int posy = (int)((Cy - Subdivision_min.y)/DL_ecm);
+	  	if ( posy < 0 ) posy = 0;
+	  	else if ( posy > Ydiv_ecm - 1 ) posy = Ydiv_ecm - 1;
+
+	 
+		int j1 = 0;
+	  	int j2 = 0;
+	 
+	  	for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if(j1 < 0 || j1 > Xdiv_ecm-1) continue;
+			
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv_ecm-1) continue;
+				
+
+			  		int index = atomicAdd( &d_NoofNNlist_ECM[j2*Xdiv_ecm+j1] , 1); //returns old
+#ifdef PRINT_TOO_SHORT_ERROR
+			  		if ( index > MaxNeighList_ecm )
+					{
+                         			printf("ECM node %d, NN-list too short, atleast %d\n", node, index);
+                                  			// for ( int k = 0; k < 32; ++k )
+                                  			//     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                                 			// printf("\n");
+						 continue;
+					}
+#endif
+			  		d_NNlist_ECM[MaxNeighList_ecm*(j2*Xdiv_ecm+j1)+index] = node;
+
+	
+			}
+		}	
+	
+	
+	}
+
+}
+
+
 
 
 // Pinning
@@ -427,6 +693,8 @@ __global__ void makeNNlistPin(int impurityNum, float *CMx, float *CMy,float *CMz
 
 
 }
+
+
 
 __global__ void DangerousParticlesFinder(int No_of_C180s, float *CMx, float *CMy,float *CMz,
 					  float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
@@ -577,6 +845,87 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float
 	}
                            
 }
+
+
+
+__global__ void UpdateNNlistWithGhostECM(int Num_ECM, int All_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           		int Xdiv_ecm, int Ydiv_ecm, float3 Subdivision_min,
+                           		int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm,
+                           		int* d_ECM_ind_glob, int* d_ECM_Map_ind,
+                           		int MaxNeighList_ecm){
+                           
+	
+	int atom = blockIdx.x*blockDim.x+threadIdx.x;
+
+	
+	if ( atom < All_ECM )
+	{
+	
+		int node = atom + Num_ECM;	
+		
+		int glob_ind = d_ECM_ind_glob[node];	
+		d_ECM_Map_ind[glob_ind] = node;
+
+	 	
+	 	int posx = (int)((d_ECM_x[node] - Subdivision_min.x)/DL_ecm);
+	  	if ( posx < 0 ) posx = 0;
+	  	if ( posx > Xdiv_ecm - 1 ) posx = Xdiv_ecm - 1;
+	  	
+
+	  	int posy = (int)((d_ECM_y[node] - Subdivision_min.y)/DL_ecm);
+	  	if ( posy < 0 ) posy = 0;
+	  	if ( posy > Ydiv_ecm - 1 ) posy = Ydiv_ecm - 1;
+
+	   	//int posz = (int)((d_ECM_z[node] - Subdivision_min.z)/DL);
+	  	//if ( posz < 0 ) posz = 0;
+	  	//if ( posz > Zdiv - 1 ) posz = Zdiv - 1;
+
+		
+		int j1 = 0;
+		int j2 = 0;
+		//int j3 = 0;
+
+		
+		for (  int i = -1; i < 2 ; ++i ){
+				
+			j1 = posx + i;
+			if (j1 > Xdiv_ecm - 1 || j1 < 0) continue; 
+
+			for (  int j = -1; j < 2; ++j ){
+					
+				j2 = posy + j;
+				if(j2 < 0 || j2 > Ydiv_ecm-1) continue;
+				
+	
+				//for (  int k = -1 ; k < 2; ++k ){
+			
+				//	j3 = posz + k;
+				//	if(j3 < 0 || j3 > Zdiv-1) continue;
+		
+
+					int index = atomicAdd( &d_NoofNNlist_ECM[j2*Xdiv_ecm+j1] , 1); //returns old
+			  		
+#ifdef PRINT_TOO_SHORT_ERROR
+					if ( index > MaxNeighList_ecm )
+					{
+                				printf("ECM node %d, NN-list too short, atleast %d\n", node, index);
+                      				 // for ( int k = 0; k < 32; ++k )
+                      				 //     printf("%d ",d_NNlist[ 32*(j2*Xdiv+j1) + k]); 
+                      				 // printf("\n");
+						continue;
+					}
+#endif
+					d_NNlist_ECM[ MaxNeighList_ecm*(j2*Xdiv_ecm+j1)+index] = node;
+				//}
+			}
+		}
+	
+	}
+                           
+}
+
+
+
 
 __global__ void migrated_cells_finder(int No_of_C180s, float *d_CM,
                          		float Sub_max, float Sub_min, float BMin, float BMax,
@@ -1563,7 +1912,9 @@ __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cell
 
 	}	
 	
+
 }  
+
 
 __global__ void Ghost_Cells_Pack_PBC_X(int No_of_Ghost_cells_buffer, int No_of_Ghost_cells_buffer_R, int* d_Ghost_Cells_ind, double3 boxMax,  float R_ghost_buffer,
 					float *d_X,  float *d_Y,  float *d_Z,
@@ -1784,4 +2135,156 @@ __global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_
 	
 	}	
 	
+}
+
+
+__global__ void Ghost_ECM_Pack(int No_of_Ghost_ECM_buffer, int* d_Ghost_ECM_ind,
+                               float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                              float* d_ECM_x_gc_buffer, float* d_ECM_y_gc_buffer, float* d_ECM_z_gc_buffer,
+                              int* d_ECM_ind_glob, int* d_ECM_ind_buffer)
+{
+
+	
+	int ECM_node = blockIdx.x*blockDim.x+threadIdx.x;
+	
+
+	if ( ECM_node < No_of_Ghost_ECM_buffer )
+	{
+	
+		int ghost_node = d_Ghost_ECM_ind[ECM_node];
+
+			
+			d_ECM_x_gc_buffer[ECM_node] = d_ECM_x[ghost_node];
+			d_ECM_y_gc_buffer[ECM_node] = d_ECM_y[ghost_node];
+			d_ECM_z_gc_buffer[ECM_node] = d_ECM_z[ghost_node];
+			d_ECM_ind_buffer[ECM_node] = d_ECM_ind_glob[ghost_node];
+			
+
+
+	}	
+	
+
+} 
+
+
+__global__ void ghost_ECM_finder_Auxiliary(int Num_ECM, int All_ECM, float *d_ECM_y , 
+						float Sub_max, float Sub_min, float R_ghost_buffer_ECM,
+						int* d_counter_ecm_r, int* d_counter_ecm_l,
+                         			int* d_Ghost_ECM_ind_R, int* d_Ghost_ECM_ind_L)
+{
+ 
+	int atom = blockIdx.x*blockDim.x+threadIdx.x;
+	
+	if ( atom < All_ECM )
+	{	
+		int node = atom + Num_ECM;
+	 	
+	 	float pos = d_ECM_y[node];
+	 	
+	 	if( pos <  Sub_min + R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_l,1);
+	 		d_Ghost_ECM_ind_L[index] = node;
+	 	
+	 	}
+	 	
+	 	if( pos >  Sub_max - R_ghost_buffer_ECM ){
+	 			
+	 		int index = atomicAdd(d_counter_ecm_r,1);
+	 		d_Ghost_ECM_ind_R[index] = node;	 			
+	 	}
+	 	
+	
+	}
+ 
+                         		 
+}
+
+
+__global__ void Ghost_ECM_Pack_PBC_X(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
+                               	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer)
+{
+
+
+	int node = blockIdx.x*blockDim.x+threadIdx.x;
+	
+
+	if ( node < No_of_Ghost_ECM_buffer )
+	{
+		
+		
+		int ghost_node = d_Ghost_ECM_ind[node];
+		
+		float Cx = d_ECM_x[ghost_node]; 
+		
+		
+		int ModifierCx = floor((Cx - R_ghost_buffer_ECM - 0.2)/boxMax.x);
+		if( node < No_of_Ghost_ECM_buffer_R ) ModifierCx = floor( (Cx + R_ghost_buffer_ECM + 0.2)/boxMax.x);
+			
+
+		d_ECM_x_buffer[node] = Cx - ModifierCx*boxMax.x;
+		d_ECM_y_buffer[node] = d_ECM_y[ghost_node];
+		d_ECM_z_buffer[node] = d_ECM_z[ghost_node];
+
+	}		
+	
+} 
+
+__global__ void Ghost_ECM_Pack_PBC_Y(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
+                               	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer)
+{
+	
+
+	int node = blockIdx.x*blockDim.x+threadIdx.x;
+	
+	
+	if( node < No_of_Ghost_ECM_buffer ){
+
+		int ghost_node = d_Ghost_ECM_ind[node];
+		
+		float Cy = d_ECM_y[ghost_node]; 
+
+		
+		__syncthreads();
+		
+		
+		int ModifierCy = floor( (Cy - R_ghost_buffer_ECM - 0.2)/boxMax.y);
+		if( node < No_of_Ghost_ECM_buffer_R ) ModifierCy = floor((Cy + R_ghost_buffer_ECM + 0.2)/boxMax.y);
+			
+			
+		d_ECM_x_buffer[node] = d_ECM_x[ghost_node];
+		d_ECM_y_buffer[node] = Cy - ModifierCy*boxMax.y;
+		d_ECM_z_buffer[node] = d_ECM_z[ghost_node];
+		
+		
+	
+	}
+
+} 
+
+
+__global__ void ECM_Connectivity_Update(int Num, int* d_ECM_Map_ind, int* d_ECM_neighbor, int* d_ECM_neighbor_updated)
+{
+
+
+	int node = blockIdx.x*blockDim.x+threadIdx.x;
+	
+	if( node < Num ){
+	
+		int index = d_ECM_neighbor[node];
+		
+		if(index > -1) {
+		
+			index = d_ECM_Map_ind[index];	
+			d_ECM_neighbor_updated[node] = index;
+			//printf("%d:%d \n", d_ECM_neighbor[node], d_ECM_neighbor_updated[node]);
+		
+		}
+		
+		
+	}
+
+
 }

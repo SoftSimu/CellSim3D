@@ -56,6 +56,7 @@ __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
     if (!good_float3(F_i)){
         printf("c1: %f, c2: %f, theta: %f, %d %d\n", c1, c2, theta, blockIdx.x, threadIdx.x);
         printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, blockIdx.x, threadIdx.x);
+        printf("iPos %f, %f, %f, and kPos %f, %f, %f\n", iPos.x, iPos.y, iPos.z, kPos.x, kPos.y, kPos.z);
         asm("trap;");
     }
 
@@ -66,6 +67,36 @@ __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
     
     return F_i; 
 }
+
+
+__device__ float3 GetAngleForceECM(const float3 iPos, const float3 kPos,
+                                      const float theta_o, const float k){
+    float i_dot_k = dot(iPos, kPos);
+    float ri_2    = mag2(iPos);
+    float rk_2    = mag2(kPos);
+    
+    float c1 = -1.0f/( sqrtf( ri_2*rk_2 - i_dot_k*i_dot_k + 1.0e-3f));
+    float c2 = i_dot_k/ri_2;
+
+    float angle = i_dot_k/(sqrtf(ri_2)*sqrtf(rk_2));
+    if ( angle < -0.995f ) angle = -0.995f;                   
+    if ( angle > +0.995f ) angle = +0.995f; 
+    
+    float theta = acos(angle);
+
+    float3 F_i = -k * c1 * (theta - theta_o)*(kPos - c2*iPos);
+    
+    if (!good_float3(F_i)){
+        printf("c1: %f, c2: %f, theta: %f, theta_o: %f, %d %d\n", c1, c2, theta, theta_o, blockIdx.x, threadIdx.x);
+        printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, blockIdx.x, threadIdx.x);
+        printf("iPos %f, %f, %f, and kPos %f, %f, %f\n", iPos.x, iPos.y, iPos.z, kPos.x, kPos.y, kPos.z);
+        asm("trap;");
+    }
+    
+    return F_i; 
+}
+
+
 
 // Watch me whip, whatch me...
 __device__ void NeighNeighs (const int nodeInd, const int ni, int& nii, int& nij, int& nik,
@@ -187,6 +218,165 @@ __device__ float3 CalculateAngleForce(int nodeInd, int d_C180_nn[],
 
     return nodeForce;
 }
+
+
+
+__global__ void CalculateConForce_ECM( int Num_ECM,
+					float* d_ECM_x, float* d_ECM_y, float* d_ECM_z, 
+					float* d_Con_ECM_force_x, float* d_Con_ECM_force_y,
+					int* d_ECM_neighbor_updated, int* d_Num_Nei_ECM,
+					float* d_R0_ECM, float ECM_stiffness,
+					float angleConstant_ecm, Ang3Nptrs d_theta0_ECM)
+{
+
+	
+	int NodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+	
+	if ( NodeInd < Num_ECM)
+	{
+	
+		float deltaX, deltaY;
+		float R, R0, nodeAngles;
+	
+		int ni, nj;
+		float3 nodePos, niPos, njPos;
+		float3 Fi, Fj;
+		float3 nodeForce = make_float3(0.0, 0.0, 0.0);;
+		
+
+		float X = d_ECM_x[NodeInd];
+		float Y = d_ECM_y[NodeInd];
+		
+		nodePos = make_float3(X, Y, 0.0);
+				
+		int num_nei = d_Num_Nei_ECM[NodeInd];
+
+		float X_ni, Y_ni;
+		
+		//printf(" %d:%d",NodeInd,d_ECM_neighbor_updated[NodeInd]);
+		
+		//printf(" %d:%d", NodeInd, num_nei);
+		
+		for ( int nn_rank1 = 0; nn_rank1 < num_nei; ++nn_rank1 )
+		{
+		
+			int loc = 32*NodeInd + nn_rank1;
+			
+			ni = d_ECM_neighbor_updated[loc];
+			nj = d_ECM_neighbor_updated[loc+1];
+			
+			//printf("%d,%d,%d\n", NodeInd, ni, nj);
+			//if (NodeInd == ni ) printf("  node %d:%d\n",NodeInd,ni);
+			//if (nj == ni ) printf("  node %d:%d,%d\n",NodeInd,ni,nj);
+			
+			X_ni = d_ECM_x[ni];
+			Y_ni = d_ECM_y[ni];
+			
+			deltaX  = X_ni - X;
+			deltaY  = Y_ni - Y;
+	
+			R  = sqrt(deltaX*deltaX+deltaY*deltaY);
+			
+			//if (R > 10) printf("R is %f",R);
+			R0 = d_R0_ECM[loc];
+			
+			//if (R > 10) printf("node %d R is: %f, R0 is: %f\n",NodeInd, R, R0);
+		
+			//spring forces
+        	    	nodeForce.x += ECM_stiffness*(R-R0)/R0*deltaX/R;
+        	    	nodeForce.y += ECM_stiffness*(R-R0)/R0*deltaY/R;
+        	    	
+        	    	
+        	    	niPos = make_float3( X_ni, Y_ni, 0.0);
+    			njPos = make_float3( d_ECM_x[nj], d_ECM_y[nj], 0.0);
+    			
+    			//printf("njPos: %f, %f, %f \n", njPos.x, njPos.y, njPos.z);
+    			
+    			nodeAngles = d_theta0_ECM.ak[loc]; 
+    			
+    			//if (nodeAngles > 3.0 || nodeAngles < 0.1) continue;
+    			
+    			//angle forces
+    			//nodeForce = nodeForce - 
+    		    	//	( GetAngleForceECM(niPos-nodePos, njPos-nodePos, nodeAngles, angleConstant_ecm) + 
+    		     	//	GetAngleForceECM(njPos-nodePos, niPos-nodePos, nodeAngles, angleConstant_ecm));		
+
+			Fi = GetAngleForceECM(niPos-nodePos, njPos-nodePos, nodeAngles, angleConstant_ecm);
+			Fj = GetAngleForceECM(njPos-nodePos, niPos-nodePos, nodeAngles, angleConstant_ecm);
+			
+			nodeForce = nodeForce - (Fi + Fj);
+			
+			atomicAdd( &d_Con_ECM_force_x[ni] , Fi.x); //returns old
+			atomicAdd( &d_Con_ECM_force_y[nj] , Fi.y); //returns old
+			
+			atomicAdd( &d_Con_ECM_force_x[nj] , Fj.x); //returns old
+			atomicAdd( &d_Con_ECM_force_y[nj] , Fj.y); //returns old
+		
+		
+		}
+
+		
+		d_Con_ECM_force_x[NodeInd] = nodeForce.x;
+        	d_Con_ECM_force_y[NodeInd] = nodeForce.y;
+		//printf("node %d, num_nei %d Fx is %f and Fy is %f\n", NodeInd, num_nei, nodeForce.x, nodeForce.y);
+
+	}
+
+
+}
+
+
+
+__global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, 
+					float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y,
+					int* d_ECM_neighbor_updated, int* d_Num_Nei_ECM,
+					float vis_damp_ecm, float gamma_env_ecm)
+{
+	
+	int NodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+	
+	if ( NodeInd < Num_ECM)
+	{
+	
+		int nn_rank;
+		 
+		float Vx = d_ECM_Vx[NodeInd];
+		float Vy = d_ECM_Vy[NodeInd];
+	
+		int num_nei = d_Num_Nei_ECM[NodeInd];
+
+		float Fx = 0.f;
+		float Fy = 0.f;		
+	
+		for ( int nn_rank1 = 0; nn_rank1 < num_nei; ++nn_rank1 )
+		{
+			
+			nn_rank = d_ECM_neighbor_updated[32*NodeInd + nn_rank1];
+				
+			Fx -= vis_damp_ecm*(Vx - d_ECM_Vx[nn_rank]);
+			Fy -= vis_damp_ecm*(Vy - d_ECM_Vy[nn_rank]);
+
+			
+			//printf("node %d Vx: %f and Vy: %f, V_rel_x: %f, V_rel_y: %f\n", NodeInd, V_node.x, V_node.y, v_ij.x, v_ij.y);		
+
+		}
+		
+		
+		Fx -= gamma_env_ecm*Vx;
+		Fy -= gamma_env_ecm*Vy;
+
+		//printf(" gamma force node %d, Vx = %f, Vy= %f, fx: %f, fy: %f\n ", NodeInd, Vx, Vy, Fx, Fy);
+		
+		d_Dis_ECM_force_x[NodeInd] = Fx;
+        	d_Dis_ECM_force_y[NodeInd] = Fy;
+
+	
+	}
+
+
+
+}
+
         
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
@@ -197,14 +387,21 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv,double3 boxMax, 
+                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax, 
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
                            double3 BoxMin, float3 Subdivision_min, float Youngs_mod,  float angleConstant, 
                            bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            bool impurity, float f_range,
                            bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX,
-                           int MaxNeighList)
+                           int MaxNeighList,
+                           bool ECM,
+                           float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
+                           float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                           float attraction_strength_ecm, float attraction_range_ecm,
+                           float repulsion_strength_ecm, float repulsion_range_ecm,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
+                           int MaxNeighList_ecm)
 {
 
 
@@ -229,7 +426,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
     	int rank = blockIdx.x;
     	int atom = threadIdx.x;
-    	int atomInd = rank*192 + atom;    	
+    	int atomInd = rank*192+atom;    	
     	
     	
     	if ( rank < No_of_C180s && atom < 180 )
@@ -246,9 +443,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
     		float Scale = d_ScaleFactor[rank];
     			
     	
-        	if (isnan(d_X[rank*192+atom]) ||
-        	    isnan(d_Y[rank*192+atom]) || 
-        	    isnan(d_Z[rank*192+atom])){
+        	if (isnan(d_X[atomInd]) ||
+        	    isnan(d_Y[atomInd]) || 
+        	    isnan(d_Z[atomInd])){
         	    printf("OH SHIT: we have a nan\n");
         	    printf("Particle index: %d, Cell: %d\n", atom, rank);
         	    printf("Crash now :(\n"); 
@@ -256,9 +453,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	}
 
 
-        	float X = d_X[rank*192+atom];
-        	float Y = d_Y[rank*192+atom];
-        	float Z = d_Z[rank*192+atom];
+        	float X = d_X[atomInd];
+        	float Y = d_Y[atomInd];
+        	float Z = d_Z[atomInd];
 
         	float FX = 0.f;
         	float FY = 0.f;
@@ -350,10 +547,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 	        float3 contactForce = make_float3(0.f, 0.f, 0.f);
         
-	        for ( int nn_rank1 = 1; nn_rank1 <= d_NoofNNlist[index]; ++nn_rank1 )
+	        for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist[index]; ++nn_rank1 )
 	        {
 	            
-	            	nn_rank = d_NNlist[MaxNeighList*index + nn_rank1 - 1];
+	            	nn_rank = d_NNlist[MaxNeighList*index + nn_rank1];
 	            
 	            	if ( nn_rank == rank )
 	                	continue;
@@ -382,10 +579,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             
                		 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
 
-               		 if ( R >= attraction_range*attraction_range )
-               		     continue;
-
                		 R = sqrt(R);
+               		 
+               		 if ( R >= attraction_range )
+               		     continue;
 
                		 contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
                		 contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
@@ -408,10 +605,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	if (impurity){
         	
         		
-        		for ( int nn_rank1 = 1; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+        		for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlistPin[index] ; ++nn_rank1 )
 	        	{
 	        
-	            		nn_rank = d_NNlistPin[32*index+nn_rank1-1];
+	            		nn_rank = d_NNlistPin[32*index+nn_rank1];
                 
 	            		deltaX  = X - d_CMxPin[nn_rank];
 	            		deltaY  = Y - d_CMyPin[nn_rank];                
@@ -460,14 +657,80 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	
         	}
         	
-        	FX += contactForce.x;
+		if (ECM) {
+			
+			
+			float Fx_ecm = 0.f;
+			float Fy_ecm = 0.f;
+			float Fz_ecm = 0.f;
+			//float old_val;
+			
+			
+			posX = (int)((X - Subdivision_min.x)/DL_ecm);
+        		if ( posX < 0 ) posX = 0;
+        		if ( posX > Xdiv_ecm - 1 ) posX = Xdiv_ecm-1;
+
+
+			posY = (int)((Y - Subdivision_min.y)/DL_ecm);
+        		if ( posY < 0 ) posY = 0;
+        		if ( posY > Ydiv_ecm - 1 ) posY = Ydiv_ecm -1;
+         
+        		index = posY*Xdiv_ecm + posX;
+
+		
+			for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist_ECM[index] ; ++nn_rank1 )
+	        	{
+				
+				nn_rank = d_NNlist_ECM[MaxNeighList_ecm*index+nn_rank1];
+				
+				deltaX  =  X - d_ECM_x[nn_rank];
+	            		deltaY  =  Y - d_ECM_y[nn_rank];                
+	            		deltaZ  =  Z - d_ECM_z[nn_rank];
+	            		
+	            		R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+               		R = sqrt(R);
+               		
+               		if ( R >= attraction_range_ecm )
+               		     		continue;
+				
+				//printf("node %d, X: %f, Y: %f\n", nn_rank, d_ECM_x[nn_rank], d_ECM_y[nn_rank]);
+               		 
+				Fx_ecm = -attraction_strength_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaX;
+				Fy_ecm = -attraction_strength_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaY;
+				Fz_ecm = -attraction_strength_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaZ;
+				 
+				 
+               		if ( R <= repulsion_range_ecm )
+               		{
+               		     Fx_ecm += +repulsion_strength_ecm*Youngs_mod*(repulsion_range_ecm-R)/R*deltaX;
+               		     Fy_ecm += +repulsion_strength_ecm*Youngs_mod*(repulsion_range_ecm-R)/R*deltaY;
+               		     Fz_ecm += +repulsion_strength_ecm*Youngs_mod*(repulsion_range_ecm-R)/R*deltaZ;
+               		}
+				 
+				contactForce.x += Fx_ecm;
+               		contactForce.y += Fy_ecm;				
+				contactForce.z += Fz_ecm;
+				
+				//d_Con_ECM_force_x[nn_rank] -= Fx_ecm;
+				//d_Con_ECM_force_y[nn_rank] -= Fy_ecm;  
+				float old_f_x = atomicAdd( &d_Con_ECM_force_x[nn_rank] , -Fx_ecm); //returns old
+				float old_f_y = atomicAdd( &d_Con_ECM_force_y[nn_rank] , -Fy_ecm); //returns old
+			
+				//printf("f_x: %f, f_y: %f\n", old_f_x, old_f_y);
+			}
+		
+		
+		}
+
+
+		FX += contactForce.x;
         	FY += contactForce.y;
         	FZ += contactForce.z; 
         	
         	FX_ext += contactForce.x;
         	FY_ext += contactForce.y;
         	FZ_ext += contactForce.z; 
-        	
 
 #ifdef FORCE_DEBUG
 
@@ -622,8 +885,17 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool impurity, float f_range,
-                                   int MaxNeighList){
+                                   R3Nptrs d_fDisList, R3Nptrs d_ConFricForces, bool impurity, float f_range,
+                                   int MaxNeighList,
+                                   bool ECM,
+                                   float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y,
+                                   float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+				    float* d_ECM_Vx, float* d_ECM_Vy,
+				    float attraction_range_ecm, float vis_ecm_cell,
+                           	    int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
+                           	    int MaxNeighList_ecm)
+{
+    
     
     size_t cellInd = blockIdx.x;
     size_t nodeInd = threadIdx.x;
@@ -639,6 +911,8 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		float range;
         	
         	float3 force = make_float3(0, 0, 0);
+        	float3 force_fric = make_float3(0, 0, 0);
+        	
         	float3 nodeVelocity = make_float3(d_velListX[globalNodeInd],
                                           	   d_velListY[globalNodeInd],
                                           	   d_velListZ[globalNodeInd]);
@@ -707,7 +981,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
         	int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
         
-        	for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlist[index] ; ++nn_rank1 )
+        	for ( int nn_rank1 = 1 ; nn_rank1 < d_NoofNNlist[index] ; ++nn_rank1 )
         	{
         	    	
         	    	nn_rank = d_NNlist[MaxNeighList*index+nn_rank1-1]; 
@@ -752,7 +1026,10 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	        	// Tangential component of relative velocity
         	        	float3 vTau = v_ij - dot(v_ij, normal)*normal;
         	        	force = force - d_viscotic_damp[cellInd]*vTau;
-        	    	
+        	        	
+				force_fric = force_fric - d_viscotic_damp[cellInd]*vTau;
+
+        	        	
         	    	}
 
         	
@@ -761,7 +1038,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	if (impurity){
 	
 			
-			for ( int nn_rank1 = 1 ; nn_rank1 <= d_NoofNNlistPin[index] ; ++nn_rank1 )
+			for ( int nn_rank1 = 1 ; nn_rank1 < d_NoofNNlistPin[index] ; ++nn_rank1 )
         		{
         	    		
         	    		nn_rank = d_NNlistPin[32*index+nn_rank1-1]; 
@@ -803,14 +1080,74 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	}
         	
+        	
+        	if (ECM){
+			
+			
+			posX = (int)((X - Subdivision_min.x)/DL_ecm);
+        		if ( posX < 0 ) posX = 0;
+        		if ( posX > Xdiv_ecm - 1 ) posX = Xdiv_ecm-1;
+
+
+			posY = (int)((Y - Subdivision_min.y)/DL_ecm);
+        		if ( posY < 0 ) posY = 0;
+        		if ( posY > Ydiv_ecm - 1 ) posY = Ydiv_ecm -1;
+         
+        		index = posY*Xdiv_ecm + posX;
+			
+			float Fx_ecm = 0.f;
+			float Fy_ecm = 0.f;
+			
+			for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist_ECM[index] ; ++nn_rank1 )
+	        	{
+				
+				nn_rank = d_NNlist_ECM[MaxNeighList_ecm*index+nn_rank1];
+				
+				deltaX  = X - d_ECM_x[nn_rank];
+	            		deltaY  = Y - d_ECM_y[nn_rank];                
+	            		deltaZ  = Z - d_ECM_z[nn_rank];
+	            		
+	            		R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+               		R = sqrt(R);
+               		
+               		if ( R >= attraction_range_ecm )
+               		     		continue;
+
+
+        	    		// Tangential component of the node velocity
+        	    		Fx_ecm = -vis_ecm_cell*(nodeVelocity.x - d_ECM_Vx[nn_rank]);
+        	    		Fy_ecm = -vis_ecm_cell*(nodeVelocity.y - d_ECM_Vy[nn_rank]);
+        	    		
+	        	        force.x += Fx_ecm;
+	        	        force.y += Fy_ecm;
+
+				atomicAdd( &d_Dis_ECM_force_x[nn_rank] , -Fx_ecm); //returns old
+				atomicAdd( &d_Dis_ECM_force_y[nn_rank] , -Fy_ecm); //returns old
+				
+		
+			}
+
+
+        	
+        	}
+        	
+        	
+        	
         	// viscous drag  
         	force = force - d_gamma_env[cellInd]*nodeVelocity;
         
-        	// write force to global memory
+        	// write forces to global memory
+        	
         	d_fDisList.x[globalNodeInd] = force.x; 
         	d_fDisList.y[globalNodeInd] = force.y; 
         	d_fDisList.z[globalNodeInd] = force.z; 
-	
+        		
+        	d_ConFricForces.x[globalNodeInd] = force_fric.x;
+        	d_ConFricForces.y[globalNodeInd] = force_fric.y;
+        	d_ConFricForces.z[globalNodeInd] = force_fric.z;	
+        	
+        		
 	} 
 
 }
@@ -868,6 +1205,7 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
          
 
     }
+
 }
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
@@ -885,13 +1223,14 @@ __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
         	d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*(dt*fConList.z[nodeInd] + root_dt*fRanList.z[nodeInd])/m;
     	}
 
+
 }
 
 
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fDisList, float dt, long int num_nodes, float m ){
     
-    //const int cellInd = blockIdx.x;
+
     long int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
 
     	
@@ -900,6 +1239,96 @@ __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
     	    d_VY[nodeInd] = d_VY[nodeInd] + 0.5*dt*(fDisList.y[nodeInd])/m;
     	    d_VZ[nodeInd] = d_VZ[nodeInd] + 0.5*dt*(fDisList.z[nodeInd])/m;
     	}
+
+}
+
+
+__global__ void Integrate_ECM (float* d_ECM_x, float* d_ECM_y,
+                          float* d_ECM_Vx, float* d_ECM_Vy, 
+                          float* d_Con_ECM_force_x, float* d_Con_ECM_force_y, 
+                          float* d_Dis_ECM_force_x, float* d_Dis_ECM_force_y, 
+                          float dt, float m_ecm,
+                          int Num_ECM)
+{
+ 
+    int nodeInd = blockIdx.x*blockDim.x + threadIdx.x; 
+    
+    if ( nodeInd < Num_ECM){
+        
+    	float factor = (0.5*dt)/m_ecm;
+    	
+    	
+        d_ECM_Vx[nodeInd] = d_ECM_Vx[nodeInd] + factor*(d_Con_ECM_force_x[nodeInd] + d_Dis_ECM_force_x[nodeInd]);
+        d_ECM_Vy[nodeInd] = d_ECM_Vy[nodeInd] + factor*(d_Con_ECM_force_y[nodeInd] + d_Dis_ECM_force_y[nodeInd]);
+        
+	d_ECM_x[nodeInd] += d_ECM_Vx[nodeInd]*dt; 
+	d_ECM_y[nodeInd] += d_ECM_Vy[nodeInd]*dt;  
+        
+        //printf("node %d x %f and y %f\n", nodeInd, d_ECM_x[nodeInd],d_ECM_y[nodeInd]);
+         
+
+    }
+
+
+}
+
+
+__global__ void VelocityUpdateA_ECM(float* d_ECM_Vx, float* d_ECM_Vy, 
+                                float* d_Con_ECM_force_x, float* d_Con_ECM_force_y,
+                                float dt, int Num_ECM, float m_ecm)
+{
+   
+
+    	int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    	if (nodeInd < Num_ECM){
+    
+        	float factor = (0.5*dt)/m_ecm;
+        	
+        	d_ECM_Vx[nodeInd] = d_ECM_Vx[nodeInd] + factor*d_Con_ECM_force_x[nodeInd];
+        	d_ECM_Vy[nodeInd] = d_ECM_Vy[nodeInd] + factor*d_Con_ECM_force_y[nodeInd];
+    
+    	}
+
+
+}
+
+
+__global__ void VelocityUpdateB_ECM(float* d_ECM_Vx, float* d_ECM_Vy, 
+                                float* d_Dis_ECM_force_x, float* d_Dis_ECM_force_y,
+                                float dt, int Num_ECM, float m_ecm)
+{
+    
+
+    	int nodeInd = blockIdx.x*blockDim.x + threadIdx.x;
+	
+    	if (nodeInd < Num_ECM){
+    	    
+    	    float factor = (0.5*dt)/m_ecm;
+    	    	
+    	    d_ECM_Vx[nodeInd] = d_ECM_Vx[nodeInd] + factor*d_Dis_ECM_force_x[nodeInd];
+    	    d_ECM_Vy[nodeInd] = d_ECM_Vy[nodeInd] + factor*d_Dis_ECM_force_y[nodeInd];
+
+    
+    	}
+
+
+}
+
+
+__global__ void CorrectCoMVelocity_ecm(int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, R3Nptrs d_sysCM_All)
+{
+    
+    long int node = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    if (node < Num_ECM){
+
+        d_ECM_Vx[node] -= *d_sysCM_All.x;       
+        d_ECM_Vy[node] -= *d_sysCM_All.y;
+     
+    }
+
+
 }
 
 
@@ -978,13 +1407,9 @@ __global__ void CorrectCoMVelocity(int No_cells_All, float* d_velListX, float* d
     
     if (tid == 0){
     
-    	*d_sysVCM.x = *d_sysCM_All.x/No_cells_All;
-    	*d_sysVCM.y = *d_sysCM_All.y/No_cells_All;
-    	*d_sysVCM.z = *d_sysCM_All.z/No_cells_All;
-    	
-    	VCmx = *d_sysVCM.x;
-    	VCmy = *d_sysVCM.y;
-    	VCmz = *d_sysVCM.z;
+    	VCmx = *d_sysCM_All.x;
+    	VCmy = *d_sysCM_All.y;
+    	VCmz = *d_sysCM_All.z;
     
     }
     

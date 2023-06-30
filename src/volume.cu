@@ -10,7 +10,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                          float* areaList,
                          float stiffness1, bool useDifferentCell, float* d_younds_mod, float* d_Growth_rate,
                          bool recalc_r0, float ApoVol, float* d_ScaleFactor,
-                         int *num_cell_div, int *cell_div_inds, char* d_cell_Apo, int* d_num_cell_Apo, int *d_cell_Apo_inds){
+                         int *d_num_cell_div, int *cell_div_inds, char* d_cell_Apo, int* d_num_cell_Apo, int *d_cell_Apo_inds){
                          
     __shared__ float locX[192];
     __shared__ float locY[192];
@@ -72,12 +72,13 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
 
 
         for ( int i = 0; i < 6; ++i ){
+            
             n1 = (locY[C180_56[7*tid+i+1]]*avZ-avY*locZ[C180_56[7*tid+i+1]])*locX[C180_56[7*tid+i]];
             n2 = (locZ[C180_56[7*tid+i+1]]*avX-avZ*locX[C180_56[7*tid+i+1]])*locY[C180_56[7*tid+i]];
             n3 = (locX[C180_56[7*tid+i+1]]*avY-avX*locY[C180_56[7*tid+i+1]])*locZ[C180_56[7*tid+i]];
             totvol += fabsf(n1+n2+n3);
 
-
+	    	
 
             if (checkSphericity){
        
@@ -97,19 +98,25 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
 
                 // area of triangle is then 0.5*|1|
                 faceArea += 0.5 * sqrtf(xx*xx + yy*yy + zz*zz);
+                
             }
-        }
+        
+       }
+        
+        
         atomicAdd(&volume, totvol);
+        
+        if (checkSphericity) atomicAdd(&area, faceArea);     
     
-        if (checkSphericity)
-            atomicAdd(&area, faceArea); 
     }
 
     __syncthreads();
 
     if ( tid == 0){
+    
         volume = volume/6.0;
         vol[fullerene] = volume;
+        
         
         if (!isfinite(volume)){
             printf("OH SHIT: non-finite volume %f, cell %d\n", volume, fullerene);
@@ -118,8 +125,36 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             volume = 1.f;
         }
         
-        if (volume >  d_DivisionVolume[fullerene]){
+        if ( volume >  d_DivisionVolume[fullerene]){
+            
             cell_div[fullerene] = 1;
+            
+            
+            if (checkSphericity){
+        
+            	areaList[fullerene] = area;
+            	float c = cbrtf(volume);
+            	float psi = 4.835975862049408 * c * c/area;
+            	if (abs(1.0f - psi) > 0.05) cell_div[fullerene] = 0;
+
+            }
+            
+            if (useDifferentCell && recalc_r0){
+            	
+            	    if (d_younds_mod[fullerene] != stiffness1) cell_div[fullerene] = 0;
+            }
+        
+            
+            if ( cell_div[fullerene] == 1 )                      
+	     {                                                    
+		
+		int index = atomicAdd(&d_num_cell_div[0],1);   
+		cell_div_inds[index] = fullerene;  
+		cell_div[fullerene] = 0;          
+		
+	     } 
+    	
+        
         }
 	
 
@@ -131,35 +166,13 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
 	    		d_cell_Apo_inds[index] = fullerene;
 	    		d_cell_Apo[fullerene] = 1;
 	    	}	
+	
 	} 
 
-
-        if (checkSphericity){
-            areaList[fullerene] = area;
-            float c = cbrtf(volume);
-            float psi = 4.835975862049408 * c * c/area;
-            if (abs(1.0f - psi) > 0.05){ // why 0.05?
-                cell_div[fullerene] = 0;
-                //printf("cell %d division rejected\n", fullerene);
-            }
-        }
-
-        if (useDifferentCell){
-            if (recalc_r0){
-                if (d_younds_mod[fullerene] != stiffness1){
-                    cell_div[fullerene] = 0;
-                }
-            }
-        }
-    
-        if ( cell_div[fullerene] == 1 )                      
-	{                                                    
-		int index = atomicAdd(&num_cell_div[0],1);   
-		cell_div_inds[index] = fullerene;            
-	} 
-    
     
     }
+
+
 }
 
 __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap,
@@ -190,8 +203,7 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
 }
 
 
-__global__ void  cell_division( 
-                               float *d_X,  float *d_Y,  float *d_Z,
+__global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
                                int No_of_C180s, float repulsion_range, float* d_asym,

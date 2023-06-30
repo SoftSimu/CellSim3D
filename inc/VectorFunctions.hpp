@@ -18,7 +18,17 @@ struct R3Nptrs{
     float* z;
 };
 
-typedef struct R3Nptrs R3Nptrs;
+typedef struct Ang3Nptrs Ang3Nptrs;
+
+
+struct Ang3Nptrs{
+    float* ak;
+    float* ai;
+    float* aj;
+};
+
+typedef struct Ang3Nptrs Ang3Nptrs;
+
 
 __host__ __device__ inline angles3 make_angles3(float aij, float ajk,
                                                 float aik){
@@ -121,4 +131,5 @@ __host__ __device__ inline bool good_float3(float3 a){
     return true;
 
 }
+
 #endif // VECTOR_FUNCTIONS_HPP

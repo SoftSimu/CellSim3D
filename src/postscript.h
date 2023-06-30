@@ -68,6 +68,27 @@ __global__ void makeNNlistLEbc(int No_of_C180s, float *CMx, float *CMy,float *CM
                            int *d_NoofNNlist, int *d_NNlist, float3 DLp, float Pshift,bool useRigidBoxZ);
 
 
+
+__global__ void makeNNlistECMMultiGpu(int Num_ECM, float R_ghost_buffer_ECM, float *ECM_x, float *ECM_y,float *ECM_z,
+                           int Xdiv_ecm, int Ydiv_ecm, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int* d_counter_ecm_e, int* d_counter_ecm_w,
+                           int* d_counter_ecm_n, int* d_counter_ecm_s,
+                           int* d_Ghost_ECM_ind_EAST, int* d_Ghost_ECM_ind_WEST, int* d_Ghost_ECM_ind_NORTH, int* d_Ghost_ECM_ind_SOUTH,
+                           int MaxNeighList_ecm);
+                           
+__global__ void makeNNlistECMMultiGpuPBC( int Num_ECM,  float R_ghost_buffer_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           int Xdiv_ecm, int Ydiv_ecm, float3 Subdivision_min, float3 Subdivision_max, double3 BoxMin, double3 boxMax,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int* d_counter_ecm_e, int* d_counter_ecm_w,
+                           int* d_counter_ecm_n, int* d_counter_ecm_s,
+                           int* d_Ghost_ECM_ind_EAST, int* d_Ghost_ECM_ind_WEST, int* d_Ghost_ECM_ind_NORTH, int* d_Ghost_ECM_ind_SOUTH,
+                           int MaxNeighList_ecm);
+
+__global__ void makeNNlistECM(int Num_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           int Xdiv_ecm, int Ydiv_ecm, double3 BoxMin,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm,
+                           int MaxNeighList_ecm);
+                           
+                           
 __global__ void CenterOfMass( int No_of_C180s,
                float *d_XP, float *d_YP, float *d_ZP,
                float *CMx, float *CMy, float *CMz);
@@ -75,8 +96,6 @@ __global__ void CenterOfMass( int No_of_C180s,
 __global__ void VelocityCenterOfMass( int No_of_C180s, 
                float *d_velListX, float *d_velListY, float *d_velListZ, 
                float *d_VCMx, float *d_VCMy,float *d_VCMz);
-               
-
 
 __global__ void volumes( int No_of_C180s, int *C180_56,
                          float *X,    float *Y,   float *Z,
@@ -101,26 +120,43 @@ int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271])
 
 int PSNUM(float X, float Y, int NUMBER, FILE *outfile);
 
+int read_ECM(void);
+int read_ECM_Neighbors(void);
+
 
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
                            float d_XPin[],  float d_YPin[],  float d_ZPin[],
-                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
-                           float* d_R0, float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
+                           float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                           
+                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax,
-                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin,  float DL, float* d_gamma_env,
+                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax, 
+                           int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
-                           double3 BoxMin, float3 Subdivision_min, float Youngs_mod, float angleConstant, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, 
+                           double3 BoxMin, float3 Subdivision_min, float Youngs_mod,  float angleConstant, 
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
                            bool impurity, float f_range,
                            bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX,
-                           int MaxNeighList);
+                           int MaxNeighList,
+                           bool ECM,
+                           float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
+                           float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                           float attraction_strength_ecm, float attraction_range_ecm,
+                           float repulsion_strength_ecm, float repulsion_range_ecm,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
+                           int MaxNeighList_ecm);
 
-                           
+
+__global__ void CalculateConForce_ECM( int Num_ECM,
+					float* d_ECM_x, float* d_ECM_y, float* d_ECM_z, 
+					float* d_Con_ECM_force_x, float* d_Con_ECM_force_y,
+					int* d_ECM_neighbor_updated, int* d_Num_Nei_ECM,
+					float* d_R0_ECM, float ECM_stiffness,
+					float angleConstant_ecm, Ang3Nptrs d_theta0_ECM);                           
+
 
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
@@ -176,6 +212,13 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
                           int numCells);
 
+__global__ void Integrate_ECM (float* d_ECM_x, float* d_ECM_y,
+                          float* d_ECM_Vx, float* d_ECM_Vy, 
+                          float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
+                          float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, 
+                          float dt, float m_ecm,
+                          int Num_ECM);
+
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
                             int numCells);
@@ -196,6 +239,7 @@ void write_trajPin(int t_step, FILE* trajfile);
 void WriteCMBinary(int t_step, FILE* cmFile,int frameCount);
 void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount);
 void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount);
+void WriteBinaryTrajECM(int t_step, FILE* traj, int frameCount);
 
 // read and write restart function
 int writeRestartFile(int t_step, int frameCount);
@@ -250,6 +294,8 @@ __global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, floa
 __global__ void CorrectCoMVelocity(int No_cells_All, float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_sysVCM, R3Nptrs d_sysCM_All, long int numParts);
 
+__global__ void CorrectCoMVelocity_ecm(int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, R3Nptrs d_sysCM_All);
+
 __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz, 
 			   float* SysCx, float* SysCy, float* SysCz);
 
@@ -257,6 +303,12 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 			float* SysCx, float* SysCy, float* SysCz,
 			R3Nptrs d_sysCM);
 
+__global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
+			   float* SysCx_ecm, float* SysCy_ecm);
+
+__global__ void SysCM_ecm( int Num_ECM, int reductionblocks,
+			float* SysCx_ecm, float* SysCy_ecm,
+			R3Nptrs d_sysCM_ecm);
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fConList, R3Nptrs fRanList,
@@ -265,20 +317,41 @@ __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fDisList, float dt, long int num_nodes, float m );
 
-__global__ void CalculateDisForce(int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
+__global__ void VelocityUpdateA_ECM(float* d_ECM_Vx, float* d_ECM_Vy, 
+                                float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
+                                float dt, int Num_ECM, float m_ecm);
+
+__global__ void VelocityUpdateB_ECM(float* d_ECM_Vx, float* d_ECM_Vy, 
+                                float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y,
+                                float dt, int Num_ECM, float m_ecm);
+
+
+__global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
                                    float *d_CMx, float *d_CMy, float *d_CMz,
-                                   float d_XPin[],  float d_YPin[],  float d_ZPin[],
-                                   float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,
+                           	    float d_XPin[],  float d_YPin[],  float d_ZPin[],
+                           	    float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                                   
                                    float gamma_int,
                                    float attraction_range,
                                    float* d_viscotic_damp, float* d_ScaleFactor,
                                    int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, bool impurity, float f_range,
-                                   int MaxNeighList);
+                                   R3Nptrs d_fDisList, R3Nptrs d_ConFricForces, bool impurity, float f_range,
+                                   int MaxNeighList,
+                                   bool ECM,
+                                   float* d_Dis_ECM_force_x, float* d_Dis_ECM_force_y,
+                                   float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                                   float* d_ECM_Vx, float* d_ECM_Vy,
+				    float attraction_range_ecm, float vis_ecm_cell,
+                           	    int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
+                           	    int MaxNeighList_ecm);
+                                 
                                    
+__global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, 
+					float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y,
+					int* d_ECM_neighbor_updated, int* d_Num_Nei_ECM,
+					float vis_damp_ecm, float gamma_env_ecm);
 
 __global__ void CalculateDisForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                                    float d_X[],  float d_Y[],  float d_Z[],
@@ -391,6 +464,12 @@ __global__ void ghost_cells_finder_Auxiliary(int No_of_C180s, int All_Cells, flo
 						float Sub_max, float Sub_min, float R_ghost_buffer,
 						int* d_counter_gc_r, int* d_counter_gc_l,
                          			int* d_Ghost_Cells_ind_R, int* d_Ghost_Cells_ind_L);
+                         			
+__global__ void ghost_ECM_finder_Auxiliary(int Num_ECM, int All_ECM, float *d_ECM_y , 
+						float Sub_max, float Sub_min, float R_ghost_buffer_ECM,
+						int* d_counter_ecm_r, int* d_counter_ecm_l,
+                         			int* d_Ghost_ECM_ind_R, int* d_Ghost_ECM_ind_L);
+                         			
 
 __global__ void Ghost_Cells_Pack(int No_of_Ghost_cells_buffer, int* d_Ghost_Cells_ind,
 				float *d_X,  float *d_Y,  float *d_Z,
@@ -432,7 +511,23 @@ __global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_
 					float *d_X_gc_buffer,  float *d_Y_gc_buffer,  float *d_Z_gc_buffer,
                               	float* d_velListX_gc_buffer, float* d_velListY_gc_buffer, float* d_velListZ_gc_buffer,
                               	float* d_CMx_gc_buffer, float* d_CMy_gc_buffer, float* d_CMz_gc_buffer);
+
+__global__ void Ghost_ECM_Pack_PBC_X(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
+                               	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer);
+              
+
+__global__ void Ghost_ECM_Pack_PBC_Y(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
+                               	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer);
+
                               
+__global__ void Ghost_ECM_Pack(int No_of_Ghost_ECM_buffer, int* d_Ghost_ECM_ind,
+                               float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                               float* d_ECM_x_gc_buffer, float* d_ECM_y_gc_buffer, float* d_ECM_z_gc_buffer,
+                               int* d_ECM_ind_glob, int* d_ECM_ind_buffer);
+                              
+
 __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float *d_CMx_gc, float *d_CMy_gc,float *d_CMz_gc,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                            int *d_NoofNNlist, int *d_NNlist, float DL,
@@ -441,6 +536,16 @@ __global__ void UpdateNNlistWithGhostCells(int No_of_C180s, int All_Cells, float
 __global__ void UpdateNNlistWithGhostCellsPBC(int No_of_C180s, int All_Cells, float *d_CMx, float *d_CMy,float *d_CMz,
                            int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min, double3 boxMax,
                            int *d_NoofNNlist, int *d_NNlist, float DL);
+                           
+                           
+__global__ void UpdateNNlistWithGhostECM(int Num_ECM, int All_ECM, float *d_ECM_x, float *d_ECM_y,float *d_ECM_z,
+                           		int Xdiv_ecm, int Ydiv_ecm, float3 Subdivision_min,
+                           		int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm,
+                           		int* d_ECM_ind_glob, int* d_ECM_Map_ind,
+                           		int MaxNeighList_ecm);
+
+
+__global__ void ECM_Connectivity_Update(int Num, int* d_ECM_Map_ind, int* d_ECM_neighbor, int* d_ECM_neighbor_updated);
 
 __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig,
@@ -531,6 +636,7 @@ __global__ void migrated_cells_finderPBC(int No_of_C180s, float *d_CM,
                          		
 __global__ void ghost_cells_finder_WEST(int No_of_C180s, int All_Cells, float *d_CMx, float3 Subdivision_min, 
                          		int* d_counter_gc_w, int* d_Ghost_Cells_ind_WEST);                           
+
                               
 void SetDeviceBeforeInit();    
 
@@ -552,3 +658,12 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 			     float* velListY_mc, float* velListZ_mc,float* CMx_mc, float* CMy_mc, float* CMz_mc, float* ScaleFactor_mc, float* Youngs_mod_mc, float* Growth_rate_mc,
 			     float* DivisionVolume_mc, float* gamma_env_mc, float* viscotic_damp_mc, float* pressList_mc,float* Apo_rate_mc, float* squeeze_rate_mc, int* CellINdex_mc,
 			     bool colloidal_dynamics);
+			     
+void Send_Recv_ghost_ECM( int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM, int receiver, int sender, int tag, MPI_Comm cart_comm,
+			     int shift_sender, int shift_receiver,	
+			     float* ECM_x_buffer, float* ECM_y_buffer, float* ECM_z_buffer,
+			     float* ECM_x_ecm, float* ECM_y_ecm, float* ECM_z_ecm,
+			     bool ind_comm, int* ECM_ind_buffer, int* ECM_ind_ecm);
+			  
+
+

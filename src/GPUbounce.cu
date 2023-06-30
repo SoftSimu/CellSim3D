@@ -98,6 +98,7 @@ bool write_cm_file = false;
 bool write_vcm_file = false;
 bool write_fcm_file = false;
 bool write_for_file = false;
+bool write_traj_Ecm_file = false;
 
 char forces_file[256];
 int   overWriteMitInd; // 0 No, 1 yes
@@ -224,13 +225,17 @@ R3Nptrs d_fConList;
 R3Nptrs d_fDisList;
 R3Nptrs d_fRanList; 
 R3Nptrs d_ExtForces;
+R3Nptrs d_ConFricForces;
+
 R3Nptrs h_contactForces;
 R3Nptrs h_ExtForces;
+R3Nptrs h_ConFricForces;
 
 
 float DL;
 float3 DLp;
 int Xdiv, Ydiv, Zdiv;
+
 
 int *d_NoofNNlist;
 int *d_NNlist;
@@ -240,6 +245,11 @@ int *d_NoofNNlistPin;
 int *d_NNlistPin;
 int *localNNs;
 int *NooflocalNN;
+
+int *d_NoofNNlist_ECM;
+int *d_NNlist_ECM;
+int *NoofNNlist_ECM;
+int *NNlist_ECM;
 
 
 int NNlistUpdater;
@@ -271,6 +281,7 @@ float *d_FCMx, *d_FCMy, *d_FCMz;
 float *FCMx, *FCMy, *FCMz;
 
 float *d_SysCx, *d_SysCy, *d_SysCz; 
+
 
 R3Nptrs h_sysCM, h_sysCM_All;
 R3Nptrs d_sysCM, d_sysCM_All;
@@ -394,10 +405,14 @@ int No_of_Ghost_cells_buffer[6];
 int No_of_Ghost_cells[6];
 int No_of_migrated_cells_buffer[6]; 
 int No_of_migrated_cells[6];
-int* numberofCells_InGPUs;
+int No_of_Ghost_ECM_buffer[6];
+int No_of_Ghost_ECM[6];
+
+
+int *numberofCells_InGPUs, *numberofECMs_InGPUs;
 int IndexShifter;
-int *CellINdex_OtherGPU;
-float R_ghost_buffer;
+int *CellIndex_OtherGPU, *ECM_Index_OtherGPU;
+float R_ghost_buffer, R_ghost_buffer_ECM;
 int BufferSize;
 int Max_Buffer_Size;
 
@@ -409,14 +424,21 @@ float *X_OtherGPU, *Y_OtherGPU, *Z_OtherGPU;
 float *XPin_OtherGPU, *YPin_OtherGPU, *ZPin_OtherGPU;
 float *velListX_OtherGPU, *velListY_OtherGPU, *velListZ_OtherGPU;
 float *CmX_OtherGPU, *CmY_OtherGPU, *CmZ_OtherGPU;
- 
+float *ECM_x_OtherGPU, *ECM_y_OtherGPU, *ECM_z_OtherGPU;
+
+
 R3Nptrs h_contactForces_OtherGPU;
 R3Nptrs h_ExtForces_OtherGPU;
+R3Nptrs h_ConFricForces_OtherGPU;
 
 
 
 int All_Cells, All_Cells_EW, All_Cells_NS, All_Cells_UD;
 int Sending_Ghost_cells_Num_total_EW, Sending_Ghost_cells_Num_total_NS, Sending_Ghost_cells_Num_total_UD;
+int Sending_Ghost_ECM_Num_total_EW, Sending_Ghost_ECM_Num_total_NS, Sending_Ghost_ECM_Num_total_UD;
+
+int All_ECM, All_ECM_EW, All_ECM_NS, All_ECM_UD;
+
 
 int* d_counter_gc_e;
 int* d_counter_gc_w;
@@ -424,6 +446,15 @@ int* d_counter_gc_n;
 int* d_counter_gc_s;
 int* d_counter_gc_u;
 int* d_counter_gc_d;
+
+
+int* d_counter_ecm_e;
+int* d_counter_ecm_w;
+int* d_counter_ecm_n;
+int* d_counter_ecm_s;
+//int* d_counter_ecm_u;
+//int* d_counter_ecm_d;
+
 
 int* d_counter_mc_e;
 int* d_counter_mc_w;
@@ -438,6 +469,11 @@ int *Ghost_Cells_ind;
 int *d_Ghost_Cells_ind_EAST, *d_Ghost_Cells_ind_WEST, *d_Ghost_Cells_ind_NORTH;
 int *d_Ghost_Cells_ind_SOUTH, *d_Ghost_Cells_ind_UP, *d_Ghost_Cells_ind_DOWN;
 int *d_Ghost_Cells_ind_EAST_WEST, *d_Ghost_Cells_ind_NORTH_SOUTH, *d_Ghost_Cells_ind_UP_DOWN;
+
+
+int *d_Ghost_ECM_ind_EAST, *d_Ghost_ECM_ind_WEST, *d_Ghost_ECM_ind_NORTH, *d_Ghost_ECM_ind_SOUTH;
+int *d_Ghost_ECM_ind_EAST_WEST, *d_Ghost_ECM_ind_NORTH_SOUTH;
+//int *d_Ghost_ECM_ind_UP, *d_Ghost_ECM_ind_DOWN, *d_Ghost_ECM_ind_UP_DOWN;
 
 int *d_migrated_cells_ind_EAST_WEST , *d_migrated_cells_ind_NORTH_SOUTH, *d_migrated_cells_ind_UP_DOWN;
 int *d_migrated_cells_ind_EAST , *d_migrated_cells_ind_WEST, *d_migrated_cells_ind_NORTH;
@@ -457,6 +493,7 @@ float  *velListX_gc_buffer, *velListY_gc_buffer, *velListZ_gc_buffer;
 float  *d_velListX_gc_buffer, *d_velListY_gc_buffer, *d_velListZ_gc_buffer;
 float  *CMx_gc_buffer, *CMy_gc_buffer, *CMz_gc_buffer;
 float  *d_CMx_gc_buffer, *d_CMy_gc_buffer, *d_CMz_gc_buffer;
+
 
 
 float  *X_mc_buffer,  *Y_mc_buffer,  *Z_mc_buffer; 
@@ -483,6 +520,50 @@ float *ScaleFactor_mc, *Youngs_mod_mc, *Growth_rate_mc, *DivisionVolume_mc;
 float *gamma_env_mc, *viscotic_damp_mc, *pressList_mc;
 float *Apo_rate_mc, *squeeze_rate_mc;
 int *CellINdex_mc;
+
+
+bool ECM;
+float DL_ecm;
+int Xdiv_ecm, Ydiv_ecm;
+float mass_ecm;     
+float stiffness_ecm;
+float angleConstant_ecm; 
+float vis_damp_ecm, gamma_env_ecm, vis_ecm_cell;
+float attraction_range_ecm, repulsion_range_ecm; 
+float attraction_strength_ecm, repulsion_strength_ecm;
+int Max_Nei_ECM;
+int Num_ECM, Num_Nei32, Num_All_ECM, MaxNoofECMs, ECM_Num32, ECM_Num_buffer; 
+int BufferSize_ECM, Max_Buffer_ECM;
+int MaxNeighList_ecm;
+
+float  *ECM_x,  *ECM_y,  *ECM_z; 
+float  *d_ECM_x,  *d_ECM_y,  *d_ECM_z; 
+float  *d_ECM_Vx,  *d_ECM_Vy,  *d_ECM_Vz;
+float  *ECM_Vx,  *ECM_Vy,  *ECM_Vz;
+
+float  *All_ECM_x,  *All_ECM_y,  *All_ECM_z;
+int *Num_Nei_ECM, *ECM_neighbor; 
+int *d_Num_Nei_ECM, *d_ECM_neighbor, *d_ECM_neighbor_updated; 
+int *Num_Nei_ECM_All, *ECM_neighbor_All;
+int *ECM_Map_ind, *ECM_ind_glob, *ECM_ind_buffer;
+int *d_ECM_Map_ind, *d_ECM_ind_glob, *d_ECM_ind_buffer, *ECM_ind_ecm;
+bool ind_comm;
+
+float  *ECM_x_ecm, *ECM_y_ecm, *ECM_z_ecm;
+float  *ECM_x_buffer, *ECM_y_buffer, *ECM_z_buffer;
+float  *d_ECM_x_buffer, *d_ECM_y_buffer, *d_ECM_z_buffer;
+
+float *d_R0_ECM, *h_R0_ECM;
+//float *d_theta0_ECM, *h_theta0_ECM;
+
+float *d_Con_ECM_force_x, *d_Con_ECM_force_y;
+float *d_Dis_ECM_force_x, *d_Dis_ECM_force_y;	
+float *h_Con_ECM_force_x, *h_Con_ECM_force_y;
+
+Ang3Nptrs d_theta0_ECM, h_theta0_ECM;
+float *d_SysCx_ecm, *d_SysCy_ecm, *d_SysCz_ecm; 
+R3Nptrs d_sysVCM_ecm;
+R3Nptrs h_sysVCM_ecm, h_sysCM_All_ecm;
 
 int main(int argc, char *argv[])
 {
@@ -597,8 +678,10 @@ int main(int argc, char *argv[])
   
   for (int i = 0; i < 6 ; i++){
   
-  	No_of_Ghost_cells_buffer[i] = 0;	
+  	No_of_Ghost_cells_buffer[i] = 0;
+  	No_of_Ghost_ECM_buffer[i] = 0;	
   	No_of_Ghost_cells[i] = 0;
+  	No_of_Ghost_ECM[i] = 0;
   
   }
   
@@ -614,6 +697,8 @@ int main(int argc, char *argv[])
   
   FILE *outfile;
   FILE *trajfile; // pointer to xyz file 
+  
+  FILE *trajfile_Ecm;
   
   FILE* forceFile;
   FILE* velFile;
@@ -667,6 +752,8 @@ int main(int argc, char *argv[])
   if(rank == 0) printf("   Buffer Size is: %d \n",BufferSize);	
 
 
+  if (ECM) BufferSize_ECM = Max_Buffer_ECM;
+
   IndexShifter = rank * MaxNoofC180s + 1;
   
   Vshift = shear_rate*boxMax.x;
@@ -696,6 +783,9 @@ int main(int argc, char *argv[])
   	angleConstant = Youngs_mod;
   }
   
+  
+  //angleConstant_ecm = 10*Youngs_mod;
+  angleConstant_ecm = 100;
   
   
   //f_range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
@@ -740,8 +830,11 @@ int main(int argc, char *argv[])
   GPUMemory = 0L;
   CPUMemory = 0L; 
   
-  if(rank == 0) numberofCells_InGPUs = (int *)calloc(nprocs , sizeof(int));
-  
+  if(rank == 0) {
+  	
+  	numberofCells_InGPUs = (int *)calloc(nprocs , sizeof(int));
+  	numberofECMs_InGPUs = (int *)calloc(nprocs , sizeof(int));
+  }
   
   XPin = (float *)calloc(192*impurityNum,sizeof(float));
   YPin = (float *)calloc(192*impurityNum,sizeof(float));
@@ -783,6 +876,11 @@ int main(int argc, char *argv[])
   h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ConFricForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ConFricForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ConFricForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  
+  
   
   DivPlane.x = (float *)calloc(MaxNoofC180s, sizeof(float));
   DivPlane.y = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -839,6 +937,8 @@ int main(int argc, char *argv[])
   CMx_gc_buffer = (float *)calloc(BufferSize,sizeof(float));
   CMy_gc_buffer = (float *)calloc(BufferSize,sizeof(float));
   CMz_gc_buffer = (float *)calloc(BufferSize,sizeof(float));
+  
+  
 
 
   X_mc = (float *)calloc(192*BufferSize,sizeof(float));
@@ -883,9 +983,8 @@ int main(int argc, char *argv[])
   Apo_rate_mc_buffer = (float *)calloc(BufferSize,sizeof(float));
   squeeze_rate_mc_buffer= (float *)calloc(BufferSize,sizeof(float));
   CellINdex_mc_buffer = (int *)calloc(BufferSize,sizeof(int));
-
-
-
+  
+  
   CPUMemory += 6L*192L*MaxNoofC180s*sizeof(float);
   CPUMemory += MaxNoofC180s*10L*sizeof(float);
   CPUMemory += MaxNoofC180s*7L*sizeof(float);
@@ -1004,6 +1103,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_ConFricForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_ConFricForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_ConFricForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fConList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fConList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fConList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
@@ -1045,7 +1147,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_counter_gc_n, sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_counter_gc_s, sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_counter_gc_u, sizeof(int))) return(-1);
-  if ( cudaSuccess != cudaMalloc((void **)&d_counter_gc_d, sizeof(int))) return(-1);         
+  if ( cudaSuccess != cudaMalloc((void **)&d_counter_gc_d, sizeof(int))) return(-1); 
   if ( cudaSuccess != cudaMalloc((void **)&d_counter_mc_e, sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_counter_mc_w, sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_counter_mc_n, sizeof(int))) return(-1);
@@ -1129,6 +1231,7 @@ int main(int argc, char *argv[])
   cudaMemset(d_CMz, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
   
+  
   cudaMemset(d_VCMx, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_VCMy, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_VCMz, 0, MaxNoofC180s*sizeof(float));
@@ -1181,13 +1284,16 @@ int main(int argc, char *argv[])
   cudaMemset(d_ExtForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
+  cudaMemset(d_ConFricForces.x, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ConFricForces.y, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ConFricForces.z, 0, 192*MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
   
   cudaMemset(d_DivPlane.x, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_DivPlane.y, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_DivPlane.z, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
-  
-  
+    
   cudaMemset(d_SysCx, 0, 1024*sizeof(float));
   cudaMemset(d_SysCy, 0, 1024*sizeof(float));
   cudaMemset(d_SysCz, 0, 1024*sizeof(float));
@@ -1232,7 +1338,7 @@ int main(int argc, char *argv[])
   cudaMemset(d_Ghost_Cells_ind_NORTH_SOUTH, 0, BufferSize*sizeof(int));
   cudaMemset(d_Ghost_Cells_ind_UP_DOWN, 0, BufferSize*sizeof(int));
   CudaErrorCheck();
-    
+        
   cudaMemset(d_migrated_cells_ind_EAST, 0, BufferSize*sizeof(int));
   cudaMemset(d_migrated_cells_ind_WEST, 0, BufferSize*sizeof(int));
   cudaMemset(d_migrated_cells_ind_NORTH, 0, BufferSize*sizeof(int));
@@ -1305,6 +1411,143 @@ int main(int argc, char *argv[])
   CudaErrorCheck();
                                		  
   
+  if(ECM){
+  	
+  	Max_Nei_ECM = 32;
+  	read_ECM();
+  	
+  	h_sysVCM_ecm.x = (float *)calloc(1, sizeof(float));
+  	h_sysVCM_ecm.y = (float *)calloc(1, sizeof(float));
+  	h_sysVCM_ecm.z = (float *)calloc(1, sizeof(float));
+  	h_sysCM_All_ecm.x = (float *)calloc(1, sizeof(float));
+  	h_sysCM_All_ecm.y = (float *)calloc(1, sizeof(float));
+  	h_sysCM_All_ecm.z = (float *)calloc(1, sizeof(float));
+  	
+  	if ( cudaSuccess != cudaMalloc((void **)&d_counter_ecm_e, sizeof(int))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_counter_ecm_w, sizeof(int))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_counter_ecm_n, sizeof(int))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_counter_ecm_s, sizeof(int))) return(-1);         
+  	
+  	if ( cudaSuccess != cudaMalloc((void **)&d_Ghost_ECM_ind_EAST, BufferSize_ECM*sizeof(int))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_Ghost_ECM_ind_WEST, BufferSize_ECM*sizeof(int))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_Ghost_ECM_ind_NORTH, BufferSize_ECM*sizeof(int))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_Ghost_ECM_ind_SOUTH, BufferSize_ECM*sizeof(int))) return -1;
+
+
+	if ( cudaSuccess != cudaMalloc((void **)&d_Ghost_ECM_ind_EAST_WEST, BufferSize_ECM*sizeof(int))) return -1;
+	if ( cudaSuccess != cudaMalloc((void **)&d_Ghost_ECM_ind_NORTH_SOUTH, BufferSize_ECM*sizeof(int))) return -1;
+
+
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_NNlist_ECM ,    Xdiv_ecm*Ydiv_ecm*MaxNeighList_ecm*sizeof(int))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_NoofNNlist_ECM ,    Xdiv_ecm*Ydiv_ecm*sizeof(int))) return(-1); 
+  	
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Num_Nei_ECM , Num_ECM*sizeof(int))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_neighbor , Num_Nei32*sizeof(int))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_neighbor_updated , Num_Nei32*sizeof(int))) return(-1);
+		  	
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_x  , MaxNoofECMs*sizeof(float))) return(-1);
+ 	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_y  , MaxNoofECMs*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_z  , MaxNoofECMs*sizeof(float))) return(-1);
+  	
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Vx  , MaxNoofECMs*sizeof(float))) return(-1);
+ 	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Vy  , MaxNoofECMs*sizeof(float))) return(-1);
+  	
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Con_ECM_force_x , MaxNoofECMs*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Con_ECM_force_y , MaxNoofECMs*sizeof(float))) return(-1);
+  	
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Dis_ECM_force_x , MaxNoofECMs*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Dis_ECM_force_y , MaxNoofECMs*sizeof(float))) return(-1);
+  	
+  	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_x_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_y_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_z_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
+    	
+    	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Map_ind  , ECM_Num32*sizeof(int))) return(-1);
+    	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_ind_glob  , ECM_Num32*sizeof(int))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_ind_buffer  , BufferSize_ECM*sizeof(int))) return(-1);
+
+	if ( cudaSuccess != cudaMalloc( (void **)&d_R0_ECM , Num_Nei32*sizeof(float))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.ak , Num_Nei32*sizeof(float))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.ai , Num_Nei32*sizeof(float))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.aj , Num_Nei32*sizeof(float))) return(-1);
+	
+	if ( cudaSuccess != cudaMalloc((void **)&d_SysCx_ecm, 1024*sizeof(float))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_SysCy_ecm, 1024*sizeof(float))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_SysCz_ecm, 1024*sizeof(float))) return -1;
+  	
+  	if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM_ecm.x, sizeof(float))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM_ecm.y, sizeof(float))) return -1;
+  	if ( cudaSuccess != cudaMalloc((void **)&d_sysVCM_ecm.z, sizeof(float))) return -1; 
+	
+
+	cudaMemset(d_Ghost_ECM_ind_EAST, 0, BufferSize_ECM*sizeof(int));
+	cudaMemset(d_Ghost_ECM_ind_WEST, 0, BufferSize_ECM*sizeof(int));
+	cudaMemset(d_Ghost_ECM_ind_NORTH, 0, BufferSize_ECM*sizeof(int));
+	cudaMemset(d_Ghost_ECM_ind_SOUTH, 0, BufferSize_ECM*sizeof(int));
+	cudaMemset(d_Ghost_ECM_ind_EAST_WEST, 0, BufferSize_ECM*sizeof(int));
+	cudaMemset(d_Ghost_ECM_ind_NORTH_SOUTH, 0, BufferSize_ECM*sizeof(int));
+
+	CudaErrorCheck(); 
+
+  	cudaMemset(d_ECM_x_buffer, 0, BufferSize_ECM*sizeof(float));
+  	cudaMemset(d_ECM_y_buffer, 0, BufferSize_ECM*sizeof(float));
+  	cudaMemset(d_ECM_z_buffer, 0, BufferSize_ECM*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_NNlist_ECM, 0, Xdiv_ecm*Ydiv_ecm*MaxNeighList_ecm*sizeof(int)); 
+	cudaMemset(d_NoofNNlist_ECM, 0, Xdiv_ecm*Ydiv_ecm*sizeof(int)); 
+	CudaErrorCheck(); 
+	
+	cudaMemset(d_ECM_x, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_ECM_y, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_ECM_z, 0, MaxNoofECMs*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_ECM_Vx, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_ECM_Vy, 0, MaxNoofECMs*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_Con_ECM_force_x, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_Con_ECM_force_y, 0, MaxNoofECMs*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_Dis_ECM_force_x, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_Dis_ECM_force_y, 0, MaxNoofECMs*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_R0_ECM, 0, Num_Nei32*sizeof(float));
+  	cudaMemset(d_theta0_ECM.ak, 0, Num_Nei32*sizeof(float));
+  	cudaMemset(d_theta0_ECM.ai, 0, Num_Nei32*sizeof(float));
+  	cudaMemset(d_theta0_ECM.aj, 0, Num_Nei32*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_SysCx_ecm, 0, 1024*sizeof(float));
+  	cudaMemset(d_SysCy_ecm, 0, 1024*sizeof(float));
+  	cudaMemset(d_SysCz_ecm, 0, 1024*sizeof(float));
+  	CudaErrorCheck();
+
+  	cudaMemcpy(d_ECM_x,  ECM_x, Num_ECM*sizeof(float),cudaMemcpyHostToDevice);
+  	cudaMemcpy(d_ECM_y,  ECM_y, Num_ECM*sizeof(float),cudaMemcpyHostToDevice);
+  	cudaMemcpy(d_ECM_z,  ECM_z, Num_ECM*sizeof(float),cudaMemcpyHostToDevice);
+  	CudaErrorCheck();
+  	
+  	cudaMemcpy(d_ECM_Map_ind,  ECM_Map_ind, ECM_Num32*sizeof(int),cudaMemcpyHostToDevice);
+  	cudaMemcpy(d_ECM_ind_glob,  ECM_ind_glob, ECM_Num32*sizeof(int),cudaMemcpyHostToDevice);
+  	CudaErrorCheck();
+  	
+  	cudaMemcpy(d_Num_Nei_ECM,  Num_Nei_ECM, Num_ECM*sizeof(int),cudaMemcpyHostToDevice);
+  	cudaMemcpy(d_ECM_neighbor,  ECM_neighbor, Num_Nei32*sizeof(int),cudaMemcpyHostToDevice);
+  	CudaErrorCheck();
+  
+    	cudaMemcpy(d_R0_ECM, h_R0_ECM, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	cudaMemcpy(d_theta0_ECM.ak, h_theta0_ECM.ak, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	cudaMemcpy(d_theta0_ECM.ai, h_theta0_ECM.ai, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	cudaMemcpy(d_theta0_ECM.aj, h_theta0_ECM.aj, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+  	CudaErrorCheck();
+  
+  }
+
+  
   
   //cudaMemcpyToSymbol(d_dt, &delta_t, sizeof(float),0, cudaMemcpyHostToDevice);
 
@@ -1314,7 +1557,7 @@ int main(int argc, char *argv[])
   //cudaMemcpy(d_pressList, pressList, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
   
 
-  int No_cells_All;
+  int No_cells_All, No_nodes_All;
   //if (colloidal_dynamics && rand_vel && !Restart ){
   if (colloidal_dynamics && rand_vel ){
   
@@ -1327,6 +1570,7 @@ int main(int argc, char *argv[])
   	
   	if (No_of_C180s > 0 ){
      
+      		
       		VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
         	                                	  d_velListX, d_velListY, d_velListZ,
         	                                	  d_VCMx, d_VCMy, d_VCMz);
@@ -1343,13 +1587,15 @@ int main(int argc, char *argv[])
 				    d_sysVCM);
       
      		CudaErrorCheck();
+     		
       
-      } else {
+       } else {
         
         
         	cudaMemset(d_sysVCM.x, 0, sizeof(float));
   		cudaMemset(d_sysVCM.y, 0, sizeof(float));
   		cudaMemset(d_sysVCM.z, 0, sizeof(float));
+
   
   	}
              
@@ -1357,12 +1603,11 @@ int main(int argc, char *argv[])
 	cudaMemcpy(h_sysVCM.x, d_sysVCM.x, sizeof(float), cudaMemcpyDeviceToHost);
       	cudaMemcpy(h_sysVCM.y, d_sysVCM.y, sizeof(float), cudaMemcpyDeviceToHost);
       	cudaMemcpy(h_sysVCM.z, d_sysVCM.z, sizeof(float), cudaMemcpyDeviceToHost);
-        
 
         MPI_Allreduce(h_sysVCM.x, h_sysCM_All.x, 1, MPI_FLOAT, MPI_SUM, cart_comm);
         MPI_Allreduce(h_sysVCM.y, h_sysCM_All.y, 1, MPI_FLOAT, MPI_SUM, cart_comm);
         MPI_Allreduce(h_sysVCM.z, h_sysCM_All.z, 1, MPI_FLOAT, MPI_SUM, cart_comm);
-        MPI_Allreduce(&No_of_C180s, &No_cells_All, 1, MPI_INT, MPI_SUM, cart_comm);
+        MPI_Allreduce(&No_of_C180s, &No_cells_All, 1, MPI_INT, MPI_SUM, cart_comm); 
         
         
         cudaMemcpy(d_sysCM_All.x, h_sysCM_All.x, sizeof(float), cudaMemcpyHostToDevice);
@@ -1478,6 +1723,7 @@ int main(int argc, char *argv[])
 /**************************************************************************************************************/
 
 
+
   // initialize device rng
 
 
@@ -1581,11 +1827,18 @@ int main(int argc, char *argv[])
       		return -1;
   	}
   	
+
+  	if (Restart == 0){
+  		trajfile_Ecm = fopen ("inp_ECM.xyz", "w");
+  	}else{
+  		trajfile_Ecm = fopen ("inp_ECM.xyz", "a+");
+  	}
+
   	
   	if (Restart == 0){
     		 forceFile = fopen(forces_file, "w");
   	}else{
-   	 	 forceFile = fopen(forces_file, "a");
+   	 	 forceFile = fopen(forces_file, "a+");
   	}
   	
   	if (Restart == 0){
@@ -1649,8 +1902,6 @@ int main(int argc, char *argv[])
   
   }
   
-
-
   // Better way to see how much GPU memory is being used.
   size_t totalGPUMem;
   size_t freeGPUMem;
@@ -1778,6 +2029,7 @@ int main(int argc, char *argv[])
 				    d_sysVCM);
       
      		CudaErrorCheck();
+
       
       } else {
         
@@ -1785,20 +2037,69 @@ int main(int argc, char *argv[])
         	cudaMemset(d_sysVCM.x, 0, sizeof(float));
   		cudaMemset(d_sysVCM.y, 0, sizeof(float));
   		cudaMemset(d_sysVCM.z, 0, sizeof(float));
+  		
+
   
-  	}
+      }
              
+      if(ECM){
+     		
+     		if(Num_ECM > 0){
+     			
+     			reductionblocks =  (Num_ECM - 1)/1024+1;
+      			SysCMpost_ECM<<<reductionblocks,1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, 
+					   			d_SysCx_ecm, d_SysCy_ecm);
+      			CudaErrorCheck();
+      			
+      			SysCM_ecm<<<1,1024>>>(Num_ECM, reductionblocks,
+        				    	d_SysCx_ecm, d_SysCy_ecm,
+					    	d_sysVCM_ecm);
+      
+     			CudaErrorCheck(); 
+		
+     		
+     		} else {
+
+  		
+  			cudaMemset(d_sysVCM_ecm.x, 0, sizeof(float));
+  			cudaMemset(d_sysVCM_ecm.y, 0, sizeof(float));
+  			cudaMemset(d_sysVCM_ecm.z, 0, sizeof(float));
+
+     		}
+     	
+     	}	
+
 		
 	cudaMemcpy(h_sysVCM.x, d_sysVCM.x, sizeof(float), cudaMemcpyDeviceToHost);
       	cudaMemcpy(h_sysVCM.y, d_sysVCM.y, sizeof(float), cudaMemcpyDeviceToHost);
       	cudaMemcpy(h_sysVCM.z, d_sysVCM.z, sizeof(float), cudaMemcpyDeviceToHost);
         
-
         MPI_Allreduce(h_sysVCM.x, h_sysCM_All.x, 1, MPI_FLOAT, MPI_SUM, cart_comm);
         MPI_Allreduce(h_sysVCM.y, h_sysCM_All.y, 1, MPI_FLOAT, MPI_SUM, cart_comm);
         MPI_Allreduce(h_sysVCM.z, h_sysCM_All.z, 1, MPI_FLOAT, MPI_SUM, cart_comm);
         MPI_Allreduce(&No_of_C180s, &No_cells_All, 1, MPI_INT, MPI_SUM, cart_comm);
         
+        *h_sysCM_All.x = *h_sysCM_All.x/No_cells_All;
+        *h_sysCM_All.y = *h_sysCM_All.y/No_cells_All;
+        *h_sysCM_All.z = *h_sysCM_All.z/No_cells_All;     	
+      	
+      	if(ECM){
+      	
+      		cudaMemcpy(h_sysVCM_ecm.x, d_sysVCM_ecm.x, sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_sysVCM_ecm.y, d_sysVCM_ecm.y, sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_sysVCM_ecm.z, d_sysVCM_ecm.z, sizeof(float), cudaMemcpyDeviceToHost);
+      		
+      		MPI_Allreduce(h_sysVCM_ecm.x, h_sysCM_All_ecm.x, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	MPI_Allreduce(h_sysVCM_ecm.y, h_sysCM_All_ecm.y, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	MPI_Allreduce(h_sysVCM_ecm.z, h_sysCM_All_ecm.z, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	MPI_Allreduce(&Num_ECM, &No_nodes_All, 1, MPI_INT, MPI_SUM, cart_comm);
+        	
+        	*h_sysCM_All.x = (*h_sysCM_All.x*mass*180 + *h_sysCM_All_ecm.x*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        	*h_sysCM_All.y = (*h_sysCM_All.y*mass*180 + *h_sysCM_All_ecm.y*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        	//*h_sysCM_All.x = (*h_sysCM_All.z*mass*180 + *h_sysCM_All_ecm.z*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        		
+      	
+      	}
         
         cudaMemcpy(d_sysCM_All.x, h_sysCM_All.x, sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_sysCM_All.y, h_sysCM_All.y, sizeof(float), cudaMemcpyHostToDevice);
@@ -1812,7 +2113,15 @@ int main(int argc, char *argv[])
                	                                                No_of_C180s*192);
           
      		 CudaErrorCheck(); 
-  	}  
+      }
+      
+      if (ECM && Num_ECM > 0){
+      
+            	CorrectCoMVelocity_ecm<<< Num_ECM/1024 + 1, 1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_sysCM_All);
+          
+     		 CudaErrorCheck(); 
+      
+      }  
   
   }
    
@@ -1824,9 +2133,10 @@ int main(int argc, char *argv[])
    
    int Sending_cell_Num_total = 0;
    int Received_New_cell = 0;
+   ind_comm = true;
    	
    if (useRigidSimulationBox){
-
+   
 	
 	if (nprocs > 1) {
 	
@@ -2085,6 +2395,7 @@ int main(int argc, char *argv[])
    				cudaMemcpy(squeeze_rate_mc_buffer,  d_squeeze_rate_mc_buffer, Sending_cell_Num_total*sizeof(float),cudaMemcpyDeviceToHost);
    		     		CudaErrorCheck();	
         		}
+   	        
    	        }
         		
    	        MPI_Sendrecv(&No_of_migrated_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 28, &No_of_migrated_cells[SOUTH],
@@ -2153,6 +2464,7 @@ int main(int argc, char *argv[])
         		
         		CudaErrorCheck();
         	}	
+		
 		No_of_C180s += Received_New_cell;
 		
 		// UP-DOWN Migration
@@ -2339,7 +2651,8 @@ int main(int argc, char *argv[])
         						d_Ghost_Cells_ind_UP, d_Ghost_Cells_ind_DOWN, MaxNeighList);        
         
         	CudaErrorCheck(); 
-        		
+        	
+        	
         	// EAST-WEST COMM
         		
         	cudaMemcpy(&No_of_Ghost_cells_buffer[EAST], d_counter_gc_e, sizeof(int), cudaMemcpyDeviceToHost);
@@ -2631,15 +2944,227 @@ int main(int argc, char *argv[])
         									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
         									MaxNeighList); 
         		
-        	All_Cells -= All_Cells_UD;   				
-		
+        	All_Cells -= All_Cells_UD;   
+        	
+        	
+        	
+        	if (ECM){
+        	
+        		ind_comm = true;
+        		
+        		cudaMemset(d_counter_ecm_e, 0, sizeof(int));
+			cudaMemset(d_counter_ecm_w, 0, sizeof(int));
+			cudaMemset(d_counter_ecm_n, 0, sizeof(int));
+			cudaMemset(d_counter_ecm_s, 0, sizeof(int));
+			//cudaMemset(d_counter_ecm_u, 0, sizeof(int));
+			//cudaMemset(d_counter_ecm_d, 0, sizeof(int));
+        	
+        		
+        		makeNNlistECMMultiGpu<<<Num_ECM/512+1,512>>>(Num_ECM, R_ghost_buffer_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+                       	    				Xdiv_ecm, Ydiv_ecm, Subdivision_min, Subdivision_max, BoxMin, boxMax,
+                       	    				d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, d_counter_ecm_e, d_counter_ecm_w,
+                       	    				d_counter_ecm_n, d_counter_ecm_s,
+                       	    				d_Ghost_ECM_ind_EAST, d_Ghost_ECM_ind_WEST, d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH,
+                       	    				MaxNeighList_ecm);
+        	
+        		
+        		CudaErrorCheck();
+        		
+        		cudaMemcpy(&No_of_Ghost_ECM_buffer[EAST], d_counter_ecm_e, sizeof(int), cudaMemcpyDeviceToHost);
+        		cudaMemcpy(&No_of_Ghost_ECM_buffer[WEST], d_counter_ecm_w, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck(); 
+        	
+        		if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[EAST] = 0;
+        		if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[WEST] = 0;
+        	
+        	
+        		cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST, d_Ghost_ECM_ind_EAST, No_of_Ghost_ECM_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST + No_of_Ghost_ECM_buffer[EAST], d_Ghost_ECM_ind_WEST, No_of_Ghost_ECM_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_ECM_Num_total_EW = No_of_Ghost_ECM_buffer[EAST]  + No_of_Ghost_ECM_buffer[WEST];
+        		
+        		if ( Sending_Ghost_ECM_Num_total_EW > 0 ){
+        					
+        			Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_EW/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_EW, d_Ghost_ECM_ind_EAST_WEST,
+        											d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        											d_ECM_ind_glob, d_ECM_ind_buffer);
+	
+
+   	
+   				CudaErrorCheck();
+   		
+   				cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				CudaErrorCheck();	
+				
+   				
+   				cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
+   				CudaErrorCheck();	
+							
+			}
+			
+			
+			MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
+        					1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+						cart_comm, 0, 0, 
+					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
+        				1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+						cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
+		  				ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+		  				ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+		  				ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+			
+			
+			All_ECM_EW = No_of_Ghost_ECM[EAST] + No_of_Ghost_ECM[WEST];
+			
+ 			
+ 			cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();
+				
+				
+			cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();	
+			
+			All_ECM = All_ECM_EW;	
+			
+			//north-south
+			
+			if (All_ECM > 0) ghost_ECM_finder_Auxiliary<<<All_ECM/512+1,512>>>(Num_ECM, All_ECM, d_ECM_y, 
+											Subdivision_max.y, Subdivision_min.y, R_ghost_buffer_ECM,
+											d_counter_ecm_n, d_counter_ecm_s,
+        	              		  						d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH);
+        	
+        	
+        	
+        	
+        		cudaMemcpy(&No_of_Ghost_ECM_buffer[NORTH], d_counter_ecm_n, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_Ghost_ECM_buffer[SOUTH], d_counter_ecm_s, sizeof(int), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();        		
+        		
+        		if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[NORTH] = 0;
+        		if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[SOUTH] = 0;
+        		
+        		cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH, d_Ghost_ECM_ind_NORTH, No_of_Ghost_ECM_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH + No_of_Ghost_ECM_buffer[NORTH], d_Ghost_ECM_ind_SOUTH, No_of_Ghost_ECM_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_ECM_Num_total_NS = No_of_Ghost_ECM_buffer[NORTH]  + No_of_Ghost_ECM_buffer[SOUTH];
+        		        
+        		if ( Sending_Ghost_ECM_Num_total_NS > 0 ){
+        			
+	        		Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_NS/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_NS, d_Ghost_ECM_ind_NORTH_SOUTH,
+	        										d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        										d_ECM_ind_glob, d_ECM_ind_buffer);
+
+				CudaErrorCheck();
+
+   		
+   				cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
+   				CudaErrorCheck();		
+							
+			}
+
+        	
+        		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_ECM[SOUTH],
+        				1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+						cart_comm, 0, 0, 
+					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_ECM[NORTH],
+        				 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+						cart_comm, 0, 0, 
+					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+        	
+        		
+        		All_ECM_NS = No_of_Ghost_ECM[NORTH] + No_of_Ghost_ECM[SOUTH];
+   			
+ 
+ 			cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   			CudaErrorCheck();
+   			
+   			cudaMemcpy(d_ECM_ind_glob + (Num_ECM + All_ECM),  ECM_ind_ecm, All_ECM_NS*sizeof(int),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();	
+			
+   	
+   			All_ECM += All_ECM_NS;
+   			
+   			
+   			if( All_ECM > 0) UpdateNNlistWithGhostECM<<< (All_ECM/128) + 1,128>>>(Num_ECM, All_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+        									Xdiv_ecm, Ydiv_ecm, Subdivision_min, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+        									d_ECM_ind_glob, d_ECM_Map_ind,
+        									MaxNeighList_ecm); 
+        	
+        		
+        		All_ECM -= All_ECM_NS;
+        	
+        	
+        		ECM_Connectivity_Update<<< (ECM_Num32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
+        	
+        		CudaErrorCheck();
+        	
+        	}
+
+        	
         
         } else {
         
+        	
         	makeNNlist<<<No_of_C180s/512+1,512>>>(No_of_C180s, d_CMx, d_CMy, d_CMz, d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
                            				Xdiv, Ydiv, Zdiv, BoxMin,
                            				d_NoofNNlist, d_NNlist, DL,
                            				MaxNeighList); 
+               
+               CudaErrorCheck();
+                           				
+               if (ECM){
+               
+               
+        		makeNNlistECM<<<Num_ECM/512+1,512>>>(Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+                       	    				Xdiv_ecm, Ydiv_ecm, BoxMin,
+                       	    				d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+                       	    				MaxNeighList_ecm); 
+               	
+               	CudaErrorCheck();
+               	
+               	
+               	ECM_Connectivity_Update<<< (Num_Nei32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
+        		CudaErrorCheck();
+
+               	
+               
+               
+               }
         
         }	
    
@@ -3170,7 +3695,7 @@ int main(int argc, char *argv[])
 		MPI_Barrier(cart_comm);
 
 		// Ghost Cells
-	
+		
 		cudaMemset(d_counter_gc_e, 0, sizeof(int));
 		cudaMemset(d_counter_gc_w, 0, sizeof(int));
 		cudaMemset(d_counter_gc_n, 0, sizeof(int));
@@ -3507,6 +4032,191 @@ int main(int argc, char *argv[])
    		if( All_Cells > 0) UpdateNNlistWithGhostCells<<< (All_Cells/512) + 1,512>>>(No_of_C180s, All_Cells, d_CMx, d_CMy, d_CMz,
         									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
         									MaxNeighList); 
+        									
+        									
+        									
+        	if (ECM){
+			
+			ind_comm = true;
+			
+			cudaMemset(d_counter_ecm_e, 0, sizeof(int));
+			cudaMemset(d_counter_ecm_w, 0, sizeof(int));
+			cudaMemset(d_counter_ecm_n, 0, sizeof(int));
+			cudaMemset(d_counter_ecm_s, 0, sizeof(int));
+			//cudaMemset(d_counter_ecm_u, 0, sizeof(int));
+			//cudaMemset(d_counter_ecm_d, 0, sizeof(int));
+			
+			
+			makeNNlistECMMultiGpuPBC<<<Num_ECM/512+1,512>>>( Num_ECM, R_ghost_buffer_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+        								Xdiv_ecm, Ydiv_ecm, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+        								d_counter_ecm_e, d_counter_ecm_w, d_counter_ecm_n, d_counter_ecm_s,
+        								d_Ghost_ECM_ind_EAST, d_Ghost_ECM_ind_WEST, d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH,
+        								MaxNeighList_ecm);  
+		
+		
+			CudaErrorCheck();
+		
+			
+			cudaMemcpy(&No_of_Ghost_ECM_buffer[EAST], d_counter_ecm_e, sizeof(int), cudaMemcpyDeviceToHost);
+        		cudaMemcpy(&No_of_Ghost_ECM_buffer[WEST], d_counter_ecm_w, sizeof(int), cudaMemcpyDeviceToHost);
+        		CudaErrorCheck(); 
+        	
+        		if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[EAST] = 0;
+        		if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[WEST] = 0;
+        	
+        	
+        		cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST, d_Ghost_ECM_ind_EAST, No_of_Ghost_ECM_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST + No_of_Ghost_ECM_buffer[EAST], d_Ghost_ECM_ind_WEST, No_of_Ghost_ECM_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_ECM_Num_total_EW = No_of_Ghost_ECM_buffer[EAST]  + No_of_Ghost_ECM_buffer[WEST];
+		
+		
+			if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        					
+        			
+        			Ghost_ECM_Pack_PBC_X<<<Sending_Ghost_ECM_Num_total_EW/256+1,256>>>(Sending_Ghost_ECM_Num_total_EW, No_of_Ghost_ECM_buffer[EAST],
+        												d_Ghost_ECM_ind_EAST_WEST, boxMax, R_ghost_buffer_ECM,
+        												d_ECM_x, d_ECM_y, d_ECM_z,
+													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+
+				
+				CudaErrorCheck();
+				
+   		
+   				cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();	
+							
+			}
+		
+		
+			MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
+        				1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+						cart_comm, 0, 0, 
+						ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+	        	MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
+        				1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+	
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+						cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
+			  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+			  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+			  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+			
+			
+			All_ECM_EW = No_of_Ghost_ECM[EAST] + No_of_Ghost_ECM[WEST];
+			
+ 			
+ 			cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();
+   			
+   			cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();
+				
+			All_ECM = All_ECM_EW;	
+			
+			
+
+			// north-south
+			
+			if (All_ECM > 0) ghost_ECM_finder_Auxiliary<<<All_ECM/512+1,512>>>(Num_ECM, All_ECM, d_ECM_y, 
+											Subdivision_max.y, Subdivision_min.y, R_ghost_buffer_ECM,
+											d_counter_ecm_n, d_counter_ecm_s,
+        	              		  						d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH);
+        	
+        	
+        	
+        	
+        		cudaMemcpy(&No_of_Ghost_ECM_buffer[NORTH], d_counter_ecm_n, sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(&No_of_Ghost_ECM_buffer[SOUTH], d_counter_ecm_s, sizeof(int), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();        		
+        		
+        		if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[NORTH] = 0;
+        		if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[SOUTH] = 0;
+        		
+        		cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH, d_Ghost_ECM_ind_NORTH, No_of_Ghost_ECM_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        		cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH + No_of_Ghost_ECM_buffer[NORTH], d_Ghost_ECM_ind_SOUTH, No_of_Ghost_ECM_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+			CudaErrorCheck();
+        	
+        		Sending_Ghost_ECM_Num_total_NS = No_of_Ghost_ECM_buffer[NORTH]  + No_of_Ghost_ECM_buffer[SOUTH];
+		
+			if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        			
+        			Ghost_ECM_Pack_PBC_Y<<<Sending_Ghost_ECM_Num_total_NS/256+1,256>>>( Sending_Ghost_ECM_Num_total_NS, No_of_Ghost_ECM_buffer[NORTH],
+        											d_Ghost_ECM_ind_NORTH_SOUTH, boxMax, R_ghost_buffer_ECM,
+        											d_ECM_x, d_ECM_y, d_ECM_z,
+												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+
+				CudaErrorCheck();
+
+   				cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   				CudaErrorCheck();				
+	
+							
+			}
+			
+			
+			MPI_Sendrecv(&No_of_Ghost_ECM_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_ECM[SOUTH],
+        				1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+			
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+						cart_comm, 0, 0, 
+					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_ECM[NORTH],
+        				 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+						cart_comm, 0, 0, 
+					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+        	
+        		
+        		All_ECM_NS = No_of_Ghost_ECM[NORTH] + No_of_Ghost_ECM[SOUTH];
+   			
+ 
+ 			cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   			CudaErrorCheck();
+   			
+   			cudaMemcpy(d_ECM_ind_glob + (Num_ECM + All_ECM),  ECM_ind_ecm, All_ECM_NS*sizeof(int),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();
+   	
+   			All_ECM += All_ECM_NS;
+   			
+   			
+   			if( All_ECM > 0) UpdateNNlistWithGhostECM<<< (All_ECM/128) + 1,128>>>(Num_ECM, All_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+        									Xdiv_ecm, Ydiv_ecm, Subdivision_min, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+        									d_ECM_ind_glob, d_ECM_Map_ind,
+        									MaxNeighList_ecm); 
+        	
+        		
+        		All_ECM -= All_ECM_NS;
+        	
+        		ECM_Connectivity_Update<<< (Num_Nei32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
+		
+		}
+
 
    }
 
@@ -3530,7 +4240,7 @@ int main(int argc, char *argv[])
   	
   		
   	
-  	CalculateConForce<<<No_of_C180s,threadsperblock>>>(   No_of_C180s, d_C180_nn, d_C180_sign,
+  	CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
         		                                             	d_X,  d_Y,  d_Z,
         		                                             	d_CMx, d_CMy, d_CMz,
         		                                             	d_XPin,  d_YPin,  d_ZPin,
@@ -3546,9 +4256,16 @@ int main(int argc, char *argv[])
                                                      		constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                                      		impurity,f_range,
                                                      		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
-                                                     		MaxNeighList); 
+                                                     		MaxNeighList,
+                                                     		ECM,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_ECM_x, d_ECM_y, d_ECM_z,
+                           						attraction_strength_ecm, attraction_range_ecm,
+                           						repulsion_strength_ecm, repulsion_range_ecm,
+                           						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           						MaxNeighList_ecm); 
                                                      	
         CudaErrorCheck();
+        
                                                      	
       	CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
         	                                                	d_X, d_Y, d_Z,
@@ -3561,12 +4278,19 @@ int main(int argc, char *argv[])
         	                                                	Xdiv, Ydiv, Zdiv, Subdivision_min,
         	                                                	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
         	                                                	d_velListX, d_velListY, d_velListZ,
-        	                                                	d_fDisList,impurity,f_range,
-        	                                                	MaxNeighList);
-                                                        
-                                                        
-        CudaErrorCheck();                                                  
-
+        	                                                	d_fDisList, d_ConFricForces, 
+        	                                                	impurity,f_range, MaxNeighList,
+        	                                                	ECM,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                   					d_ECM_x, d_ECM_y, d_ECM_z,
+                                   					d_ECM_Vx, d_ECM_Vy,
+				    					attraction_range_ecm, vis_ecm_cell,
+                           	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           	    					MaxNeighList_ecm);
+        	                                                	
+        	                                         
+        CudaErrorCheck();  
+     
   
   	volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                                      d_X, d_Y, d_Z,
@@ -3582,7 +4306,27 @@ int main(int argc, char *argv[])
     }
 	
     
-    int lentrajfile, lenforceFile, lenvelFile, lencmFile, lenvcmFile, lenfcmFile, lenforFile ; 
+    if(ECM && Num_ECM > 0) {
+        
+        	CalculateConForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z, 
+        								d_Con_ECM_force_x, d_Con_ECM_force_y,
+									d_ECM_neighbor_updated, d_Num_Nei_ECM,
+									d_R0_ECM, stiffness_ecm,
+									angleConstant_ecm, d_theta0_ECM);
+        
+        	CudaErrorCheck();
+        	
+        	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy, 
+								d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+								d_ECM_neighbor_updated, d_Num_Nei_ECM,
+								vis_damp_ecm, gamma_env_ecm);                                                
+
+		CudaErrorCheck();                                                  	
+  	
+    }
+    
+    
+    int lentrajfile, lenforceFile, lenvelFile, lencmFile, lenvcmFile, lenfcmFile, lenforFile, lentrajEcmFile; 
     
     if(rank == 0) {
     
@@ -3606,13 +4350,17 @@ int main(int argc, char *argv[])
   	
   	fseek(forFile, 0, SEEK_END);
   	lenforFile = ftell(forFile);
-    
+    	
+    	fseek(trajfile_Ecm, 0, SEEK_END);
+    	lentrajEcmFile = ftell(trajfile_Ecm);
+    	
     }
     
     
     if (nprocs > 1) {
     	
     	MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
+    	MPI_Gather(&Num_ECM, 1, MPI_INT, numberofECMs_InGPUs , 1, MPI_INT, 0, cart_comm);
     	
     	MPI_Bcast(&lentrajfile , 1, MPI_INT, 0, cart_comm);
     	MPI_Bcast(&lenforceFile , 1, MPI_INT, 0, cart_comm);
@@ -3621,6 +4369,7 @@ int main(int argc, char *argv[])
     	MPI_Bcast(&lenvcmFile , 1, MPI_INT, 0, cart_comm);
     	MPI_Bcast(&lenfcmFile , 1, MPI_INT, 0, cart_comm);
     	MPI_Bcast(&lenforFile , 1, MPI_INT, 0, cart_comm);
+    	MPI_Bcast(&lentrajEcmFile , 1, MPI_INT, 0, cart_comm);
     
     }
     	
@@ -3660,7 +4409,7 @@ int main(int argc, char *argv[])
       				t = (int)useDifferentCell;
       				fwrite(&t, sizeof(int), 1, trajfile);
       	
-      				t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      				t = (Time_steps+equiStepCount+1)/trajWriteInt;
       				fwrite(&t, sizeof(int), 1, trajfile);      
     
      				if (Restart ==0) 
@@ -3700,7 +4449,36 @@ int main(int argc, char *argv[])
   
   		}
   	
-  	}	
+  	}
+  	
+  	if(write_traj_Ecm_file){
+        
+        	
+            	cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    		CudaErrorCheck();
+	
+        	if( lentrajEcmFile == 0 ) {
+      			
+      				t = Num_All_ECM;	
+      				fwrite(&t, sizeof(int), 1, trajfile_Ecm);
+      	
+      				t = 0;
+      				fwrite(&t, sizeof(int), 1, trajfile_Ecm);
+      	
+      				t = (Time_steps+equiStepCount+1) / trajWriteInt;
+      				fwrite(&t, sizeof(int), 1, trajfile_Ecm);      
+    
+     				if (Restart ==0) 
+     					WriteBinaryTrajECM(0, trajfile_Ecm, 1);
+     				else 
+     					WriteBinaryTrajECM(Laststep, trajfile_Ecm, Lastframe); 
+  		
+  		}
+  		
+  	}
+  		
   	if (write_cont_force){
   
       		
@@ -3708,10 +4486,18 @@ int main(int argc, char *argv[])
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		CudaErrorCheck();
+      		
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		CudaErrorCheck();
+		
+		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		CudaErrorCheck();
+		
+		
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
@@ -3720,7 +4506,7 @@ int main(int argc, char *argv[])
 
         	if( lenforceFile == 0 ) {
       		
-      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
+      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,FX_fric,FY_fric,FZ_fric,F_fric,P,Vol,Area\n");
       
       			if (Restart ==0) 
      				writeForces(forceFile, 0, No_of_C180s);
@@ -3885,6 +4671,26 @@ int main(int argc, char *argv[])
     	
     	}
     	
+    	
+    	if(write_traj_Ecm_file){
+    		
+            	cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    		cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    		CudaErrorCheck();
+    		
+    		if( lentrajfile == 0 ){
+    	
+    			MPI_Send(ECM_x , Num_ECM, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(ECM_y , Num_ECM, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(ECM_z , Num_ECM, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(ECM_ind_glob , Num_ECM, MPI_INT, 0, rank, cart_comm);
+    	
+    		}
+    	
+    	}
+    	
+    	
     	if (write_cont_force){
     		      		
     		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -3897,6 +4703,11 @@ int main(int argc, char *argv[])
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		CudaErrorCheck();
 		
+		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		CudaErrorCheck();
+		
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
@@ -3907,9 +4718,14 @@ int main(int argc, char *argv[])
       			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
       			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
+      			MPI_Send(h_ConFricForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		
     			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
@@ -4086,8 +4902,8 @@ int main(int argc, char *argv[])
         	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
         	CudaErrorCheck();
 
-
-	
+		
+		
 		DangerousParticlesFinder<<<No_of_C180s/512+1,512>>>(No_of_C180s,  d_CMx, d_CMy, d_CMz,
 									d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
 									BufferDistance, d_num_cell_dang, d_cell_dang_inds, d_cell_dang, 
@@ -4139,6 +4955,18 @@ int main(int argc, char *argv[])
 		}
 	
 	}
+	  
+	
+	if (ECM && Num_ECM > 0) { 
+			
+		Integrate_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_x, d_ECM_y, d_ECM_Vx, d_ECM_Vy, 
+                          					d_Con_ECM_force_x, d_Con_ECM_force_y, 
+                          					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                          					delta_t, mass_ecm, Num_ECM);
+		CudaErrorCheck();
+		
+	} 
+	  
 // ----------------------------------------- End Cell Death --------------
  
 
@@ -4150,6 +4978,7 @@ int main(int argc, char *argv[])
 	} else {
 		NNlistUpdaterAll = NNlistUpdater;
 	}
+
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -4170,6 +4999,7 @@ int main(int argc, char *argv[])
       		num_cell_Apo = 0;
       		
       		cudaMemset(d_NoofNNlist, 0, Xdiv*Ydiv*Zdiv*sizeof(int));
+      		cudaMemset(d_NoofNNlist_ECM, 0, Xdiv_ecm*Ydiv_ecm*sizeof(int));
       		
       		
       		if (useRigidSimulationBox){
@@ -4998,18 +5828,220 @@ int main(int argc, char *argv[])
         									Xdiv, Ydiv, Zdiv, Subdivision_min, d_NoofNNlist, d_NNlist, DL,
         									MaxNeighList); 
         		
-        			All_Cells -= All_Cells_UD;   				
+        			All_Cells -= All_Cells_UD;  
+        			
+        			
+        			if (ECM){
+	
+        				ind_comm = true;
+        				
+        				cudaMemset(d_counter_ecm_e, 0, sizeof(int));
+					cudaMemset(d_counter_ecm_w, 0, sizeof(int));
+					cudaMemset(d_counter_ecm_n, 0, sizeof(int));
+					cudaMemset(d_counter_ecm_s, 0, sizeof(int));
+					//cudaMemset(d_counter_ecm_u, 0, sizeof(int));
+					//cudaMemset(d_counter_ecm_d, 0, sizeof(int));
+        	
+        		
+        				makeNNlistECMMultiGpu<<<(Num_ECM/512)+1,512>>>(Num_ECM, R_ghost_buffer_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+                       	    						Xdiv_ecm, Ydiv_ecm, Subdivision_min, Subdivision_max, BoxMin, boxMax,
+                       	    						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, d_counter_ecm_e, d_counter_ecm_w,
+                       	    						d_counter_ecm_n, d_counter_ecm_s,
+                       	    						d_Ghost_ECM_ind_EAST, d_Ghost_ECM_ind_WEST, d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH,
+                       	    						MaxNeighList_ecm);
+        	
+        		
+        				cudaMemcpy(&No_of_Ghost_ECM_buffer[EAST], d_counter_ecm_e, sizeof(int), cudaMemcpyDeviceToHost);
+        				cudaMemcpy(&No_of_Ghost_ECM_buffer[WEST], d_counter_ecm_w, sizeof(int), cudaMemcpyDeviceToHost);
+        				CudaErrorCheck(); 
+        	
+        				if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[EAST] = 0;
+        				if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[WEST] = 0;
+        	
+        	
+        				cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST, d_Ghost_ECM_ind_EAST, No_of_Ghost_ECM_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        				cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST + No_of_Ghost_ECM_buffer[EAST], d_Ghost_ECM_ind_WEST, No_of_Ghost_ECM_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+					CudaErrorCheck();
+        	
+        				Sending_Ghost_ECM_Num_total_EW = No_of_Ghost_ECM_buffer[EAST]  + No_of_Ghost_ECM_buffer[WEST];
+        		
+        				if ( Sending_Ghost_ECM_Num_total_EW > 0 ){
+        					
+        					Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_EW/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_EW, d_Ghost_ECM_ind_EAST_WEST,
+        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        												d_ECM_ind_glob, d_ECM_ind_buffer);
+	
+
+   	
+   						CudaErrorCheck();
+   		
+   						cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   						CudaErrorCheck();
+   						
+   						cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
+   						CudaErrorCheck();		
+					
+							
+					}
+			
+			
+					MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
+        							1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+								cart_comm, 0, 0, 
+					  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
+        						1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+								cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
+		  						ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+		  						ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+		  						ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+			
+			
+					All_ECM_EW = No_of_Ghost_ECM[EAST] + No_of_Ghost_ECM[WEST];
+			
+ 			
+ 					cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   					CudaErrorCheck();
+				
+				
+				   	cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
+   					CudaErrorCheck();
+				
+					All_ECM = All_ECM_EW;	
+			
+					//north-south
+			
+					if (All_ECM > 0) ghost_ECM_finder_Auxiliary<<<All_ECM/512+1,512>>>(Num_ECM, All_ECM, d_ECM_y, 
+													Subdivision_max.y, Subdivision_min.y, R_ghost_buffer_ECM,
+													d_counter_ecm_n, d_counter_ecm_s,
+        	              				  						d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH);
+        	
+        	
+        	
+        	
+        				cudaMemcpy(&No_of_Ghost_ECM_buffer[NORTH], d_counter_ecm_n, sizeof(int), cudaMemcpyDeviceToHost);
+					cudaMemcpy(&No_of_Ghost_ECM_buffer[SOUTH], d_counter_ecm_s, sizeof(int), cudaMemcpyDeviceToHost);
+					CudaErrorCheck();        		
+        		
+        				if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[NORTH] = 0;
+        				if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[SOUTH] = 0;
+        		
+        				cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH, d_Ghost_ECM_ind_NORTH, No_of_Ghost_ECM_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        				cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH + No_of_Ghost_ECM_buffer[NORTH], d_Ghost_ECM_ind_SOUTH, No_of_Ghost_ECM_buffer[SOUTH]*sizeof(int),
+        				 		cudaMemcpyDeviceToDevice);
+					CudaErrorCheck();
+        	
+        				Sending_Ghost_ECM_Num_total_NS = No_of_Ghost_ECM_buffer[NORTH]  + No_of_Ghost_ECM_buffer[SOUTH];
+        		        
+        				if ( Sending_Ghost_ECM_Num_total_NS > 0 ){
+        			
+	        				Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_NS/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_NS, d_Ghost_ECM_ind_NORTH_SOUTH,
+	        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        												d_ECM_ind_glob, d_ECM_ind_buffer);
+
+						CudaErrorCheck();
+
+   		
+   						cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   						CudaErrorCheck();
+   						
+   						cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
+   						CudaErrorCheck();		
+						
+							
+					}
+
+        	
+        				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_ECM[SOUTH],
+        						1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+			
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+								cart_comm, 0, 0, 
+							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_ECM[NORTH],
+        						 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+								cart_comm, 0, 0, 
+							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+        	
+        		
+        				All_ECM_NS = No_of_Ghost_ECM[NORTH] + No_of_Ghost_ECM[SOUTH];
+   			
+ 
+ 					cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   					CudaErrorCheck();
+   					
+   					cudaMemcpy(d_ECM_ind_glob + (Num_ECM + All_ECM),  ECM_ind_ecm, All_ECM_NS*sizeof(int),cudaMemcpyHostToDevice);
+   					CudaErrorCheck();
+   	
+   					All_ECM += All_ECM_NS;
+   			
+   			
+   					if( All_ECM > 0) UpdateNNlistWithGhostECM<<< (All_ECM/128) + 1,128>>>(Num_ECM, All_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+        									Xdiv_ecm, Ydiv_ecm, Subdivision_min, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+        									d_ECM_ind_glob, d_ECM_Map_ind,
+        									MaxNeighList_ecm); 
+        	
+        		
+        				All_ECM -= All_ECM_NS;
+        				
+        				ECM_Connectivity_Update<<< (Num_Nei32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
+        	
+        			}
+ 				
        		
        		} else {
-       		
+       			
+       			//printf("Num Cells: %d, step: %d\n",No_of_C180s, step);
+        	
+       			
        		        makeNNlist<<<No_of_C180s/512+1,512>>>(No_of_C180s, d_CMx, d_CMy, d_CMz,
        		        					d_CMxNNlist, d_CMyNNlist, d_CMzNNlist,
                            						Xdiv, Ydiv, Zdiv, BoxMin,
                            						d_NoofNNlist, d_NNlist, DL,
                            						MaxNeighList);
+                           						
+                           	if (ECM){
+               
+               			
+               			
+        				makeNNlistECM<<<Num_ECM/512+1,512>>>(Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+                       	    						Xdiv_ecm, Ydiv_ecm, BoxMin,
+                       	    						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+                       	    						MaxNeighList_ecm); 
+               	
+               			CudaErrorCheck();
+               
+               
+               		}
 
        		}
-       	
        	
        	
        	} else {
@@ -5879,6 +6911,187 @@ int main(int argc, char *argv[])
         											MaxNeighList); 
         		
         		   				
+			if (ECM && usePBCs){
+				
+				ind_comm = true;
+			
+				cudaMemset(d_counter_ecm_e, 0, sizeof(int));
+				cudaMemset(d_counter_ecm_w, 0, sizeof(int));
+				cudaMemset(d_counter_ecm_n, 0, sizeof(int));
+				cudaMemset(d_counter_ecm_s, 0, sizeof(int));
+				//cudaMemset(d_counter_ecm_u, 0, sizeof(int));
+				//cudaMemset(d_counter_ecm_d, 0, sizeof(int));
+			
+				
+			
+			
+				makeNNlistECMMultiGpuPBC<<<(Num_ECM/512)+1,512>>>( Num_ECM, R_ghost_buffer_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+        									Xdiv_ecm, Ydiv_ecm, Subdivision_min, Subdivision_max, BoxMin, boxMax, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+        									d_counter_ecm_e, d_counter_ecm_w, d_counter_ecm_n, d_counter_ecm_s,
+        									d_Ghost_ECM_ind_EAST, d_Ghost_ECM_ind_WEST, d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH,
+        									MaxNeighList_ecm);  
+		
+		
+				CudaErrorCheck();
+		
+			
+				cudaMemcpy(&No_of_Ghost_ECM_buffer[EAST], d_counter_ecm_e, sizeof(int), cudaMemcpyDeviceToHost);
+        			cudaMemcpy(&No_of_Ghost_ECM_buffer[WEST], d_counter_ecm_w, sizeof(int), cudaMemcpyDeviceToHost);
+        			CudaErrorCheck(); 
+        	
+        			if (neighbours_ranks[EAST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[EAST] = 0;
+        			if (neighbours_ranks[WEST] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[WEST] = 0;
+        	
+        	
+        			cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST, d_Ghost_ECM_ind_EAST, No_of_Ghost_ECM_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
+        			cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST + No_of_Ghost_ECM_buffer[EAST], d_Ghost_ECM_ind_WEST, No_of_Ghost_ECM_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
+				CudaErrorCheck();
+        	
+        			Sending_Ghost_ECM_Num_total_EW = No_of_Ghost_ECM_buffer[EAST]  + No_of_Ghost_ECM_buffer[WEST];
+		
+		
+				if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        					
+        			
+        				Ghost_ECM_Pack_PBC_X<<<(Sending_Ghost_ECM_Num_total_EW/512)+1,512>>>(Sending_Ghost_ECM_Num_total_EW, No_of_Ghost_ECM_buffer[EAST],
+        													d_Ghost_ECM_ind_EAST_WEST, boxMax, R_ghost_buffer_ECM,
+        													d_ECM_x, d_ECM_y, d_ECM_z,
+														d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+
+				
+					CudaErrorCheck();
+				
+   		
+   					cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   					CudaErrorCheck();	
+							
+				}
+		
+		
+				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
+        					1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+							cart_comm, 0, 0, 
+							ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+	        		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
+        					1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+	
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+							cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
+				  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+				  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+				  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+			
+			
+				All_ECM_EW = No_of_Ghost_ECM[EAST] + No_of_Ghost_ECM[WEST];
+			
+ 			
+ 				cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
+   				CudaErrorCheck();
+				
+				All_ECM = All_ECM_EW;	
+
+			
+				// north-south
+			
+				if (All_ECM > 0) ghost_ECM_finder_Auxiliary<<<(All_ECM/512)+1,512>>>(Num_ECM, All_ECM, d_ECM_y, 
+												Subdivision_max.y, Subdivision_min.y, R_ghost_buffer_ECM,
+												d_counter_ecm_n, d_counter_ecm_s,
+        	        	      		  						d_Ghost_ECM_ind_NORTH, d_Ghost_ECM_ind_SOUTH);
+        	
+        	
+        			cudaMemcpy(&No_of_Ghost_ECM_buffer[NORTH], d_counter_ecm_n, sizeof(int), cudaMemcpyDeviceToHost);
+				cudaMemcpy(&No_of_Ghost_ECM_buffer[SOUTH], d_counter_ecm_s, sizeof(int), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();        		
+        		
+        			if (neighbours_ranks[NORTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[NORTH] = 0;
+        			if (neighbours_ranks[SOUTH] == MPI_PROC_NULL) No_of_Ghost_ECM_buffer[SOUTH] = 0;
+        			
+        			cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH, d_Ghost_ECM_ind_NORTH, No_of_Ghost_ECM_buffer[NORTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+        			cudaMemcpy(d_Ghost_ECM_ind_NORTH_SOUTH + No_of_Ghost_ECM_buffer[NORTH], d_Ghost_ECM_ind_SOUTH, No_of_Ghost_ECM_buffer[SOUTH]*sizeof(int), cudaMemcpyDeviceToDevice);
+				CudaErrorCheck();
+        	
+        			Sending_Ghost_ECM_Num_total_NS = No_of_Ghost_ECM_buffer[NORTH]  + No_of_Ghost_ECM_buffer[SOUTH];
+		
+				if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        				
+        				Ghost_ECM_Pack_PBC_Y<<<(Sending_Ghost_ECM_Num_total_NS/512)+1,512>>>( Sending_Ghost_ECM_Num_total_NS, No_of_Ghost_ECM_buffer[NORTH],
+        												d_Ghost_ECM_ind_NORTH_SOUTH, boxMax, R_ghost_buffer_ECM,
+        												d_ECM_x, d_ECM_y, d_ECM_z,
+													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+
+					CudaErrorCheck();
+
+   					cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   					CudaErrorCheck();				
+	
+							
+				}
+			
+			
+				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_ECM[SOUTH],
+        					1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+				
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+							cart_comm, 0, 0, 
+						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        			MPI_Sendrecv(&No_of_Ghost_ECM_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_ECM[NORTH],
+        					 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+							cart_comm, 0, 0, 
+						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+        	
+        		
+        			All_ECM_NS = No_of_Ghost_ECM[NORTH] + No_of_Ghost_ECM[SOUTH];
+   			
+ 
+ 				cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(d_ECM_ind_glob + (Num_ECM + All_ECM),  ECM_ind_ecm, All_ECM_NS*sizeof(int),cudaMemcpyHostToDevice);
+   				CudaErrorCheck();
+   	
+   				All_ECM += All_ECM_NS;
+   			
+   			
+   				if( All_ECM > 0) UpdateNNlistWithGhostECM<<< (All_ECM/512) + 1,512>>>(Num_ECM, All_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
+        										Xdiv_ecm, Ydiv_ecm, Subdivision_min, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
+        										d_ECM_ind_glob, d_ECM_Map_ind,
+        										MaxNeighList_ecm); 
+        	
+        		
+        			All_ECM -= All_ECM_NS;
+        			
+        			ECM_Connectivity_Update<<< (Num_Nei32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
+        	
+		
+			}
 
 
        	}
@@ -6091,6 +7304,109 @@ int main(int argc, char *argv[])
    			
    				CudaErrorCheck();
 		
+			
+			
+				        			
+        			if (ECM){
+
+        				ind_comm = false;
+        				
+        				if ( Sending_Ghost_ECM_Num_total_EW > 0 ){
+        					
+        					Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_EW/512 + 1,512>>>( Sending_Ghost_ECM_Num_total_EW, d_Ghost_ECM_ind_EAST_WEST,
+        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        												d_ECM_ind_glob, d_ECM_ind_buffer);
+	
+
+   	
+   						CudaErrorCheck();
+   		
+   						cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   						CudaErrorCheck();	
+							
+					}
+			
+			
+					MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
+        							1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+								cart_comm, 0, 0, 
+					  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
+        						1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+								cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
+		  						ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+		  						ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+		  						ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+			
+ 			
+ 					cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   					CudaErrorCheck();
+			
+					//north-south
+			
+        		        
+        				if ( Sending_Ghost_ECM_Num_total_NS > 0 ){
+        			
+	        				Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_NS/512 + 1,512>>>( Sending_Ghost_ECM_Num_total_NS, d_Ghost_ECM_ind_NORTH_SOUTH,
+	        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        												d_ECM_ind_glob, d_ECM_ind_buffer);
+
+						CudaErrorCheck();
+
+   		
+   						cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   						CudaErrorCheck();		
+							
+					}
+
+        	
+        				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_ECM[SOUTH],
+        						1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+			
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+								cart_comm, 0, 0, 
+							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_ECM[NORTH],
+        						 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+								cart_comm, 0, 0, 
+							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+        	
+        		
+        				All_ECM_NS = No_of_Ghost_ECM[NORTH] + No_of_Ghost_ECM[SOUTH];
+   			
+ 
+ 					cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM_EW),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM_EW),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM_EW),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   					CudaErrorCheck();
+        	
+        			}
+			
 			
 			}
 		
@@ -6321,6 +7637,107 @@ int main(int argc, char *argv[])
    			CudaErrorCheck();
 	
 		
+		
+			if (ECM && usePBCs){ 
+		
+				ind_comm = false;
+				
+				if ( Sending_Ghost_cells_Num_total_EW > 0 ){
+        					
+        			
+        				Ghost_ECM_Pack_PBC_X<<<(Sending_Ghost_ECM_Num_total_EW/512)+1,512>>>(Sending_Ghost_ECM_Num_total_EW, No_of_Ghost_ECM_buffer[EAST],
+        													d_Ghost_ECM_ind_EAST_WEST, boxMax, R_ghost_buffer_ECM,
+        													d_ECM_x, d_ECM_y, d_ECM_z,
+														d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+
+				
+					CudaErrorCheck();
+				
+   		
+   					cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   					CudaErrorCheck();	
+							
+				}
+		
+		
+				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
+        					1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
+							cart_comm, 0, 0, 
+							ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+	        		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
+        					1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
+	
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
+							cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
+				  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+				  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+				  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+			
+ 			
+ 				cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   				CudaErrorCheck();
+			
+				// north-south
+		
+				if ( Sending_Ghost_cells_Num_total_NS > 0 ){
+        				
+        				Ghost_ECM_Pack_PBC_Y<<<(Sending_Ghost_ECM_Num_total_NS/512)+1,512>>>( Sending_Ghost_ECM_Num_total_NS, No_of_Ghost_ECM_buffer[NORTH],
+        												d_Ghost_ECM_ind_NORTH_SOUTH, boxMax, R_ghost_buffer_ECM,
+        												d_ECM_x, d_ECM_y, d_ECM_z,
+													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+
+					CudaErrorCheck();
+
+   					cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   	
+   					CudaErrorCheck();				
+	
+							
+				}
+			
+			
+				MPI_Sendrecv(&No_of_Ghost_ECM_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_ECM[SOUTH],
+        					1, MPI_INT, neighbours_ranks[SOUTH], 17, cart_comm, MPI_STATUS_IGNORE);
+				
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
+							cart_comm, 0, 0, 
+						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+	
+
+        			MPI_Sendrecv(&No_of_Ghost_ECM_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 17, &No_of_Ghost_ECM[NORTH],
+        					 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
+
+				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
+							cart_comm, 0, 0, 
+						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
+   			
+ 
+ 				cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM_EW),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM_EW),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM_EW),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   				CudaErrorCheck();
+
+			}
+		
+		
 		} 
 	
 	}
@@ -6331,7 +7748,7 @@ int main(int argc, char *argv[])
 
       if (!colloidal_dynamics){      
       		
-      		PressureUpdate <<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
+      		PressureUpdate<<<No_of_C180s/1024 + 1, 1024>>> (d_pressList, maxPressure, d_Growth_rate, No_of_C180s,
         	                                           	d_Youngs_mod);
       		CudaErrorCheck(); 
       }
@@ -6362,13 +7779,34 @@ int main(int argc, char *argv[])
 
 #ifdef FORCE_DEBUG
       printf("time %d  pressure = %f\n", step, Pressure);
-#endif
+#endif	
+
+
+ if(ECM && Num_ECM > 0) {
+       
+       	
+       	CalculateConForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z, 
+       								d_Con_ECM_force_x, d_Con_ECM_force_y,
+									d_ECM_neighbor_updated, d_Num_Nei_ECM,
+									d_R0_ECM, stiffness_ecm,
+									angleConstant_ecm, d_theta0_ECM);
+        
+       	CudaErrorCheck();
+       
+
+        	
+        	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy,
+									d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+									d_ECM_neighbor_updated, d_Num_Nei_ECM,
+									vis_damp_ecm, gamma_env_ecm);                                                
+
+		CudaErrorCheck(); 
+ } 
 
  numNodes = No_of_C180s*192;
  if (No_of_C180s > 0 ) {
  
- 	
-  	
+
   	CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
         		                                             	d_X,  d_Y,  d_Z,
         	         	                                    	d_CMx, d_CMy, d_CMz,
@@ -6385,9 +7823,17 @@ int main(int argc, char *argv[])
                                		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                		                      	impurity,f_range,
                                		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
-                               		                      	MaxNeighList); 
+                               		                      	MaxNeighList,
+                               		                      	ECM,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y,
+                                                     		d_ECM_x, d_ECM_y, d_ECM_z,
+                           						attraction_strength_ecm, attraction_range_ecm,
+                           						repulsion_strength_ecm, repulsion_range_ecm,
+                           						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           						MaxNeighList_ecm); 
                                                      	
        CudaErrorCheck();
+
                                                      	
        CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                	                                         	d_X, d_Y, d_Z,
@@ -6400,13 +7846,19 @@ int main(int argc, char *argv[])
                        	                                 	Xdiv, Ydiv, Zdiv, Subdivision_min,
                        	                                 	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                        	                                 	d_velListX, d_velListY, d_velListZ,
-                       	                                 	d_fDisList,impurity,f_range,
-                       	                                 	MaxNeighList);
+                       	                                 	d_fDisList, d_ConFricForces,
+                       	                                 	impurity,f_range,MaxNeighList,
+                       	                                 	ECM,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                   					d_ECM_x, d_ECM_y, d_ECM_z,
+                                   					d_ECM_Vx, d_ECM_Vy,
+				    					attraction_range_ecm, vis_ecm_cell,
+                           	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           	    					MaxNeighList_ecm);
                        	                                 
                                                         
-        CudaErrorCheck();                                                  
-  	
-  	
+        CudaErrorCheck();
+        
       	// Calculate random Force here...
       	if (add_rands){
       	
@@ -6415,20 +7867,48 @@ int main(int argc, char *argv[])
             CudaErrorCheck();
      	}
       
+      	
       	VelocityUpdateA<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
         	                                                d_fConList, d_fRanList, delta_t, numNodes, mass);
       	CudaErrorCheck();
-
-
+      	
       	// Dissipative velocity update part...
-      	for (int s = 0; s < 1; ++s){
       
-          	VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
+        VelocityUpdateB<<<No_of_C180s, threadsperblock>>>(d_velListX, d_velListY, d_velListZ,
                	                                            d_fDisList, delta_t, numNodes, mass );
-          	CudaErrorCheck();
+        CudaErrorCheck();
           	
+  } 		
+		
+  if(ECM && Num_ECM > 0) {  
+
+
+		VelocityUpdateA_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_Vx, d_ECM_Vy, 
+                                				d_Con_ECM_force_x, d_Con_ECM_force_y, delta_t, Num_ECM, mass_ecm);
+      	
+      		CudaErrorCheck();  
+      		
+      		
+      		VelocityUpdateB_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_Vx, d_ECM_Vy, 
+                                				     d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                				     delta_t, Num_ECM, mass_ecm);
+          		
+          	CudaErrorCheck();
+
+        	
+          	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy,
+          								d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+									d_ECM_neighbor_updated, d_Num_Nei_ECM,
+									vis_damp_ecm, gamma_env_ecm);                                                
+
+		CudaErrorCheck();                                                  	
+                                               	
+  	
+  }
+  
+  if (No_of_C180s > 0 ) {  	
                                                      	
-     		CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
+     	CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                	                                         	d_X, d_Y, d_Z,
                	                                         	d_CMx, d_CMy, d_CMz,
                	                                      	d_XPin,  d_YPin,  d_ZPin,
@@ -6439,16 +7919,22 @@ int main(int argc, char *argv[])
                	                                         	Xdiv, Ydiv, Zdiv, Subdivision_min,
                	                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                	                                         	d_velListX, d_velListY, d_velListZ,
-               	                                         	d_fDisList, impurity,f_range,
-               	                                         	MaxNeighList);
+               	                                         	d_fDisList, d_ConFricForces, 
+               	                                         	impurity,f_range, MaxNeighList,
+               	                                         	ECM,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                   					d_ECM_x, d_ECM_y, d_ECM_z,
+                                   					d_ECM_Vx, d_ECM_Vy,
+				    					attraction_range_ecm, vis_ecm_cell,
+                           	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           	    					MaxNeighList_ecm);
                                                         
-       	CudaErrorCheck();                                                  
-  		
-  	
-     	}
-
-
+        CudaErrorCheck(); 
+       	
    }
+   
+   
+   
 // ------------------------------ Begin Cell Division ------------------------------------------------
    
    
@@ -6488,7 +7974,8 @@ int main(int argc, char *argv[])
    
 	 	if ( num_cell_div > 0 ) {
 	 
-          	
+          		//printf("step: %d\n",step);
+          		
           		cell_division<<<num_cell_div,192>>>(
                		                    	d_X, d_Y, d_Z, 
                		                    	d_CMx, d_CMy, d_CMz,
@@ -6506,7 +7993,8 @@ int main(int argc, char *argv[])
           
           
         		No_of_C180s += num_cell_div;                           
-        		NewCellInd  += num_cell_div;                           
+        		NewCellInd  += num_cell_div; 
+        		//printf("num_cell_div %d, NewCellInd %d\n",num_cell_div,NewCellInd);                          
         	
 
         	}
@@ -6608,6 +8096,7 @@ int main(int argc, char *argv[])
               printf("\n"); 
           }
       } else{
+          
           h_volume = d_volumeV; 
           for (int i = 0; i < No_of_C180s; i++){
               printf ("Cell: %d, volume= %f", i, h_volume[i]); 
@@ -6855,7 +8344,34 @@ int main(int argc, char *argv[])
   		cudaMemset(d_sysVCM.y, 0, sizeof(float));
   		cudaMemset(d_sysVCM.z, 0, sizeof(float));
   
-  	}	
+  	}
+  	
+  	if(ECM){
+     		
+     		if(Num_ECM > 0){
+     			
+     			reductionblocks =  (Num_ECM - 1)/1024+1;
+      			SysCMpost_ECM<<<reductionblocks,1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, 
+					   			d_SysCx_ecm, d_SysCy_ecm);
+      			CudaErrorCheck();
+      			
+      			SysCM_ecm<<<1,1024>>>(Num_ECM, reductionblocks,
+        				    	d_SysCx_ecm, d_SysCy_ecm,
+					    	d_sysVCM_ecm);
+      
+     			CudaErrorCheck(); 
+		
+     		
+     		} else {
+
+  		
+  			cudaMemset(d_sysVCM_ecm.x, 0, sizeof(float));
+  			cudaMemset(d_sysVCM_ecm.y, 0, sizeof(float));
+  			cudaMemset(d_sysVCM_ecm.z, 0, sizeof(float));
+
+     		}
+     	
+     	}	
         
 		
 	cudaMemcpy(h_sysVCM.x, d_sysVCM.x, sizeof(float), cudaMemcpyDeviceToHost);
@@ -6867,20 +8383,49 @@ int main(int argc, char *argv[])
         MPI_Allreduce(h_sysVCM.z, h_sysCM_All.z, 1, MPI_FLOAT, MPI_SUM, cart_comm);
         MPI_Allreduce(&No_of_C180s, &No_cells_All, 1, MPI_INT, MPI_SUM, cart_comm);
         
+        *h_sysCM_All.x = *h_sysCM_All.x/No_cells_All;
+        *h_sysCM_All.y = *h_sysCM_All.y/No_cells_All;
+        *h_sysCM_All.z = *h_sysCM_All.z/No_cells_All;     	
+      	
+      	if(ECM){
+      	
+      		cudaMemcpy(h_sysVCM_ecm.x, d_sysVCM_ecm.x, sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_sysVCM_ecm.y, d_sysVCM_ecm.y, sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_sysVCM_ecm.z, d_sysVCM_ecm.z, sizeof(float), cudaMemcpyDeviceToHost);
+      		
+      		MPI_Allreduce(h_sysVCM_ecm.x, h_sysCM_All_ecm.x, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	MPI_Allreduce(h_sysVCM_ecm.y, h_sysCM_All_ecm.y, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	MPI_Allreduce(h_sysVCM_ecm.z, h_sysCM_All_ecm.z, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	MPI_Allreduce(&Num_ECM, &No_nodes_All, 1, MPI_INT, MPI_SUM, cart_comm);
+        	
+        	*h_sysCM_All.x = (*h_sysCM_All.x*mass*180 + *h_sysCM_All_ecm.x*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        	*h_sysCM_All.y = (*h_sysCM_All.y*mass*180 + *h_sysCM_All_ecm.y*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        	//*h_sysCM_All.x = (*h_sysCM_All.z*mass*180 + *h_sysCM_All_ecm.z*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        		
+      	
+      	}
+        
         cudaMemcpy(d_sysCM_All.x, h_sysCM_All.x, sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_sysCM_All.y, h_sysCM_All.y, sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_sysCM_All.z, h_sysCM_All.z, sizeof(float), cudaMemcpyHostToDevice);
         	
-        
-        
-      if (No_of_C180s > 0 ){
+                
+        if (No_of_C180s > 0 ){
       
       		CorrectCoMVelocity<<<(No_of_C180s*192)/1024 + 1, 1024>>>(No_cells_All, d_velListX, d_velListY, d_velListZ,
                	                                                d_sysVCM, d_sysCM_All,
                	                                                No_of_C180s*192);
           
      		 CudaErrorCheck(); 
-  	} 
+  	}
+  	
+  	if (ECM && Num_ECM > 0){
+      
+            	CorrectCoMVelocity_ecm<<<Num_ECM/1024 + 1, 1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_sysCM_All);
+          
+     		 CudaErrorCheck(); 
+      
+      	}   
         
         //cudaMemcpy(h_sysVCM.x, d_sysVCM.x, sizeof(float), cudaMemcpyDeviceToHost);
       	//cudaMemcpy(h_sysVCM.y, d_sysVCM.y, sizeof(float), cudaMemcpyDeviceToHost);
@@ -6929,12 +8474,12 @@ int main(int argc, char *argv[])
           frameCount++; 
           
           cudaMemcpy(CellINdex, d_CellINdex, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
- 
-          
           if (nprocs > 1) MPI_Gather(&No_of_C180s, 1, MPI_INT, numberofCells_InGPUs , 1, MPI_INT, 0, cart_comm);
           
-          if(rank ==0){
+          cudaMemcpy(ECM_ind_glob,  d_ECM_ind_glob, ECM_Num32*sizeof(int),cudaMemcpyDeviceToHost);
+          if (nprocs > 1) MPI_Gather(&Num_ECM, 1, MPI_INT, numberofECMs_InGPUs , 1, MPI_INT, 0, cart_comm);
           
+          if(rank ==0){
           
           	if(write_traj_file){
           		
@@ -6950,6 +8495,17 @@ int main(int argc, char *argv[])
 		
 		}
           	
+          	if(write_traj_Ecm_file){
+          		
+            		cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    			cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    			cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    			CudaErrorCheck();
+          	
+              		WriteBinaryTrajECM(step + Laststep, trajfile_Ecm, frameCount + Lastframe);
+		
+		}
+
           	if (write_cont_force == true){
 
               		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -6961,6 +8517,11 @@ int main(int argc, char *argv[])
               		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		CudaErrorCheck();
+              		
+              		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
               
               		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -7038,6 +8599,21 @@ int main(int argc, char *argv[])
     			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
     		}
     		
+    		
+    		if(write_traj_Ecm_file){
+          		
+            		cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    			cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    			cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+    			CudaErrorCheck();
+    		
+    			MPI_Send(ECM_x , Num_ECM, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(ECM_y , Num_ECM, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(ECM_z , Num_ECM, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(ECM_ind_glob , Num_ECM, MPI_INT, 0, rank, cart_comm);
+    		
+    		}
+    		
     		if (write_cont_force){
     		      		
     			cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -7050,6 +8626,11 @@ int main(int argc, char *argv[])
 			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			CudaErrorCheck();
 
+              		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();			
+			
 			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       			cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       			cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
@@ -7058,9 +8639,14 @@ int main(int argc, char *argv[])
       			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
       			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
+      			MPI_Send(h_ConFricForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		
     			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
@@ -7234,7 +8820,21 @@ int main(int argc, char *argv[])
       			fseek(trajfile, 8, SEEK_SET);
       			fwrite(&t, sizeof(int), 1, trajfile);
   		}
+   	
    	}
+    	
+    	if(write_traj_Ecm_file){
+  
+      		fclose(trajfile_Ecm);
+      
+      		trajfile_Ecm = fopen ("inp_ECM.xyz", "r+");
+      		fseek(trajfile_Ecm, 0, SEEK_SET);
+      		fwrite(&Num_All_ECM, sizeof(int), 1, trajfile_Ecm);    
+      		fseek(trajfile_Ecm, 8, SEEK_SET);
+      		fwrite(&t, sizeof(int), 1, trajfile_Ecm);
+  	
+  	}
+    	
     	
     	if ( colloidal_dynamics && Compressor) {
     	
@@ -7287,7 +8887,7 @@ int main(int argc, char *argv[])
  	printf("Unable to call Restart Kernel. \n");
 	return(-1);
    }
- 
+   
   cudaFree( (void *)d_X  );
   cudaFree( (void *)d_Y  );
   cudaFree( (void *)d_Z  );
@@ -7407,6 +9007,25 @@ inline void SetupBoxParams(int t_step)
       			printf("   Simulation Subdivision maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", Subdivision_max.x, Subdivision_max.y, Subdivision_max.z); 
   		
   		}
+  		
+  		
+  		if (ECM) {
+  		
+  			
+      			//DL_ecm = 1.0;
+      			
+  			Xdiv_ecm = ceil((Subdivision_max.x - Subdivision_min.x)/DL_ecm);
+      			Ydiv_ecm = ceil((Subdivision_max.y - Subdivision_min.y)/DL_ecm);
+ 
+			if (t_step == 0) {
+      		
+      				printf("   Number of subdivisions for ECM: Xdiv = %d, Ydiv = %d",Xdiv_ecm, Ydiv_ecm);
+  		
+  			}
+  		
+  		}
+  		
+  		
   	
   	} else {
     		
@@ -7472,6 +9091,23 @@ inline void SetupBoxParams(int t_step)
     			printf("   Simulation Subdivision maxima:   X: %8.2f, Y: %8.2f, Z: %8.2f\n", Subdivision_max.x, Subdivision_max.y, Subdivision_max.z); 
     
   		}
+  		
+  		
+  		if (ECM){
+  		
+  			//DL_ecm = 1.0;
+  			
+  			Xdiv_ecm = ceil((Subdivision_max.x - Subdivision_min.x)/DL_ecm);
+    			Ydiv_ecm = ceil((Subdivision_max.y - Subdivision_min.y)/DL_ecm);
+    
+			if (t_step == 0){
+		
+    				printf("   Number of subdivisions for ECM: Xdiv = %d, Ydiv = %d\n",Xdiv_ecm, Ydiv_ecm); 
+    
+  			}
+  			
+  		}
+  		
 
 	}
 
@@ -8932,6 +10568,418 @@ int generate_random(int no_of_ran1_vectors)
 }
 
 
+int read_ECM(void)
+{
+
+  Num_All_ECM = 0;
+  Num_ECM = 0;
+  
+  FILE *EcFile;
+  FILE *EcFile_Neighbor;
+    	
+  float Xe, Ye, Ze;
+
+  if( rank == 0) {
+  
+  	
+  	printf("   Reading ECM ..\n");
+  
+  	EcFile = fopen("nodes.txt","r");
+  	if ( EcFile == NULL ) {printf("Unable to open file ECM nodes file\n");return(-1);}
+  
+  
+  	while (fscanf(EcFile, "%f, %f, %f", &Xe, &Ye, &Ze) == 3) {
+  	
+        	Num_All_ECM++;
+  	}
+
+  	fseek(EcFile, 0, SEEK_SET);
+  
+  }
+  
+  
+  if (nprocs > 1) {
+  
+  	MPI_Bcast(&Num_All_ECM, 1, MPI_INT, 0, cart_comm);
+  }	
+  	
+  
+  ECM_Num32 = (Num_All_ECM / 32) * 32 + 32;
+  
+  if (nprocs > 1) {
+  	MaxNoofECMs = ( ( 2*Num_All_ECM/nprocs ) / 32 ) * 32 + 32;
+  	printf("Max ECM: %d\n", MaxNoofECMs);
+  
+  } else if (usePBCs || useLEbc){
+  
+  	MaxNoofECMs = ( ( 2*Num_All_ECM/nprocs ) / 32 ) * 32 + 32;
+  }
+  
+  ECM_Map_ind = (int *)calloc(ECM_Num32,sizeof(int));
+  ECM_ind_glob = (int *)calloc(ECM_Num32,sizeof(int));
+  ECM_ind_buffer = (int *)calloc(BufferSize_ECM,sizeof(int));
+  ECM_ind_ecm = (int *)calloc(BufferSize_ECM,sizeof(int));
+  
+  
+  All_ECM_x = (float *)calloc(Num_All_ECM,sizeof(float));
+  All_ECM_y = (float *)calloc(Num_All_ECM,sizeof(float));
+  All_ECM_z = (float *)calloc(Num_All_ECM,sizeof(float));
+  
+  
+  ECM_x = (float *)calloc(MaxNoofECMs,sizeof(float));
+  ECM_y = (float *)calloc(MaxNoofECMs,sizeof(float));
+  ECM_z = (float *)calloc(MaxNoofECMs,sizeof(float)); 
+  
+  ECM_Vx = (float *)calloc(MaxNoofECMs,sizeof(float));
+  ECM_Vy = (float *)calloc(MaxNoofECMs,sizeof(float));
+  
+  h_Con_ECM_force_x = (float *)calloc(MaxNoofECMs,sizeof(float));
+  h_Con_ECM_force_y = (float *)calloc(MaxNoofECMs,sizeof(float));
+  	
+  ECM_x_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_y_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_z_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));	
+  
+  ECM_x_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_y_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_z_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  
+  Num_Nei_ECM_All = (int *)calloc(Num_All_ECM,sizeof(int));
+  ECM_neighbor_All = (int *)calloc(Num_All_ECM*32,sizeof(int));
+  
+  
+  if( rank == 0) {
+  
+  	int i = 0;	
+  	int row = 0;
+  	char line[2048];
+  	
+  	
+  	while (fscanf(EcFile, "%f, %f, %f", &Xe, &Ye, &Ze) == 3) {
+  
+        	All_ECM_x[i] = Xe;
+        	All_ECM_y[i] = Ye;
+        	All_ECM_z[i] = Ze;
+        	i++;
+  
+  	}
+
+  	
+  	printf("   Reading ECM Neighbor..\n");
+  
+  	EcFile_Neighbor = fopen("connected_nodes.txt","r");
+  	if ( EcFile_Neighbor == NULL ) {printf("Unable to open file ECM neighbor file\n");return(-1);}
+  	
+  	
+  	while (fgets(line, sizeof(line), EcFile_Neighbor) != NULL) {
+        
+        	char *token = strtok(line, ",");
+        	int col = 0;
+
+        	while (token != NULL) {
+            
+        	    ECM_neighbor_All[row*32+col] = atoi(token);
+        	    //printf("%d,", ECM_neighbor_All[row*32+col]);
+        	    col++;
+        	    token = strtok(NULL, ",");
+        	}
+
+		Num_Nei_ECM_All[row] = col;
+		//printf("%d", Num_Nei_ECM_All[row]);
+        	row++;
+    
+       }
+
+	 
+
+    fclose(EcFile);
+    fclose(EcFile_Neighbor);
+  	
+  
+  }
+
+     
+      
+  if (nprocs > 1){
+		
+		
+	MPI_Bcast(All_ECM_x, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(All_ECM_x, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(All_ECM_x, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
+	
+	MPI_Bcast(Num_Nei_ECM_All, Num_All_ECM, MPI_INT, 0, cart_comm);
+	MPI_Bcast(ECM_neighbor_All, Num_All_ECM*32, MPI_INT, 0, cart_comm);
+
+	
+	
+	int c = 0;
+   	for (int i = 0; i < Num_All_ECM; i++){
+       		
+       	if ( All_ECM_x[i] >= Subdivision_min.x  && All_ECM_x[i] < Subdivision_max.x ){
+       		if ( All_ECM_y[i] >= Subdivision_min.y  && All_ECM_y[i] < Subdivision_max.y ){
+       			if ( All_ECM_z[i] >= Subdivision_min.z  && All_ECM_z[i] < Subdivision_max.z ){
+       					
+       						
+               		   	ECM_x[c] =  All_ECM_x[i];
+               		   	ECM_y[c] =  All_ECM_y[i];
+               		   	ECM_z[c] =  All_ECM_z[i];
+               		   	
+               		   	ECM_Map_ind[i] = c;
+               		   	ECM_ind_glob[c] = i;  
+
+
+       				c++;
+       				
+       			}
+       		}
+       	} else {
+       	
+       		
+       		ECM_Map_ind[i] = -1;
+       	
+       	
+       	}      		
+       		
+   	}
+   		
+   	
+   	Num_ECM = c;
+   	
+   	Num_Nei32 = Num_ECM*32;
+   	
+   	Num_Nei_ECM = (int *)calloc(Num_ECM,sizeof(int));
+   	ECM_neighbor = (int *)calloc(Num_Nei32,sizeof(int));
+	h_R0_ECM = (float *)calloc(Num_Nei32,sizeof(float));
+	h_theta0_ECM.ak = (float *)calloc(Num_Nei32,sizeof(float));
+	h_theta0_ECM.ai = (float *)calloc(Num_Nei32,sizeof(float));
+	h_theta0_ECM.aj = (float *)calloc(Num_Nei32,sizeof(float));
+   	
+   	int k;
+   	for (int i = 0; i < Num_ECM; i++){
+   	
+   		k = ECM_ind_glob[i];
+   		Num_Nei_ECM[i] = Num_Nei_ECM_All[k];
+   		
+   		for (int j = 0; j < 32; j++) ECM_neighbor[i*32+j] = ECM_neighbor_All[k*32+j]; 
+
+   	}
+   	
+   	for (int i = 0; i < Num_ECM; ++i){
+      		
+      		k = Num_Nei_ECM[i];
+      		
+      		ECM_neighbor[i*32 + k] = ECM_neighbor[i*32];
+      		for (int j = k+1; j < 32; ++j) ECM_neighbor[i*32+j] = -1;
+   	
+   	}
+   	
+   	
+   	float3 a, b;
+   	int Nei;
+   	for (int i = 0; i < Num_ECM; ++i){
+      		
+      		k = ECM_ind_glob[i];
+      		a = make_float3(ECM_x[k], ECM_y[k], ECM_z[k]);
+      		
+      		for (int j=0; j < 32; ++j){
+      		
+      			Nei = ECM_neighbor[i*32+j];
+      			
+      			if(Nei > -1){      		 
+      				
+      				b = make_float3(ECM_x[Nei], ECM_y[Nei], ECM_z[Nei]);
+      				h_R0_ECM[i*32+j] = mag(a-b);
+      			
+      			}
+      		
+      		}
+
+  	}
+   	
+   	float3 nck, nci, ncj;
+   	float3 ni, nj, nk;
+   	int Ni, Nj;
+   	
+   	for (int i = 0; i < Num_ECM; ++i){
+      		
+      		k = ECM_ind_glob[i];
+      		nck = make_float3(ECM_x[k], ECM_y[k], ECM_z[k]);
+      		
+      		for (int j=0; j < 32; ++j){
+  			
+  			Ni = ECM_neighbor[i*32+j];
+  			Nj = ECM_neighbor[i*32+j+1];
+  			
+        		if(Nj > -1){
+        		
+        			nci = make_float3(ECM_x[Ni], ECM_y[Ni], ECM_z[Ni]); 
+          			ncj = make_float3(ECM_x[Nj], ECM_y[Nj], ECM_z[Nj]);
+          
+          			
+          			ni = nci-nck;
+          			nj = ncj-nck;
+
+          			h_theta0_ECM.ak[i*32+j] = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
+          			
+          			nj = ncj - nci;
+          			nk = nck - nci;
+          			
+          			h_theta0_ECM.ai[i*32+j] = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
+          			
+          			ni = nci - ncj;
+          			nk = nck - ncj;  
+          			
+          			h_theta0_ECM.aj[i*32+j] = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
+          			
+          			
+          		
+          		
+          		}
+          		
+		
+		}
+  	
+  	} 
+   	
+	
+	
+  } else {
+
+  	Num_ECM = Num_All_ECM;
+  	Num_Nei32 = Num_ECM*32;
+  	        
+  	Num_Nei_ECM = (int *)calloc(Num_ECM,sizeof(int));
+   	ECM_neighbor = (int *)calloc(Num_Nei32,sizeof(int));
+   	h_R0_ECM = (float *)calloc(Num_Nei32,sizeof(float));
+   	h_theta0_ECM.ak = (float *)calloc(Num_Nei32,sizeof(float));
+	h_theta0_ECM.ai = (float *)calloc(Num_Nei32,sizeof(float));
+	h_theta0_ECM.aj = (float *)calloc(Num_Nei32,sizeof(float));
+  	
+  	for (int i = 0; i < Num_All_ECM; i++){
+  		
+  		ECM_x[i] =  All_ECM_x[i];
+  		ECM_y[i] =  All_ECM_y[i];
+  		ECM_z[i] =  All_ECM_z[i];
+  		
+  		ECM_Map_ind[i] = i;
+  		ECM_ind_glob[i] = i;
+  	
+  	}
+        
+        int k;
+        for (int i = 0; i < Num_ECM; i++){
+        
+        	 	
+        	for (int j = 0; j < 32; j++) {
+        		ECM_neighbor[i*32+j] = ECM_neighbor_All[i*32+j]; 
+  		}
+  		
+  		k = Num_Nei_ECM_All[i];
+  			
+  		ECM_neighbor[i*32 + k] = ECM_neighbor[i*32];
+      		for (int j = k+1; j < 32; ++j) {
+      			ECM_neighbor[i*32+j] = -1;
+  		}
+  		
+  		Num_Nei_ECM[i] = Num_Nei_ECM_All[i];
+  	
+  	}
+  	  
+     	float3 a, b;
+   	int Nei;
+   	for (int i = 0; i < Num_ECM; ++i){
+      		
+      		k = ECM_ind_glob[i];
+      		
+      		for (int j= 0; j < 32; ++j){
+      			
+      			
+      			Nei = ECM_neighbor[i*32+j];
+      			
+      			if(Nei > -1){      		 
+      				
+      				a = make_float3(ECM_x[k], ECM_y[k], ECM_z[k]);
+      				b = make_float3(ECM_x[Nei], ECM_y[Nei], ECM_z[Nei]);
+      			
+      				h_R0_ECM[i*32+j] = mag(a-b);
+      			
+      			}
+      		
+      		}
+
+  	}
+  	
+  	
+  	float3 nck, nci, ncj;
+  	float3 nk, ni, nj;
+   	int Ni, Nj;
+   	float ang;
+   	
+   	for (int i = 0; i < Num_ECM; ++i){
+      		
+      		k = ECM_ind_glob[i];
+      		nck = make_float3(ECM_x[k], ECM_y[k], ECM_z[k]);
+      		
+      		for (int j=0; j < 32; ++j){
+  			
+  			Ni = ECM_neighbor[i*32+j];
+  			Nj = ECM_neighbor[i*32+j+1];
+  			
+        		if(Nj > -1){
+        		
+        			nci = make_float3(ECM_x[Ni], ECM_y[Ni], ECM_z[Ni]); 
+          			ncj = make_float3(ECM_x[Nj], ECM_y[Nj], ECM_z[Nj]);
+          
+          			ni = nci-nck;
+          			nj = ncj-nck;
+				ang = dot(ni, nj)/(mag(ni)*mag(nj));
+				
+				if ( ang < -0.995f ) ang = -0.995f;                   
+    				if ( ang > +0.995f ) ang = +0.995f; 
+    				
+          			h_theta0_ECM.ak[i*32+j] = acos(ang);
+          			
+          			
+          			
+          			nj = ncj - nci;
+          			nk = nck - nci;		
+				ang = dot(nj, nk)/(mag(nj)*mag(nk));
+				
+				if ( ang < -0.995f ) ang = -0.995f;                   
+    				if ( ang > +0.995f ) ang = +0.995f; 
+          			
+          			h_theta0_ECM.ai[i*32+j] = acos(ang);
+          			
+          			
+          			
+          			ni = nci - ncj;
+          			nk = nck - ncj;  
+          			
+          			ang = dot(ni, nk)/(mag(ni)*mag(nk));
+				
+				if ( ang < -0.995f ) ang = -0.995f;                   
+    				if ( ang > +0.995f ) ang = +0.995f; 
+          			
+          			h_theta0_ECM.aj[i*32+j] = acos(ang);
+          			
+          			
+          			
+          			//float test_ang = dot(ni, nj)/(mag(ni)*mag(nj));
+          			//if(test_ang > 1 || test_ang < -1) printf("shit. angle: %f\n",test_ang);
+          		}
+          		
+		
+		}
+  	
+  	} 
+   	
+  
+  }
+
+  return(0);
+
+}
+
 
 int read_fullerene_nn(void)
 {
@@ -9147,7 +11195,8 @@ int read_json_params(const char* inpFile){
         write_fcm_file = coreParams["write_fcm_file"].asBool();
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
         correct_com = coreParams["correct_com"].asBool();
-        correct_Vcom = coreParams["correct_Vcom"].asBool();                         
+        correct_Vcom = coreParams["correct_Vcom"].asBool(); 
+                                
     }
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);
@@ -9207,6 +11256,31 @@ int read_json_params(const char* inpFile){
         divPlaneBasis[1] = divParams["divPlaneBasisY"].asFloat();
         divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
 	asymDivision = divParams["asymDivision"].asBool();
+    }
+    
+    Json::Value ECMparams = inpRoot.get("ECMparams", Json::nullValue);
+    
+    if (ECMparams == Json::nullValue){
+        printf("ERROR: Cannot load division parameters\n");
+        return -1;
+    } else{
+	
+	ECM = ECMparams["ECM"].asBool();
+	MaxNoofECMs = ECMparams["Max_ECM_nodes"].asInt();
+	DL_ecm = ECMparams["Div_size"].asFloat();
+	Max_Buffer_ECM = ECMparams["Buffer_size"].asInt();
+	MaxNeighList_ecm = ECMparams["MaxNeighList"].asInt();
+	mass_ecm = ECMparams["mass"].asFloat();
+	stiffness_ecm = ECMparams["stiffness"].asFloat()*1000;
+	vis_damp_ecm = ECMparams["vis_damp"].asFloat();
+	gamma_env_ecm = ECMparams["gamma_env"].asFloat();
+	vis_ecm_cell = ECMparams["vis_ecm_cell"].asFloat();
+	attraction_range_ecm = ECMparams["attraction_range_ecm"].asFloat();
+	repulsion_range_ecm = ECMparams["repulsion_range_ecm"].asFloat();
+	attraction_strength_ecm = ECMparams["attraction_strength_ecm"].asFloat();
+	repulsion_strength_ecm = ECMparams["repulsion_strength_ecm"].asFloat();
+	write_traj_Ecm_file = ECMparams["write_traj_Ecm_file"].asBool();
+	
     }
 
     Json::Value NewCell = inpRoot.get("NewCell", Json::nullValue);
@@ -9660,13 +11734,13 @@ void write_traj(int t_step, FILE* trajfile)
     		X_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		Y_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		Z_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		//int*  Ghost_Cells_ind_other_GPU = (int*)malloc(sizeof(int)*No_of_Ghost_cells);
     
     		MPI_Recv(X_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(Y_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(Z_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		//MPI_Recv(Ghost_Cells_ind_other_GPU , No_of_Ghost_cells, MPI_INT, 1, 61, cart_comm, MPI_STATUS_IGNORE);
     
     	}
@@ -9694,15 +11768,15 @@ void write_traj(int t_step, FILE* trajfile)
       			
       			} else if (nprocs > 1) {
         		
-        			if (CellINdex_OtherGPU[c] < 0)
+        			if (CellIndex_OtherGPU[c] < 0)
               				
-              				fprintf(trajfile, "cell: %d C\n", CellINdex_OtherGPU[c]);
+              				fprintf(trajfile, "cell: %d C\n", CellIndex_OtherGPU[c]);
           			
-          			else if(CellINdex_OtherGPU[c] >= 0)
+          			else if(CellIndex_OtherGPU[c] >= 0)
               				
-              				fprintf(trajfile, "cell: %d H\n", CellINdex_OtherGPU[c]);
+              				fprintf(trajfile, "cell: %d H\n", CellIndex_OtherGPU[c]);
           			else
-              				fprintf(trajfile, "cell: %d UnknownStiffness\n", CellINdex_OtherGPU[c]);
+              				fprintf(trajfile, "cell: %d UnknownStiffness\n", CellIndex_OtherGPU[c]);
 
           			for (int p = 0; p < 192; p++)
           			{
@@ -9727,7 +11801,7 @@ void write_traj(int t_step, FILE* trajfile)
  			
  			} else if (nprocs > 1) {
  			
- 				fprintf(trajfile, "cell: %d\n", CellINdex_OtherGPU[c]);
+ 				fprintf(trajfile, "cell: %d\n", CellIndex_OtherGPU[c]);
  				
  				for (int p = 0; p < 192; p++)
               			{
@@ -9781,6 +11855,11 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
     		h_ExtForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		h_ExtForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		
+    		h_ConFricForces_OtherGPU.x = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_ConFricForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_ConFricForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    			
+    		
     		pressList_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     		volume_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     		area_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
@@ -9792,6 +11871,10 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
     		MPI_Recv(h_ExtForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(h_ExtForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(h_ExtForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		
+    		MPI_Recv(h_ConFricForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_ConFricForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_ConFricForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     		
     		MPI_Recv(pressList_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
@@ -9808,7 +11891,7 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
         
         		for (int n = 0; n < 180; ++n){
             
-        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
         	            		t_step, No_of_All_Cells, k, n,
         	            		h_contactForces.x[c*192 + n],
         	            		h_contactForces.y[c*192 + n],
@@ -9822,6 +11905,12 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
         	            		mag(make_float3(h_ExtForces.x[c*192 + n],
         	            				 h_ExtForces.y[c*192 + n],
         	                            		 h_ExtForces.z[c*192 + n])),
+        	            		h_ConFricForces.x[c*192 + n],
+        	            		h_ConFricForces.y[c*192 + n],
+        	            		h_ConFricForces.z[c*192 + n],
+        	            		mag(make_float3(h_ConFricForces.x[c*192 + n],
+        	            				 h_ConFricForces.y[c*192 + n],
+        	                            		 h_ConFricForces.z[c*192 + n])),        	                            		 
         	            		pressList[c],
         	            		volume[c],
         	            		area[c]
@@ -9835,7 +11924,7 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
 
    		        for (int n = 0; n < 180; ++n){
             
-        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
         	            		t_step, No_of_All_Cells, k, n,
         	            		h_contactForces_OtherGPU.x[c*192 + n],
         	            		h_contactForces_OtherGPU.y[c*192 + n],
@@ -9849,6 +11938,12 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
         	            		mag(make_float3(h_ExtForces_OtherGPU.x[c*192 + n],
         	            				 h_ExtForces_OtherGPU.y[c*192 + n],
         	                            		 h_ExtForces_OtherGPU.z[c*192 + n])),
+        	            		h_ConFricForces_OtherGPU.x[c*192 + n],
+        	            		h_ConFricForces_OtherGPU.y[c*192 + n],
+        	            		h_ConFricForces_OtherGPU.z[c*192 + n],
+        	            		mag(make_float3(h_ConFricForces_OtherGPU.x[c*192 + n],
+        	            				 h_ConFricForces_OtherGPU.y[c*192 + n],
+        	                            		 h_ConFricForces_OtherGPU.z[c*192 + n])),
         	            		pressList_OtherGPU[c],
         	            		volume_OtherGPU[c],
         	            		area_OtherGPU[c]
@@ -9897,13 +11992,13 @@ void write_force(int t_step, FILE* forFile,int frameCount){
     		h_contactForces_OtherGPU.x = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		h_contactForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		h_contactForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		
     
     		MPI_Recv(h_contactForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(h_contactForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(h_contactForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     
     	}
@@ -9923,7 +12018,7 @@ void write_force(int t_step, FILE* forFile,int frameCount){
         			
         	} else if (nprocs > 1){
         		
-        		Ind = CellINdex_OtherGPU[c];
+        		Ind = CellIndex_OtherGPU[c];
         			
                 	fwrite(&Ind, sizeof(int), 1, forFile);
             		fwrite(h_contactForces_OtherGPU.x + (c*192), sizeof(float), 192, forFile); 
@@ -9970,12 +12065,12 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
     		X_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		Y_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		Z_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     
     		MPI_Recv(X_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(Y_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(Z_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
 
     
     	}
@@ -10008,14 +12103,14 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		} else if (nprocs > 1) {
             		
             			
-            			Ind = CellINdex_OtherGPU[c];
+            			Ind = CellIndex_OtherGPU[c];
             			fwrite(&Ind, sizeof(int), 1, trajFile);
             			
             			fwrite(X_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Y_OtherGPU + (c*192), sizeof(float), 192, trajFile); 
             			fwrite(Z_OtherGPU + (c*192), sizeof(float), 192, trajFile);
             			
-            			if (CellINdex_OtherGPU[c] < 0)
+            			if (CellIndex_OtherGPU[c] < 0)
                 			cellType = 1;
             			else
                 			cellType = 0; 
@@ -10044,7 +12139,7 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
             		} else if (nprocs > 1){
             			
             			
-            			Ind = CellINdex_OtherGPU[c];
+            			Ind = CellIndex_OtherGPU[c];
             			
             			fwrite(&Ind, sizeof(int), 1, trajFile);
             			
@@ -10059,6 +12154,80 @@ void WriteBinaryTraj(int t_step, FILE* trajFile, int frameCount, int rank){
     	}
               
    }        
+       
+}
+
+
+void WriteBinaryTrajECM(int t_step, FILE* traj, int frameCount){
+    
+
+    int No_of_All_ECMs = 0;
+    
+    if (nprocs > 1){
+    	for (int i = 0; i<nprocs; i++) No_of_All_ECMs += numberofECMs_InGPUs[i];
+    } else {
+	No_of_All_ECMs = Num_ECM;
+    	numberofECMs_InGPUs[0] = Num_ECM;
+    }	
+
+
+    fwrite(&t_step, sizeof(int), 1, traj);
+    fwrite(&frameCount, sizeof(int), 1, traj); 
+    fwrite(&No_of_All_ECMs, sizeof(int), 1, traj);
+    
+    float x_e, y_e, z_e;
+    int Ind_e;
+    	    
+    for (int i = 0; i < nprocs; i++){
+    		
+	if (i !=0 && nprocs > 1) { 
+	
+	    	ECM_x_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+    		ECM_y_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+    		ECM_z_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+    		ECM_Index_OtherGPU = (int*)malloc(sizeof(int)*numberofECMs_InGPUs[i]);
+    
+    		MPI_Recv(ECM_x_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(ECM_y_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(ECM_z_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(ECM_Index_OtherGPU, numberofECMs_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+
+	}
+
+	for (int c = 0; c < numberofECMs_InGPUs[i]; c++){
+	
+	
+		if (i == 0) {
+		
+			x_e = ECM_x[c];
+			y_e = ECM_y[c];
+        		z_e = ECM_z[c];
+        		Ind_e = ECM_ind_glob[c];
+				
+        		fwrite(&Ind_e, sizeof(int), 1, traj);
+        		fwrite(&x_e, sizeof(float), 1, traj); 
+        		fwrite(&y_e, sizeof(float), 1, traj); 
+        		fwrite(&z_e, sizeof(float), 1, traj);
+        			
+        	} else if (nprocs > 1) {        
+			
+			x_e = ECM_x_OtherGPU[c];
+			y_e = ECM_y_OtherGPU[c];
+        		z_e = ECM_z_OtherGPU[c];
+        		Ind_e = ECM_Index_OtherGPU[c];			
+					
+        		fwrite(&Ind_e, sizeof(int), 1, traj);
+        		fwrite(&x_e, sizeof(float), 1, traj); 
+        		fwrite(&y_e, sizeof(float), 1, traj); 
+        		fwrite(&z_e, sizeof(float), 1, traj);
+    
+    	
+    		}
+	
+	}		
+              
+   }        
+
        
 }
 
@@ -10089,12 +12258,12 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
     			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    			CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		
     			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     
     		}
@@ -10120,7 +12289,7 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
         			Cx = CmX_OtherGPU[c];
 				Cy = CmY_OtherGPU[c];
         			Cz = CmZ_OtherGPU[c];
-        			Ind = CellINdex_OtherGPU[c];
+        			Ind = CellIndex_OtherGPU[c];
         				
         			fwrite(&Ind, sizeof(int), 1, cmFile);
         			fwrite(&Cx, sizeof(float), 1, cmFile); 
@@ -10163,12 +12332,12 @@ void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
     			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    			CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		
     			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     
     		}
@@ -10194,7 +12363,7 @@ void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
         			vCx = CmX_OtherGPU[c];
 				vCy = CmY_OtherGPU[c];
         			vCz = CmZ_OtherGPU[c];
-        			Ind = CellINdex_OtherGPU[c];
+        			Ind = CellIndex_OtherGPU[c];
         				
         			fwrite(&Ind, sizeof(int), 1, VcmFile);
         			fwrite(&vCx, sizeof(float), 1, VcmFile); 
@@ -10238,12 +12407,12 @@ void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
     			CmX_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     			CmY_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     			CmZ_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    			CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    			CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		
     			MPI_Recv(CmX_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			MPI_Recv(CmY_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			MPI_Recv(CmZ_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    			MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     
     		}
@@ -10269,7 +12438,7 @@ void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
         			fCx = CmX_OtherGPU[c];
 				fCy = CmY_OtherGPU[c];
         			fCz = CmZ_OtherGPU[c];
-        			Ind = CellINdex_OtherGPU[c];
+        			Ind = CellIndex_OtherGPU[c];
         				
         			fwrite(&Ind, sizeof(int), 1, FcmFile);
         			fwrite(&fCx, sizeof(float), 1, FcmFile); 
@@ -10470,13 +12639,13 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
     		velListX_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		velListY_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		velListZ_OtherGPU = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
-    		CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		
     
     		MPI_Recv(velListX_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(velListY_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(velListZ_OtherGPU, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     
     	}
@@ -10507,14 +12676,14 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
             		
             		} else if (nprocs > 1){
             			
-            			Ind = CellINdex_OtherGPU[c];
+            			Ind = CellIndex_OtherGPU[c];
             			
             		        fwrite(&Ind, sizeof(int), 1, velFile);
             			fwrite(velListX_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListY_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListZ_OtherGPU + (c*192), sizeof(float), 192, velFile);
             
-            			if (CellINdex_OtherGPU[c] < 0)
+            			if (CellIndex_OtherGPU[c] < 0)
                 			cellType = 1;
             			else
                 			cellType = 0; 
@@ -10539,7 +12708,7 @@ void write_vel(int t_step, FILE* velFile,int frameCount){
         			
         		} else if (nprocs > 1){
         			
-        			Ind = CellINdex_OtherGPU[c];
+        			Ind = CellIndex_OtherGPU[c];
             		        fwrite(&Ind, sizeof(int), 1, velFile);
             			fwrite(velListX_OtherGPU + (c*192), sizeof(float), 192, velFile); 
             			fwrite(velListY_OtherGPU + (c*192), sizeof(float), 192, velFile); 
@@ -10961,7 +13130,7 @@ int writeRestartFile(int t_step, int frameCount){
     				squeeze_rate_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     				gamma_env_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     				viscotic_damp_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
-    				CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    				CellIndex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
 
     				
     				MPI_Recv(pressList_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
@@ -10973,7 +13142,7 @@ int writeRestartFile(int t_step, int frameCount){
     				MPI_Recv(squeeze_rate_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(gamma_env_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(viscotic_damp_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    				MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(CellIndex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			}	
 			
 			
@@ -11016,7 +13185,7 @@ int writeRestartFile(int t_step, int frameCount){
         				sq = squeeze_rate_OtherGPU[c];
         				ge = gamma_env_OtherGPU[c];
         				vd = viscotic_damp_OtherGPU[c];
-        				I = CellINdex_OtherGPU[c];
+        				I = CellIndex_OtherGPU[c];
         		
 					fwrite(&p, sizeof(float), 1, Restartfile);
         	    			fwrite(&y, sizeof(float), 1, Restartfile);
@@ -11474,5 +13643,3 @@ void SetDeviceBeforeInit()
     printf("local rank=	%d\n", rank);
 
 }
-
-

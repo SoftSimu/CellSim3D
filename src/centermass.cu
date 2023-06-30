@@ -142,6 +142,7 @@ __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz
 
 	}
 
+
 }
 
 
@@ -194,9 +195,98 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 
 	}
 
+}
+
+
+__global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
+			   float* SysCx_ecm, float* SysCy_ecm)
+{
+
+	__shared__ float  sumx[1024];
+	__shared__ float  sumy[1024];
+
+
+  	int node = blockIdx.x*blockDim.x+threadIdx.x;
+	int tid = threadIdx.x;
+	int rank = blockIdx.x;
+	  
+	sumx[tid] = 0.0;
+	sumy[tid] = 0.0;
+
+	if ( node < Num_ECM )
+    	{
+    		sumx[tid] = d_ECM_Vx[node];
+    		sumy[tid] = d_ECM_Vy[node];
+    	}
+
+        __syncthreads();
+
+	for ( int s = blockDim.x/2; s > 0; s>>=1)
+   	{
+   		if ( tid < s )
+      		{
+      			sumx[tid] += sumx[tid+s];
+      			sumy[tid] += sumy[tid+s];
+      		}
+   	__syncthreads();
+   	}
+
+        if ( tid == 0 )
+	{
+	      
+	      SysCx_ecm[rank]  = sumx[0];
+	      SysCy_ecm[rank]  = sumy[0];
+
+	}
 
 
 }
 
 
+__global__ void SysCM_ecm( int Num_ECM, int reductionblocks,
+			float* SysCx_ecm, float* SysCy_ecm,
+			R3Nptrs d_sysCM_ecm)
+{
+
+	__shared__ float  sysCmx[1024];
+  	__shared__ float  sysCmy[1024];
+
+
+  	int tid = threadIdx.x;
+
+	sysCmx[tid] = 0.0;
+	sysCmy[tid] = 0.0;
+
+
+	if ( tid < reductionblocks )
+    	{
+    		sysCmx[tid] = SysCx_ecm[tid];
+    		sysCmy[tid] = SysCy_ecm[tid];
+    	}
+
+        __syncthreads();
+
+
+        for ( int s = blockDim.x/2; s > 0; s>>=1)
+   	{
+   		if ( tid < s )
+      		{
+      			sysCmx[tid] += sysCmx[tid+s];
+      			sysCmy[tid] += sysCmy[tid+s];
+      		}
+   		__syncthreads();
+   	}
+
+
+  	if ( tid == 0 )
+	{
+
+		*d_sysCM_ecm.x = sysCmx[0];
+		*d_sysCM_ecm.y = sysCmy[0];
+		*d_sysCM_ecm.z = 0.0;
+
+
+	}
+
+}
 
