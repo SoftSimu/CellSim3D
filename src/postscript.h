@@ -142,7 +142,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX,
                            int MaxNeighList,
                            bool ECM,
-                           float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
+                           float *d_Con_ECM_force_x, float *d_Con_ECM_force_y, float *d_Con_ECM_force_z,
                            float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
@@ -152,10 +152,11 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 __global__ void CalculateConForce_ECM( int Num_ECM,
 					float* d_ECM_x, float* d_ECM_y, float* d_ECM_z, 
-					float* d_Con_ECM_force_x, float* d_Con_ECM_force_y,
+					float* d_Con_ECM_force_x, float* d_Con_ECM_force_y, float *d_Con_ECM_force_z,
 					int* d_ECM_neighbor_updated, int* d_Num_Nei_ECM,
-					float* d_R0_ECM, float ECM_stiffness,
-					float angleConstant_ecm, Ang3Nptrs d_theta0_ECM);                           
+					float* d_R0_ECM, float *d_stiffness_ecm,
+					float angleConstant_ecm, float* d_theta0_ECM,
+					int* d_ECM_neighbor);                           
 
 
 __global__ void CalculateConForcePBC( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -212,12 +213,14 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
                           R3Nptrs d_fConList, R3Nptrs d_fDisList, R3Nptrs d_fRanList,
                           int numCells);
 
-__global__ void Integrate_ECM (float* d_ECM_x, float* d_ECM_y,
-                          float* d_ECM_Vx, float* d_ECM_Vy, 
-                          float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
-                          float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, 
+__global__ void Integrate_ECM (float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                          float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                          float *d_Con_ECM_force_x, float *d_Con_ECM_force_y, float *d_Con_ECM_force_z,
+                          float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, float *d_Dis_ECM_force_z, 
                           float dt, float m_ecm,
-                          int Num_ECM);
+                          int Num_ECM, bool Clamped, int* d_clamped_node);
+                          
+                        
 
 __global__ void ForwardTime(float *d_XP, float *d_YP, float *d_ZP,
                             float *d_X, float *d_Y, float *d_Z,
@@ -294,7 +297,7 @@ __global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, floa
 __global__ void CorrectCoMVelocity(int No_cells_All, float* d_velListX, float* d_velListY, float* d_velListZ,
                                    R3Nptrs d_sysVCM, R3Nptrs d_sysCM_All, long int numParts);
 
-__global__ void CorrectCoMVelocity_ecm(int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, R3Nptrs d_sysCM_All);
+__global__ void CorrectCoMVelocity_ecm(int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz, R3Nptrs d_sysCM_All);
 
 __global__ void SysCMpost( int No_of_C180s, float *d_Cx, float *d_Cy,float *d_Cz, 
 			   float* SysCx, float* SysCy, float* SysCz);
@@ -303,11 +306,11 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 			float* SysCx, float* SysCy, float* SysCz,
 			R3Nptrs d_sysCM);
 
-__global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
-			   float* SysCx_ecm, float* SysCy_ecm);
+__global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy, float* d_ECM_Vz,
+			   float* SysCx_ecm, float* SysCy_ecm, float* SysCz_ecm);
 
 __global__ void SysCM_ecm( int Num_ECM, int reductionblocks,
-			float* SysCx_ecm, float* SysCy_ecm,
+			float* SysCx_ecm, float* SysCy_ecm, float* SysCz_ecm,
 			R3Nptrs d_sysCM_ecm);
 
 __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
@@ -317,13 +320,15 @@ __global__ void VelocityUpdateA(float* d_VX, float* d_VY, float* d_VZ,
 __global__ void VelocityUpdateB(float* d_VX, float* d_VY, float* d_VZ,
                                 R3Nptrs fDisList, float dt, long int num_nodes, float m );
 
-__global__ void VelocityUpdateA_ECM(float* d_ECM_Vx, float* d_ECM_Vy, 
-                                float *d_Con_ECM_force_x, float *d_Con_ECM_force_y,
-                                float dt, int Num_ECM, float m_ecm);
+__global__ void VelocityUpdateA_ECM(float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz, 
+                                float *d_Con_ECM_force_x, float *d_Con_ECM_force_y, float *d_Con_ECM_force_z,
+                                float dt, int Num_ECM, float m_ecm,
+                                 bool Clamped, int* d_clamped_node);
 
-__global__ void VelocityUpdateB_ECM(float* d_ECM_Vx, float* d_ECM_Vy, 
-                                float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y,
-                                float dt, int Num_ECM, float m_ecm);
+__global__ void VelocityUpdateB_ECM(float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                                float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, float *d_Dis_ECM_force_z,
+                                float dt, int Num_ECM, float m_ecm,
+                                 bool Clamped, int* d_clamped_node);
 
 
 __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
@@ -340,16 +345,16 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    R3Nptrs d_fDisList, R3Nptrs d_ConFricForces, bool impurity, float f_range,
                                    int MaxNeighList,
                                    bool ECM,
-                                   float* d_Dis_ECM_force_x, float* d_Dis_ECM_force_y,
+                                   float* d_Dis_ECM_force_x, float* d_Dis_ECM_force_y, float *d_Dis_ECM_force_z,
                                    float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
-                                   float* d_ECM_Vx, float* d_ECM_Vy,
+                                   float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
 				    float attraction_range_ecm, float vis_ecm_cell,
                            	    int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
                            	    int MaxNeighList_ecm);
                                  
                                    
-__global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, 
-					float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y,
+__global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+					float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, float *d_Dis_ECM_force_z,
 					int* d_ECM_neighbor_updated, int* d_Num_Nei_ECM,
 					float vis_damp_ecm, float gamma_env_ecm);
 
@@ -514,17 +519,23 @@ __global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_
 
 __global__ void Ghost_ECM_Pack_PBC_X(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
                                	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
-                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer);
+                               	float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer,
+                              	float* d_ECM_Vx_buffer, float* d_ECM_Vy_buffer, float* d_ECM_Vz_buffer);
               
 
 __global__ void Ghost_ECM_Pack_PBC_Y(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
                                	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
-                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer);
+                               	float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer,
+                              	float* d_ECM_Vx_buffer, float* d_ECM_Vy_buffer, float* d_ECM_Vz_buffer);
 
                               
 __global__ void Ghost_ECM_Pack(int No_of_Ghost_ECM_buffer, int* d_Ghost_ECM_ind,
                                float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
+                               float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
                                float* d_ECM_x_gc_buffer, float* d_ECM_y_gc_buffer, float* d_ECM_z_gc_buffer,
+                               float* d_ECM_Vx_buffer, float* d_ECM_Vy_buffer, float* d_ECM_Vz_buffer,
                                int* d_ECM_ind_glob, int* d_ECM_ind_buffer);
                               
 
@@ -662,7 +673,9 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 void Send_Recv_ghost_ECM( int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM, int receiver, int sender, int tag, MPI_Comm cart_comm,
 			     int shift_sender, int shift_receiver,	
 			     float* ECM_x_buffer, float* ECM_y_buffer, float* ECM_z_buffer,
+			     float* ECM_Vx_buffer, float* ECM_Vy_buffer, float* ECM_Vz_buffer,
 			     float* ECM_x_ecm, float* ECM_y_ecm, float* ECM_z_ecm,
+			     float* ECM_Vx_ecm, float* ECM_Vy_ecm, float* ECM_Vz_ecm,
 			     bool ind_comm, int* ECM_ind_buffer, int* ECM_ind_ecm);
 			  
 

@@ -198,12 +198,13 @@ __global__ void SysCM( int No_of_C180s, int reductionblocks,
 }
 
 
-__global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
-			   float* SysCx_ecm, float* SysCy_ecm)
+__global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy, float *d_ECM_Vz, 
+			   float* SysCx_ecm, float* SysCy_ecm, float* SysCz_ecm)
 {
 
 	__shared__ float  sumx[1024];
 	__shared__ float  sumy[1024];
+	__shared__ float  sumz[1024];
 
 
   	int node = blockIdx.x*blockDim.x+threadIdx.x;
@@ -212,11 +213,13 @@ __global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
 	  
 	sumx[tid] = 0.0;
 	sumy[tid] = 0.0;
+	sumz[tid] = 0.0;
 
 	if ( node < Num_ECM )
     	{
     		sumx[tid] = d_ECM_Vx[node];
     		sumy[tid] = d_ECM_Vy[node];
+    		sumz[tid] = d_ECM_Vz[node];
     	}
 
         __syncthreads();
@@ -227,6 +230,7 @@ __global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
       		{
       			sumx[tid] += sumx[tid+s];
       			sumy[tid] += sumy[tid+s];
+      			sumz[tid] += sumz[tid+s];
       		}
    	__syncthreads();
    	}
@@ -236,6 +240,7 @@ __global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
 	      
 	      SysCx_ecm[rank]  = sumx[0];
 	      SysCy_ecm[rank]  = sumy[0];
+	      SysCz_ecm[rank]  = sumz[0];
 
 	}
 
@@ -244,24 +249,27 @@ __global__ void SysCMpost_ECM( int Num_ECM, float *d_ECM_Vx, float *d_ECM_Vy,
 
 
 __global__ void SysCM_ecm( int Num_ECM, int reductionblocks,
-			float* SysCx_ecm, float* SysCy_ecm,
+			float* SysCx_ecm, float* SysCy_ecm, float* SysCz_ecm,
 			R3Nptrs d_sysCM_ecm)
 {
 
 	__shared__ float  sysCmx[1024];
   	__shared__ float  sysCmy[1024];
+  	__shared__ float  sysCmz[1024];
 
 
   	int tid = threadIdx.x;
 
 	sysCmx[tid] = 0.0;
 	sysCmy[tid] = 0.0;
+	sysCmz[tid] = 0.0;
 
 
 	if ( tid < reductionblocks )
     	{
     		sysCmx[tid] = SysCx_ecm[tid];
     		sysCmy[tid] = SysCy_ecm[tid];
+    		sysCmz[tid] = SysCz_ecm[tid];
     	}
 
         __syncthreads();
@@ -273,6 +281,7 @@ __global__ void SysCM_ecm( int Num_ECM, int reductionblocks,
       		{
       			sysCmx[tid] += sysCmx[tid+s];
       			sysCmy[tid] += sysCmy[tid+s];
+      			sysCmz[tid] += sysCmz[tid+s];
       		}
    		__syncthreads();
    	}
@@ -283,7 +292,7 @@ __global__ void SysCM_ecm( int Num_ECM, int reductionblocks,
 
 		*d_sysCM_ecm.x = sysCmx[0];
 		*d_sysCM_ecm.y = sysCmy[0];
-		*d_sysCM_ecm.z = 0.0;
+		*d_sysCM_ecm.z = sysCmz[0];
 
 
 	}

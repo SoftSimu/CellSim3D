@@ -865,6 +865,8 @@ __global__ void UpdateNNlistWithGhostECM(int Num_ECM, int All_ECM, float *d_ECM_
 		
 		int glob_ind = d_ECM_ind_glob[node];	
 		d_ECM_Map_ind[glob_ind] = node;
+		
+		//printf("node is %d and glob_ind is %d\n",node, glob_ind);
 
 	 	
 	 	int posx = (int)((d_ECM_x[node] - Subdivision_min.x)/DL_ecm);
@@ -919,6 +921,8 @@ __global__ void UpdateNNlistWithGhostECM(int Num_ECM, int All_ECM, float *d_ECM_
 				//}
 			}
 		}
+	
+	
 	
 	}
                            
@@ -2140,8 +2144,10 @@ __global__ void Ghost_Cells_Pack_LEbc_X(int No_of_Ghost_cells_buffer, int No_of_
 
 __global__ void Ghost_ECM_Pack(int No_of_Ghost_ECM_buffer, int* d_Ghost_ECM_ind,
                                float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
-                              float* d_ECM_x_gc_buffer, float* d_ECM_y_gc_buffer, float* d_ECM_z_gc_buffer,
-                              int* d_ECM_ind_glob, int* d_ECM_ind_buffer)
+                               float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                               float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer,
+                               float* d_ECM_Vx_buffer, float* d_ECM_Vy_buffer, float* d_ECM_Vz_buffer,
+                               int* d_ECM_ind_glob, int* d_ECM_ind_buffer)
 {
 
 	
@@ -2154,9 +2160,14 @@ __global__ void Ghost_ECM_Pack(int No_of_Ghost_ECM_buffer, int* d_Ghost_ECM_ind,
 		int ghost_node = d_Ghost_ECM_ind[ECM_node];
 
 			
-			d_ECM_x_gc_buffer[ECM_node] = d_ECM_x[ghost_node];
-			d_ECM_y_gc_buffer[ECM_node] = d_ECM_y[ghost_node];
-			d_ECM_z_gc_buffer[ECM_node] = d_ECM_z[ghost_node];
+			d_ECM_x_buffer[ECM_node] = d_ECM_x[ghost_node];
+			d_ECM_y_buffer[ECM_node] = d_ECM_y[ghost_node];
+			d_ECM_z_buffer[ECM_node] = d_ECM_z[ghost_node];
+			
+			d_ECM_Vx_buffer[ECM_node] = d_ECM_Vx[ghost_node];
+			d_ECM_Vy_buffer[ECM_node] = d_ECM_Vy[ghost_node];
+			d_ECM_Vz_buffer[ECM_node] = d_ECM_Vz[ghost_node];
+			
 			d_ECM_ind_buffer[ECM_node] = d_ECM_ind_glob[ghost_node];
 			
 
@@ -2203,7 +2214,9 @@ __global__ void ghost_ECM_finder_Auxiliary(int Num_ECM, int All_ECM, float *d_EC
 
 __global__ void Ghost_ECM_Pack_PBC_X(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
                                	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
-                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer)
+                               	float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer,
+                              	float* d_ECM_Vx_buffer, float* d_ECM_Vy_buffer, float* d_ECM_Vz_buffer)
 {
 
 
@@ -2226,6 +2239,11 @@ __global__ void Ghost_ECM_Pack_PBC_X(int No_of_Ghost_ECM_buffer, int No_of_Ghost
 		d_ECM_x_buffer[node] = Cx - ModifierCx*boxMax.x;
 		d_ECM_y_buffer[node] = d_ECM_y[ghost_node];
 		d_ECM_z_buffer[node] = d_ECM_z[ghost_node];
+		
+		d_ECM_Vx_buffer[node] = d_ECM_Vx[ghost_node];
+		d_ECM_Vy_buffer[node] = d_ECM_Vy[ghost_node];
+		d_ECM_Vz_buffer[node] = d_ECM_Vz[ghost_node];
+		
 
 	}		
 	
@@ -2233,7 +2251,9 @@ __global__ void Ghost_ECM_Pack_PBC_X(int No_of_Ghost_ECM_buffer, int No_of_Ghost
 
 __global__ void Ghost_ECM_Pack_PBC_Y(int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM_buffer_R, int* d_Ghost_ECM_ind, double3 boxMax,  float R_ghost_buffer_ECM,
                                	float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
-                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer)
+                               	float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
+                              	float* d_ECM_x_buffer, float* d_ECM_y_buffer, float* d_ECM_z_buffer,
+                              	float* d_ECM_Vx_buffer, float* d_ECM_Vy_buffer, float* d_ECM_Vz_buffer)
 {
 	
 
@@ -2258,7 +2278,10 @@ __global__ void Ghost_ECM_Pack_PBC_Y(int No_of_Ghost_ECM_buffer, int No_of_Ghost
 		d_ECM_y_buffer[node] = Cy - ModifierCy*boxMax.y;
 		d_ECM_z_buffer[node] = d_ECM_z[ghost_node];
 		
-		
+		d_ECM_Vx_buffer[node] = d_ECM_Vx[ghost_node];
+		d_ECM_Vy_buffer[node] = d_ECM_Vy[ghost_node];
+		d_ECM_Vz_buffer[node] = d_ECM_Vz[ghost_node];
+	
 	
 	}
 
@@ -2271,14 +2294,20 @@ __global__ void ECM_Connectivity_Update(int Num, int* d_ECM_Map_ind, int* d_ECM_
 
 	int node = blockIdx.x*blockDim.x+threadIdx.x;
 	
-	if( node < Num ){
+	//if (node == 0) printf("Num is %d\n",Num);
 	
+	if( node < Num ){
+			
 		int index = d_ECM_neighbor[node];
 		
-		if(index > -1) {
 		
-			index = d_ECM_Map_ind[index];	
-			d_ECM_neighbor_updated[node] = index;
+		if( index > -1) {
+			
+			
+			int ind = d_ECM_Map_ind[index];	
+			d_ECM_neighbor_updated[node] = ind;
+			//if(node % 32 == 0) printf("node is %d and index is %d, new index %d\n",node, index, ind);
+			//printf("node is %d and index is %d, new index %d\n",node, index, ind);
 			//printf("%d:%d \n", d_ECM_neighbor[node], d_ECM_neighbor_updated[node]);
 		
 		}

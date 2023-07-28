@@ -150,21 +150,37 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 void Send_Recv_ghost_ECM( int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM, int receiver, int sender, int tag, MPI_Comm cart_comm,
 			     int shift_sender, int shift_receiver,	
 			     float* ECM_x_buffer, float* ECM_y_buffer, float* ECM_z_buffer,
+			     float* ECM_Vx_buffer, float* ECM_Vy_buffer, float* ECM_Vz_buffer,
 			     float* ECM_x_ecm, float* ECM_y_ecm, float* ECM_z_ecm,
+			     float* ECM_Vx_ecm, float* ECM_Vy_ecm, float* ECM_Vz_ecm,
 			     bool ind_comm, int* ECM_ind_buffer, int* ECM_ind_ecm)
 {
 
-    		
+
     		    	MPI_Sendrecv( ECM_x_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_FLOAT, receiver, tag,
                  			ECM_x_ecm + shift_receiver, No_of_Ghost_ECM, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
                  	
+
                  	MPI_Sendrecv( ECM_y_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_FLOAT, receiver, tag,
                  			ECM_y_ecm + shift_receiver, No_of_Ghost_ECM, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
-                 			
+                 	
+		
                  	MPI_Sendrecv( ECM_z_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_FLOAT, receiver, tag,
                  			ECM_z_ecm + shift_receiver, No_of_Ghost_ECM, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
     
 
+        		MPI_Sendrecv( ECM_Vx_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_FLOAT, receiver, tag,
+                 			ECM_Vx_ecm + shift_receiver, No_of_Ghost_ECM, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
+                 	
+
+                 	MPI_Sendrecv( ECM_Vy_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_FLOAT, receiver, tag,
+                 			ECM_Vy_ecm + shift_receiver, No_of_Ghost_ECM, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
+                 	
+		
+                 	MPI_Sendrecv( ECM_Vz_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_FLOAT, receiver, tag,
+                 			ECM_Vz_ecm + shift_receiver, No_of_Ghost_ECM, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
+    
+    
 			if (ind_comm) MPI_Sendrecv( ECM_ind_buffer + shift_sender, No_of_Ghost_ECM_buffer, MPI_INT, receiver, tag,
                  					ECM_ind_ecm + shift_receiver, No_of_Ghost_ECM, MPI_INT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
 }

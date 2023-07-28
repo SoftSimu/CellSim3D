@@ -523,10 +523,11 @@ int *CellINdex_mc;
 
 
 bool ECM;
+bool Clamped;
 float DL_ecm;
 int Xdiv_ecm, Ydiv_ecm;
-float mass_ecm;     
-float stiffness_ecm;
+float mass_ecm, stiffness_ecm_min, stiffness_ecm_max;     
+float *d_stiffness_ecm, *h_stiffness_ecm;
 float angleConstant_ecm; 
 float vis_damp_ecm, gamma_env_ecm, vis_ecm_cell;
 float attraction_range_ecm, repulsion_range_ecm; 
@@ -542,25 +543,28 @@ float  *d_ECM_Vx,  *d_ECM_Vy,  *d_ECM_Vz;
 float  *ECM_Vx,  *ECM_Vy,  *ECM_Vz;
 
 float  *All_ECM_x,  *All_ECM_y,  *All_ECM_z;
-int *Num_Nei_ECM, *ECM_neighbor; 
-int *d_Num_Nei_ECM, *d_ECM_neighbor, *d_ECM_neighbor_updated; 
+int *Num_Nei_ECM, *ECM_neighbor, *clamped_node; 
+int *d_Num_Nei_ECM, *d_ECM_neighbor, *d_ECM_neighbor_updated, *d_clamped_node; 
 int *Num_Nei_ECM_All, *ECM_neighbor_All;
-int *ECM_Map_ind, *ECM_ind_glob, *ECM_ind_buffer;
+int *ECM_Map_ind, *ECM_ind_glob, *All_ECM_ind_glob,  *ECM_ind_buffer;
 int *d_ECM_Map_ind, *d_ECM_ind_glob, *d_ECM_ind_buffer, *ECM_ind_ecm;
 bool ind_comm;
 
 float  *ECM_x_ecm, *ECM_y_ecm, *ECM_z_ecm;
+float  *ECM_Vx_ecm, *ECM_Vy_ecm, *ECM_Vz_ecm;
 float  *ECM_x_buffer, *ECM_y_buffer, *ECM_z_buffer;
+float  *ECM_Vx_buffer, *ECM_Vy_buffer, *ECM_Vz_buffer;
 float  *d_ECM_x_buffer, *d_ECM_y_buffer, *d_ECM_z_buffer;
+float  *d_ECM_Vx_buffer, *d_ECM_Vy_buffer, *d_ECM_Vz_buffer;
 
 float *d_R0_ECM, *h_R0_ECM;
-//float *d_theta0_ECM, *h_theta0_ECM;
+float *d_theta0_ECM, *h_theta0_ECM;
 
-float *d_Con_ECM_force_x, *d_Con_ECM_force_y;
-float *d_Dis_ECM_force_x, *d_Dis_ECM_force_y;	
-float *h_Con_ECM_force_x, *h_Con_ECM_force_y;
+float *d_Con_ECM_force_x, *d_Con_ECM_force_y, *d_Con_ECM_force_z;
+float *d_Dis_ECM_force_x, *d_Dis_ECM_force_y, *d_Dis_ECM_force_z;	
+float *h_Con_ECM_force_x, *h_Con_ECM_force_y, *h_Con_ECM_force_z;
 
-Ang3Nptrs d_theta0_ECM, h_theta0_ECM;
+//Ang3Nptrs d_theta0_ECM, h_theta0_ECM;
 float *d_SysCx_ecm, *d_SysCy_ecm, *d_SysCz_ecm; 
 R3Nptrs d_sysVCM_ecm;
 R3Nptrs h_sysVCM_ecm, h_sysCM_All_ecm;
@@ -741,6 +745,9 @@ int main(int argc, char *argv[])
   if(rank == 0) printf("   Ghost_Buffer_Distance is: %f \n",R_ghost_buffer);	
 
 
+  R_ghost_buffer_ECM = 1.0;
+  if(rank == 0) printf("   Ghost_Buffer_Distance of ECM is: %f \n", R_ghost_buffer_ECM);
+
   float MaxArea, MaxArea_All;  
   MaxArea = Subdivision_Area.x;
   if (Subdivision_Area.y > MaxArea) MaxArea = Subdivision_Area.y;
@@ -785,7 +792,7 @@ int main(int argc, char *argv[])
   
   
   //angleConstant_ecm = 10*Youngs_mod;
-  angleConstant_ecm = 100;
+  //angleConstant_ecm = 100;
   
   
   //f_range = (attraction_range + 0.9*shapeLim) * (attraction_range + 0.9*shapeLim);
@@ -1444,6 +1451,8 @@ int main(int argc, char *argv[])
   	if ( cudaSuccess != cudaMalloc( (void **)&d_Num_Nei_ECM , Num_ECM*sizeof(int))) return(-1);
 	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_neighbor , Num_Nei32*sizeof(int))) return(-1);
 	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_neighbor_updated , Num_Nei32*sizeof(int))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_clamped_node , Num_ECM*sizeof(int))) return(-1);
+	
 		  	
   	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_x  , MaxNoofECMs*sizeof(float))) return(-1);
  	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_y  , MaxNoofECMs*sizeof(float))) return(-1);
@@ -1451,25 +1460,36 @@ int main(int argc, char *argv[])
   	
   	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Vx  , MaxNoofECMs*sizeof(float))) return(-1);
  	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Vy  , MaxNoofECMs*sizeof(float))) return(-1);
+ 	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Vz  , MaxNoofECMs*sizeof(float))) return(-1);
   	
   	if ( cudaSuccess != cudaMalloc( (void **)&d_Con_ECM_force_x , MaxNoofECMs*sizeof(float))) return(-1);
   	if ( cudaSuccess != cudaMalloc( (void **)&d_Con_ECM_force_y , MaxNoofECMs*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Con_ECM_force_z , MaxNoofECMs*sizeof(float))) return(-1);
   	
   	if ( cudaSuccess != cudaMalloc( (void **)&d_Dis_ECM_force_x , MaxNoofECMs*sizeof(float))) return(-1);
   	if ( cudaSuccess != cudaMalloc( (void **)&d_Dis_ECM_force_y , MaxNoofECMs*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc( (void **)&d_Dis_ECM_force_z , MaxNoofECMs*sizeof(float))) return(-1);
   	
   	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_x_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
   	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_y_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
   	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_z_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
+    	
+    	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_Vx_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_Vy_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
+  	if ( cudaSuccess != cudaMalloc((void **)&d_ECM_Vz_buffer  , BufferSize_ECM*sizeof(float))) return(-1);
     	
     	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_Map_ind  , ECM_Num32*sizeof(int))) return(-1);
     	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_ind_glob  , ECM_Num32*sizeof(int))) return(-1);
 	if ( cudaSuccess != cudaMalloc( (void **)&d_ECM_ind_buffer  , BufferSize_ECM*sizeof(int))) return(-1);
 
 	if ( cudaSuccess != cudaMalloc( (void **)&d_R0_ECM , Num_Nei32*sizeof(float))) return(-1);
-	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.ak , Num_Nei32*sizeof(float))) return(-1);
-	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.ai , Num_Nei32*sizeof(float))) return(-1);
-	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.aj , Num_Nei32*sizeof(float))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_stiffness_ecm , Num_Nei32*sizeof(float))) return(-1);
+	//if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.ak , Num_Nei32*sizeof(float))) return(-1);
+	//if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.ai , Num_Nei32*sizeof(float))) return(-1);
+	//if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM.aj , Num_Nei32*sizeof(float))) return(-1);
+	if ( cudaSuccess != cudaMalloc( (void **)&d_theta0_ECM , Num_Nei32*sizeof(float))) return(-1);
+	
+	
 	
 	if ( cudaSuccess != cudaMalloc((void **)&d_SysCx_ecm, 1024*sizeof(float))) return -1;
   	if ( cudaSuccess != cudaMalloc((void **)&d_SysCy_ecm, 1024*sizeof(float))) return -1;
@@ -1494,6 +1514,11 @@ int main(int argc, char *argv[])
   	cudaMemset(d_ECM_z_buffer, 0, BufferSize_ECM*sizeof(float));
   	CudaErrorCheck();
   	
+  	cudaMemset(d_ECM_Vx_buffer, 0, BufferSize_ECM*sizeof(float));
+  	cudaMemset(d_ECM_Vy_buffer, 0, BufferSize_ECM*sizeof(float));
+  	cudaMemset(d_ECM_Vz_buffer, 0, BufferSize_ECM*sizeof(float));
+  	CudaErrorCheck();
+  	
   	cudaMemset(d_NNlist_ECM, 0, Xdiv_ecm*Ydiv_ecm*MaxNeighList_ecm*sizeof(int)); 
 	cudaMemset(d_NoofNNlist_ECM, 0, Xdiv_ecm*Ydiv_ecm*sizeof(int)); 
 	CudaErrorCheck(); 
@@ -1505,20 +1530,28 @@ int main(int argc, char *argv[])
   	
   	cudaMemset(d_ECM_Vx, 0, MaxNoofECMs*sizeof(float));
   	cudaMemset(d_ECM_Vy, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_ECM_Vz, 0, MaxNoofECMs*sizeof(float));
   	CudaErrorCheck();
   	
   	cudaMemset(d_Con_ECM_force_x, 0, MaxNoofECMs*sizeof(float));
   	cudaMemset(d_Con_ECM_force_y, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_Con_ECM_force_z, 0, MaxNoofECMs*sizeof(float));
   	CudaErrorCheck();
   	
   	cudaMemset(d_Dis_ECM_force_x, 0, MaxNoofECMs*sizeof(float));
   	cudaMemset(d_Dis_ECM_force_y, 0, MaxNoofECMs*sizeof(float));
+  	cudaMemset(d_Dis_ECM_force_z, 0, MaxNoofECMs*sizeof(float));
+  	CudaErrorCheck();
+  	
+  	cudaMemset(d_clamped_node, 0, Num_ECM*sizeof(float));
   	CudaErrorCheck();
   	
   	cudaMemset(d_R0_ECM, 0, Num_Nei32*sizeof(float));
-  	cudaMemset(d_theta0_ECM.ak, 0, Num_Nei32*sizeof(float));
-  	cudaMemset(d_theta0_ECM.ai, 0, Num_Nei32*sizeof(float));
-  	cudaMemset(d_theta0_ECM.aj, 0, Num_Nei32*sizeof(float));
+  	cudaMemset(d_stiffness_ecm, 0, Num_Nei32*sizeof(float));
+  	//cudaMemset(d_theta0_ECM.ak, 0, Num_Nei32*sizeof(float));
+  	//cudaMemset(d_theta0_ECM.ai, 0, Num_Nei32*sizeof(float));
+  	//cudaMemset(d_theta0_ECM.aj, 0, Num_Nei32*sizeof(float));
+  	cudaMemset(d_theta0_ECM, 0, Num_Nei32*sizeof(float));
   	CudaErrorCheck();
   	
   	cudaMemset(d_SysCx_ecm, 0, 1024*sizeof(float));
@@ -1538,11 +1571,16 @@ int main(int argc, char *argv[])
   	cudaMemcpy(d_Num_Nei_ECM,  Num_Nei_ECM, Num_ECM*sizeof(int),cudaMemcpyHostToDevice);
   	cudaMemcpy(d_ECM_neighbor,  ECM_neighbor, Num_Nei32*sizeof(int),cudaMemcpyHostToDevice);
   	CudaErrorCheck();
+  	
+  	cudaMemcpy(d_clamped_node,  clamped_node, Num_ECM*sizeof(int),cudaMemcpyHostToDevice);
+  	CudaErrorCheck();
   
     	cudaMemcpy(d_R0_ECM, h_R0_ECM, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
-    	cudaMemcpy(d_theta0_ECM.ak, h_theta0_ECM.ak, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
-    	cudaMemcpy(d_theta0_ECM.ai, h_theta0_ECM.ai, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
-    	cudaMemcpy(d_theta0_ECM.aj, h_theta0_ECM.aj, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	cudaMemcpy(d_stiffness_ecm, h_stiffness_ecm, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	cudaMemcpy(d_theta0_ECM, h_theta0_ECM, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	//cudaMemcpy(d_theta0_ECM.ak, h_theta0_ECM.ak, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	//cudaMemcpy(d_theta0_ECM.ai, h_theta0_ECM.ai, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
+    	//cudaMemcpy(d_theta0_ECM.aj, h_theta0_ECM.aj, Num_Nei32*sizeof(float),cudaMemcpyHostToDevice);
   	CudaErrorCheck();
   
   }
@@ -2047,12 +2085,12 @@ int main(int argc, char *argv[])
      		if(Num_ECM > 0){
      			
      			reductionblocks =  (Num_ECM - 1)/1024+1;
-      			SysCMpost_ECM<<<reductionblocks,1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, 
-					   			d_SysCx_ecm, d_SysCy_ecm);
+      			SysCMpost_ECM<<<reductionblocks,1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+					   			d_SysCx_ecm, d_SysCy_ecm, d_SysCz_ecm);
       			CudaErrorCheck();
       			
       			SysCM_ecm<<<1,1024>>>(Num_ECM, reductionblocks,
-        				    	d_SysCx_ecm, d_SysCy_ecm,
+        				    	d_SysCx_ecm, d_SysCy_ecm, d_SysCz_ecm,
 					    	d_sysVCM_ecm);
       
      			CudaErrorCheck(); 
@@ -2096,7 +2134,7 @@ int main(int argc, char *argv[])
         	
         	*h_sysCM_All.x = (*h_sysCM_All.x*mass*180 + *h_sysCM_All_ecm.x*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
         	*h_sysCM_All.y = (*h_sysCM_All.y*mass*180 + *h_sysCM_All_ecm.y*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
-        	//*h_sysCM_All.x = (*h_sysCM_All.z*mass*180 + *h_sysCM_All_ecm.z*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        	*h_sysCM_All.x = (*h_sysCM_All.z*mass*180 + *h_sysCM_All_ecm.z*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
         		
       	
       	}
@@ -2117,7 +2155,7 @@ int main(int argc, char *argv[])
       
       if (ECM && Num_ECM > 0){
       
-            	CorrectCoMVelocity_ecm<<< Num_ECM/1024 + 1, 1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_sysCM_All);
+            	CorrectCoMVelocity_ecm<<< Num_ECM/1024 + 1, 1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, d_sysCM_All);
           
      		 CudaErrorCheck(); 
       
@@ -2987,7 +3025,10 @@ int main(int argc, char *argv[])
         		if ( Sending_Ghost_ECM_Num_total_EW > 0 ){
         					
         			Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_EW/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_EW, d_Ghost_ECM_ind_EAST_WEST,
-        											d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        											d_ECM_x, d_ECM_y, d_ECM_z,
+        											d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+        											d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        											d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer,
         											d_ECM_ind_glob, d_ECM_ind_buffer);
 	
 
@@ -2997,6 +3038,11 @@ int main(int argc, char *argv[])
    				cudaMemcpy(ECM_x_buffer,  d_ECM_x_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				CudaErrorCheck();	
 				
    				
@@ -3005,24 +3051,30 @@ int main(int argc, char *argv[])
 							
 			}
 			
-			
+
 			MPI_Sendrecv(&No_of_Ghost_ECM_buffer[EAST], 1, MPI_INT, neighbours_ranks[EAST], 7, &No_of_Ghost_ECM[WEST],
         					1, MPI_INT, neighbours_ranks[WEST], 7, cart_comm, MPI_STATUS_IGNORE);
+			
 			
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
 						cart_comm, 0, 0, 
 					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
-
+			
         		MPI_Sendrecv(&No_of_Ghost_ECM_buffer[WEST], 1, MPI_INT, neighbours_ranks[WEST], 7, &No_of_Ghost_ECM[EAST],
         				1, MPI_INT, neighbours_ranks[EAST], 7, cart_comm, MPI_STATUS_IGNORE);
-
+			
+			
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
 						cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
 		  				ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+		  				ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 		  				ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+		  				ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 		  				ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 			
 			
@@ -3033,7 +3085,11 @@ int main(int argc, char *argv[])
 			cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 			cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
    			CudaErrorCheck();
-				
+			
+			cudaMemcpy(d_ECM_Vx + Num_ECM,  ECM_Vx_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vy + Num_ECM,  ECM_Vy_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vz + Num_ECM,  ECM_Vz_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();	
 				
 			cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
    			CudaErrorCheck();	
@@ -3065,8 +3121,13 @@ int main(int argc, char *argv[])
         		        
         		if ( Sending_Ghost_ECM_Num_total_NS > 0 ){
         			
+        			
+        			
 	        		Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_NS/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_NS, d_Ghost_ECM_ind_NORTH_SOUTH,
-	        										d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        										d_ECM_x, d_ECM_y, d_ECM_z,
+	        										d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+	        										d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        										d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer,
 	        										d_ECM_ind_glob, d_ECM_ind_buffer);
 
 				CudaErrorCheck();
@@ -3078,7 +3139,12 @@ int main(int argc, char *argv[])
    	
    				CudaErrorCheck();
    				
-   				cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(int),cudaMemcpyDeviceToHost);
    				CudaErrorCheck();		
 							
 			}
@@ -3090,7 +3156,9 @@ int main(int argc, char *argv[])
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
 						cart_comm, 0, 0, 
 					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -3098,9 +3166,11 @@ int main(int argc, char *argv[])
         				 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
 
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-						cart_comm, 0, 0, 
+						cart_comm, No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH],
 					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
         	
         		
@@ -3113,24 +3183,30 @@ int main(int argc, char *argv[])
    			
    			CudaErrorCheck();
    			
+   			
+   			cudaMemcpy(d_ECM_Vx + (Num_ECM + All_ECM),  ECM_Vx_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vy + (Num_ECM + All_ECM),  ECM_Vy_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vz + (Num_ECM + All_ECM),  ECM_Vz_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   			CudaErrorCheck();
+   			
    			cudaMemcpy(d_ECM_ind_glob + (Num_ECM + All_ECM),  ECM_ind_ecm, All_ECM_NS*sizeof(int),cudaMemcpyHostToDevice);
    			CudaErrorCheck();	
 			
    	
    			All_ECM += All_ECM_NS;
    			
-   			
+   			//printf("All_ECM is %d\n",All_ECM);
    			if( All_ECM > 0) UpdateNNlistWithGhostECM<<< (All_ECM/128) + 1,128>>>(Num_ECM, All_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
         									Xdiv_ecm, Ydiv_ecm, Subdivision_min, d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm,
         									d_ECM_ind_glob, d_ECM_Map_ind,
         									MaxNeighList_ecm); 
         	
-        		
         		All_ECM -= All_ECM_NS;
         	
-        	
-        		ECM_Connectivity_Update<<< (ECM_Num32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
-        	
+        		
+        		ECM_Connectivity_Update<<< (Num_Nei32/128) + 1,128>>>(Num_Nei32, d_ECM_Map_ind, d_ECM_neighbor, d_ECM_neighbor_updated);
+        		
         		CudaErrorCheck();
         	
         	}
@@ -3880,6 +3956,7 @@ int main(int argc, char *argv[])
    	
    			CudaErrorCheck();	
 							
+		
 		}
 			
    		MPI_Sendrecv(&No_of_Ghost_cells_buffer[NORTH], 1, MPI_INT, neighbours_ranks[NORTH], 17, &No_of_Ghost_cells[SOUTH],
@@ -4078,7 +4155,9 @@ int main(int argc, char *argv[])
         			Ghost_ECM_Pack_PBC_X<<<Sending_Ghost_ECM_Num_total_EW/256+1,256>>>(Sending_Ghost_ECM_Num_total_EW, No_of_Ghost_ECM_buffer[EAST],
         												d_Ghost_ECM_ind_EAST_WEST, boxMax, R_ghost_buffer_ECM,
         												d_ECM_x, d_ECM_y, d_ECM_z,
-													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+													d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer);
 
 				
 				CudaErrorCheck();
@@ -4088,6 +4167,11 @@ int main(int argc, char *argv[])
    				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				CudaErrorCheck();	
 							
 			}
@@ -4099,7 +4183,9 @@ int main(int argc, char *argv[])
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
 						cart_comm, 0, 0, 
 						ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 						ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 						ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -4109,7 +4195,9 @@ int main(int argc, char *argv[])
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
 						cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
 			  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+			  			ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 			  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+			  			ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 			  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 			
 			
@@ -4119,6 +4207,11 @@ int main(int argc, char *argv[])
  			cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 			cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 			cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   			CudaErrorCheck();
+   			
+   			cudaMemcpy(d_ECM_Vx + Num_ECM,  ECM_Vx_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vy + Num_ECM,  ECM_Vy_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vz + Num_ECM,  ECM_Vz_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
    			CudaErrorCheck();
    			
    			cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
@@ -4156,7 +4249,9 @@ int main(int argc, char *argv[])
         			Ghost_ECM_Pack_PBC_Y<<<Sending_Ghost_ECM_Num_total_NS/256+1,256>>>( Sending_Ghost_ECM_Num_total_NS, No_of_Ghost_ECM_buffer[NORTH],
         											d_Ghost_ECM_ind_NORTH_SOUTH, boxMax, R_ghost_buffer_ECM,
         											d_ECM_x, d_ECM_y, d_ECM_z,
-												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+        											d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+												d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer);
 
 				CudaErrorCheck();
 
@@ -4164,6 +4259,11 @@ int main(int argc, char *argv[])
    				cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   				cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    				CudaErrorCheck();				
 	
 							
@@ -4176,7 +4276,9 @@ int main(int argc, char *argv[])
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
 						cart_comm, 0, 0, 
 					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -4184,9 +4286,11 @@ int main(int argc, char *argv[])
         				 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
 
 			Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-						cart_comm, 0, 0, 
+						cart_comm, No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH],
 					  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
         	
         		
@@ -4196,6 +4300,12 @@ int main(int argc, char *argv[])
  			cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 			cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 			cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   			CudaErrorCheck();
+   			
+   			cudaMemcpy(d_ECM_Vx + (Num_ECM + All_ECM),  ECM_Vx_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vy + (Num_ECM + All_ECM),  ECM_Vy_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+			cudaMemcpy(d_ECM_Vz + (Num_ECM + All_ECM),  ECM_Vz_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
    			
    			CudaErrorCheck();
    			
@@ -4236,6 +4346,29 @@ int main(int argc, char *argv[])
   // cudaMemcpy(d_X, X, 192*No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
 
   
+  if(ECM && Num_ECM > 0) {
+        	
+        	//printf("I am here, Con Force\n");
+        	
+        	CalculateConForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z, 
+        								d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z,
+									d_ECM_neighbor_updated, d_Num_Nei_ECM,
+									d_R0_ECM, d_stiffness_ecm,
+									angleConstant_ecm, d_theta0_ECM,
+									d_ECM_neighbor);
+        
+        	CudaErrorCheck();
+        	
+        	
+        	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+								d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
+								d_ECM_neighbor_updated, d_Num_Nei_ECM,
+								vis_damp_ecm, gamma_env_ecm);                                                
+
+		CudaErrorCheck();                                                  	
+  	
+  }
+  
   if (No_of_C180s > 0 ){
   	
   		
@@ -4258,7 +4391,7 @@ int main(int argc, char *argv[])
                                                      		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
                                                      		MaxNeighList,
                                                      		ECM,
-                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_ECM_x, d_ECM_y, d_ECM_z,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, d_ECM_x, d_ECM_y, d_ECM_z,
                            						attraction_strength_ecm, attraction_range_ecm,
                            						repulsion_strength_ecm, repulsion_range_ecm,
                            						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
@@ -4281,9 +4414,9 @@ int main(int argc, char *argv[])
         	                                                	d_fDisList, d_ConFricForces, 
         	                                                	impurity,f_range, MaxNeighList,
         	                                                	ECM,
-                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
                                    					d_ECM_x, d_ECM_y, d_ECM_z,
-                                   					d_ECM_Vx, d_ECM_Vy,
+                                   					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
 				    					attraction_range_ecm, vis_ecm_cell,
                            	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
                            	    					MaxNeighList_ecm);
@@ -4304,26 +4437,7 @@ int main(int argc, char *argv[])
   	CudaErrorCheck();
   
     }
-	
-    
-    if(ECM && Num_ECM > 0) {
-        
-        	CalculateConForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z, 
-        								d_Con_ECM_force_x, d_Con_ECM_force_y,
-									d_ECM_neighbor_updated, d_Num_Nei_ECM,
-									d_R0_ECM, stiffness_ecm,
-									angleConstant_ecm, d_theta0_ECM);
-        
-        	CudaErrorCheck();
-        	
-        	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy, 
-								d_Dis_ECM_force_x, d_Dis_ECM_force_y,
-								d_ECM_neighbor_updated, d_Num_Nei_ECM,
-								vis_damp_ecm, gamma_env_ecm);                                                
 
-		CudaErrorCheck();                                                  	
-  	
-    }
     
     
     int lentrajfile, lenforceFile, lenvelFile, lencmFile, lenvcmFile, lenfcmFile, lenforFile, lentrajEcmFile; 
@@ -4393,7 +4507,8 @@ int main(int argc, char *argv[])
     	int t = nprocs*MaxNoofC180s;	
         
         if(write_traj_file){
-        
+        	
+        	
             	cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     		cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
     		cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -4959,10 +5074,12 @@ int main(int argc, char *argv[])
 	
 	if (ECM && Num_ECM > 0) { 
 			
-		Integrate_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_x, d_ECM_y, d_ECM_Vx, d_ECM_Vy, 
-                          					d_Con_ECM_force_x, d_Con_ECM_force_y, 
-                          					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
-                          					delta_t, mass_ecm, Num_ECM);
+		Integrate_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_x, d_ECM_y, d_ECM_z, 
+								d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+                          					d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z,
+                          					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
+                          					delta_t, mass_ecm, Num_ECM,
+                          					Clamped, d_clamped_node);
 		CudaErrorCheck();
 		
 	} 
@@ -5868,7 +5985,10 @@ int main(int argc, char *argv[])
         				if ( Sending_Ghost_ECM_Num_total_EW > 0 ){
         					
         					Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_EW/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_EW, d_Ghost_ECM_ind_EAST_WEST,
-        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        												d_ECM_x, d_ECM_y, d_ECM_z,
+        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+        												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        												d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer,
         												d_ECM_ind_glob, d_ECM_ind_buffer);
 	
 
@@ -5879,6 +5999,11 @@ int main(int argc, char *argv[])
    						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   						CudaErrorCheck();
+   						
+   						cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    						CudaErrorCheck();
    						
    						cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
@@ -5894,7 +6019,9 @@ int main(int argc, char *argv[])
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
 								cart_comm, 0, 0, 
 					  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  			ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  			ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -5904,7 +6031,9 @@ int main(int argc, char *argv[])
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
 								cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
 		  						ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+		  						ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 		  						ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+		  						ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 		  						ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 			
 			
@@ -5916,6 +6045,10 @@ int main(int argc, char *argv[])
 					cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
    					CudaErrorCheck();
 				
+				 	cudaMemcpy(d_ECM_Vx + Num_ECM,  ECM_Vx_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vy + Num_ECM,  ECM_Vy_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vz + Num_ECM,  ECM_Vz_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   					CudaErrorCheck();
 				
 				   	cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
    					CudaErrorCheck();
@@ -5949,7 +6082,10 @@ int main(int argc, char *argv[])
         				if ( Sending_Ghost_ECM_Num_total_NS > 0 ){
         			
 	        				Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_NS/256 + 1,256>>>( Sending_Ghost_ECM_Num_total_NS, d_Ghost_ECM_ind_NORTH_SOUTH,
-	        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        												d_ECM_x, d_ECM_y, d_ECM_z,
+	        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+	        												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        												d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer,
 	        												d_ECM_ind_glob, d_ECM_ind_buffer);
 
 						CudaErrorCheck();
@@ -5961,7 +6097,12 @@ int main(int argc, char *argv[])
    	
    						CudaErrorCheck();
    						
-   						cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(int),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						CudaErrorCheck();
+   						
+   						cudaMemcpy(ECM_ind_buffer,  d_ECM_ind_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(int),cudaMemcpyDeviceToHost);
    						CudaErrorCheck();		
 						
 							
@@ -5974,7 +6115,9 @@ int main(int argc, char *argv[])
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
 								cart_comm, 0, 0, 
 							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -5982,9 +6125,11 @@ int main(int argc, char *argv[])
         						 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
 
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-								cart_comm, 0, 0, 
+								cart_comm, No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], 
 							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
         	
         		
@@ -5994,6 +6139,13 @@ int main(int argc, char *argv[])
  					cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 					cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 					cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   					CudaErrorCheck();
+   					
+   					
+   					cudaMemcpy(d_ECM_Vx + (Num_ECM + All_ECM),  ECM_Vx_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vy + (Num_ECM + All_ECM),  ECM_Vy_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vz + (Num_ECM + All_ECM),  ECM_Vz_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
    			
    					CudaErrorCheck();
    					
@@ -6956,7 +7108,9 @@ int main(int argc, char *argv[])
         				Ghost_ECM_Pack_PBC_X<<<(Sending_Ghost_ECM_Num_total_EW/512)+1,512>>>(Sending_Ghost_ECM_Num_total_EW, No_of_Ghost_ECM_buffer[EAST],
         													d_Ghost_ECM_ind_EAST_WEST, boxMax, R_ghost_buffer_ECM,
         													d_ECM_x, d_ECM_y, d_ECM_z,
-														d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+        													d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+														d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+														d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer);
 
 				
 					CudaErrorCheck();
@@ -6966,6 +7120,11 @@ int main(int argc, char *argv[])
    					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   					CudaErrorCheck();
+   					
+   					cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					CudaErrorCheck();	
 							
 				}
@@ -6977,7 +7136,9 @@ int main(int argc, char *argv[])
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
 							cart_comm, 0, 0, 
 							ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 							ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 							ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -6987,7 +7148,9 @@ int main(int argc, char *argv[])
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
 							cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
 				  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+				  			ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 				  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+				  			ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 				  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 			
 			
@@ -6997,6 +7160,11 @@ int main(int argc, char *argv[])
  				cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(d_ECM_Vx + Num_ECM,  ECM_Vx_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vy + Num_ECM,  ECM_Vy_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vz + Num_ECM,  ECM_Vz_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
    				CudaErrorCheck();
    				
    				cudaMemcpy(d_ECM_ind_glob + Num_ECM,  ECM_ind_ecm, All_ECM_EW*sizeof(int),cudaMemcpyHostToDevice);
@@ -7031,7 +7199,9 @@ int main(int argc, char *argv[])
         				Ghost_ECM_Pack_PBC_Y<<<(Sending_Ghost_ECM_Num_total_NS/512)+1,512>>>( Sending_Ghost_ECM_Num_total_NS, No_of_Ghost_ECM_buffer[NORTH],
         												d_Ghost_ECM_ind_NORTH_SOUTH, boxMax, R_ghost_buffer_ECM,
         												d_ECM_x, d_ECM_y, d_ECM_z,
-													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+													d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer);
 
 					CudaErrorCheck();
 
@@ -7039,6 +7209,11 @@ int main(int argc, char *argv[])
    					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   					CudaErrorCheck();
+   					
+   					cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					CudaErrorCheck();				
 	
 							
@@ -7051,7 +7226,9 @@ int main(int argc, char *argv[])
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
 							cart_comm, 0, 0, 
 						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -7059,9 +7236,11 @@ int main(int argc, char *argv[])
         					 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
 
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-							cart_comm, 0, 0, 
+							cart_comm, No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH],
 						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
         	
         		
@@ -7071,6 +7250,12 @@ int main(int argc, char *argv[])
  				cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(d_ECM_Vx + (Num_ECM + All_ECM),  ECM_Vx_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vy + (Num_ECM + All_ECM),  ECM_Vy_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vz + (Num_ECM + All_ECM),  ECM_Vz_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
    			
    				CudaErrorCheck();
    				
@@ -7314,7 +7499,10 @@ int main(int argc, char *argv[])
         				if ( Sending_Ghost_ECM_Num_total_EW > 0 ){
         					
         					Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_EW/512 + 1,512>>>( Sending_Ghost_ECM_Num_total_EW, d_Ghost_ECM_ind_EAST_WEST,
-        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        												d_ECM_x, d_ECM_y, d_ECM_z,
+        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, 
+        												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+        												d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer,
         												d_ECM_ind_glob, d_ECM_ind_buffer);
 	
 
@@ -7325,6 +7513,11 @@ int main(int argc, char *argv[])
    						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   						CudaErrorCheck();
+   						
+   						cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    						CudaErrorCheck();	
 							
 					}
@@ -7336,7 +7529,9 @@ int main(int argc, char *argv[])
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
 								cart_comm, 0, 0, 
 					  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+					  			ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 					  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+					  			ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 					  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -7346,7 +7541,9 @@ int main(int argc, char *argv[])
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
 								cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
 		  						ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+		  						ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 		  						ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+		  						ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 		  						ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 			
  			
@@ -7355,13 +7552,21 @@ int main(int argc, char *argv[])
 					cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
    					CudaErrorCheck();
 			
+			 		cudaMemcpy(d_ECM_Vx + Num_ECM,  ECM_Vx_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vy + Num_ECM,  ECM_Vy_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vz + Num_ECM,  ECM_Vz_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   					CudaErrorCheck();
+			
 					//north-south
 			
         		        
         				if ( Sending_Ghost_ECM_Num_total_NS > 0 ){
         			
 	        				Ghost_ECM_Pack<<<Sending_Ghost_ECM_Num_total_NS/512 + 1,512>>>( Sending_Ghost_ECM_Num_total_NS, d_Ghost_ECM_ind_NORTH_SOUTH,
-	        												d_ECM_x, d_ECM_y, d_ECM_z, d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        												d_ECM_x, d_ECM_y, d_ECM_z, 
+	        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+	        												d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+	        												d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer,
 	        												d_ECM_ind_glob, d_ECM_ind_buffer);
 
 						CudaErrorCheck();
@@ -7371,7 +7576,13 @@ int main(int argc, char *argv[])
    						cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
    						cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
    	
-   						CudaErrorCheck();		
+   						CudaErrorCheck();	
+   						
+   						cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_NS*sizeof(float),cudaMemcpyDeviceToHost);
+   						CudaErrorCheck();
+   							
 							
 					}
 
@@ -7382,7 +7593,9 @@ int main(int argc, char *argv[])
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
 								cart_comm, 0, 0, 
 							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -7390,9 +7603,11 @@ int main(int argc, char *argv[])
         						 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
 
 					Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-								cart_comm, 0, 0, 
+								cart_comm, No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH],
 							  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 							  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 							  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
         	
         		
@@ -7402,6 +7617,13 @@ int main(int argc, char *argv[])
  					cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM_EW),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 					cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM_EW),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 					cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM_EW),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   					CudaErrorCheck();
+        	
+        	
+        	 			cudaMemcpy(d_ECM_Vx + (Num_ECM + All_ECM_EW),  ECM_Vx_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vy + (Num_ECM + All_ECM_EW),  ECM_Vy_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+					cudaMemcpy(d_ECM_Vz + (Num_ECM + All_ECM_EW),  ECM_Vz_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
    			
    					CudaErrorCheck();
         	
@@ -7648,7 +7870,9 @@ int main(int argc, char *argv[])
         				Ghost_ECM_Pack_PBC_X<<<(Sending_Ghost_ECM_Num_total_EW/512)+1,512>>>(Sending_Ghost_ECM_Num_total_EW, No_of_Ghost_ECM_buffer[EAST],
         													d_Ghost_ECM_ind_EAST_WEST, boxMax, R_ghost_buffer_ECM,
         													d_ECM_x, d_ECM_y, d_ECM_z,
-														d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+        													d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+														d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+														d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer);
 
 				
 					CudaErrorCheck();
@@ -7658,6 +7882,11 @@ int main(int argc, char *argv[])
    					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   					CudaErrorCheck();
+   					
+   					cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					CudaErrorCheck();	
 							
 				}
@@ -7669,7 +7898,9 @@ int main(int argc, char *argv[])
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST], neighbours_ranks[EAST], neighbours_ranks[WEST], 12,
 							cart_comm, 0, 0, 
 							ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+							ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 							ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+							ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 							ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -7679,13 +7910,20 @@ int main(int argc, char *argv[])
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[WEST], No_of_Ghost_ECM[EAST], neighbours_ranks[WEST], neighbours_ranks[EAST], 12,
 							cart_comm, No_of_Ghost_ECM_buffer[EAST], No_of_Ghost_ECM[WEST],
 				  			ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+				  			ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 				  			ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+				  			ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 				  			ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 			
  			
  				cudaMemcpy(d_ECM_x + Num_ECM,  ECM_x_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_y + Num_ECM,  ECM_y_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_z + Num_ECM,  ECM_z_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(d_ECM_Vx + Num_ECM,  ECM_Vx_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vy + Num_ECM,  ECM_Vy_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vz + Num_ECM,  ECM_Vz_ecm, All_ECM_EW*sizeof(float),cudaMemcpyHostToDevice);
    				CudaErrorCheck();
 			
 				// north-south
@@ -7695,7 +7933,9 @@ int main(int argc, char *argv[])
         				Ghost_ECM_Pack_PBC_Y<<<(Sending_Ghost_ECM_Num_total_NS/512)+1,512>>>( Sending_Ghost_ECM_Num_total_NS, No_of_Ghost_ECM_buffer[NORTH],
         												d_Ghost_ECM_ind_NORTH_SOUTH, boxMax, R_ghost_buffer_ECM,
         												d_ECM_x, d_ECM_y, d_ECM_z,
-													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer);
+        												d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+													d_ECM_x_buffer, d_ECM_y_buffer, d_ECM_z_buffer,
+													d_ECM_Vx_buffer, d_ECM_Vy_buffer, d_ECM_Vz_buffer);
 
 					CudaErrorCheck();
 
@@ -7703,6 +7943,11 @@ int main(int argc, char *argv[])
    					cudaMemcpy(ECM_y_buffer,  d_ECM_y_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					cudaMemcpy(ECM_z_buffer,  d_ECM_z_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    	
+   					CudaErrorCheck();
+   					
+   					cudaMemcpy(ECM_Vx_buffer,  d_ECM_Vx_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vy_buffer,  d_ECM_Vy_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
+   					cudaMemcpy(ECM_Vz_buffer,  d_ECM_Vz_buffer, Sending_Ghost_ECM_Num_total_EW*sizeof(float),cudaMemcpyDeviceToHost);
    					CudaErrorCheck();				
 	
 							
@@ -7715,7 +7960,9 @@ int main(int argc, char *argv[])
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH], neighbours_ranks[NORTH], neighbours_ranks[SOUTH], 15,
 							cart_comm, 0, 0, 
 						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
 	
 
@@ -7723,15 +7970,23 @@ int main(int argc, char *argv[])
         					 1, MPI_INT, neighbours_ranks[NORTH], 17, cart_comm, MPI_STATUS_IGNORE);
 
 				Send_Recv_ghost_ECM( No_of_Ghost_ECM_buffer[SOUTH], No_of_Ghost_ECM[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 12,
-							cart_comm, 0, 0, 
+							cart_comm, No_of_Ghost_ECM_buffer[NORTH], No_of_Ghost_ECM[SOUTH],
 						  	ECM_x_buffer, ECM_y_buffer, ECM_z_buffer,
+						  	ECM_Vx_buffer, ECM_Vy_buffer, ECM_Vz_buffer,
 						  	ECM_x_ecm, ECM_y_ecm, ECM_z_ecm,
+						  	ECM_Vx_ecm, ECM_Vy_ecm, ECM_Vz_ecm,
 						  	ind_comm, ECM_ind_buffer, ECM_ind_ecm);
    			
  
  				cudaMemcpy(d_ECM_x + (Num_ECM + All_ECM_EW),  ECM_x_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_y + (Num_ECM + All_ECM_EW),  ECM_y_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
 				cudaMemcpy(d_ECM_z + (Num_ECM + All_ECM_EW),  ECM_z_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+   			
+   				CudaErrorCheck();
+   				
+   				cudaMemcpy(d_ECM_Vx + (Num_ECM + All_ECM_EW),  ECM_Vx_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vy + (Num_ECM + All_ECM_EW),  ECM_Vy_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
+				cudaMemcpy(d_ECM_Vz + (Num_ECM + All_ECM_EW),  ECM_Vz_ecm, All_ECM_NS*sizeof(float),cudaMemcpyHostToDevice);
    			
    				CudaErrorCheck();
 
@@ -7783,20 +8038,25 @@ int main(int argc, char *argv[])
 
 
  if(ECM && Num_ECM > 0) {
-       
+       	
+       	cudaMemset(d_Con_ECM_force_x, 0, MaxNoofECMs*sizeof(float));
+  		cudaMemset(d_Con_ECM_force_y, 0, MaxNoofECMs*sizeof(float));
+  		cudaMemset(d_Con_ECM_force_z, 0, MaxNoofECMs*sizeof(float));
+  		CudaErrorCheck();
        	
        	CalculateConForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_x, d_ECM_y, d_ECM_z, 
-       								d_Con_ECM_force_x, d_Con_ECM_force_y,
+       								d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z,
 									d_ECM_neighbor_updated, d_Num_Nei_ECM,
-									d_R0_ECM, stiffness_ecm,
-									angleConstant_ecm, d_theta0_ECM);
+									d_R0_ECM, d_stiffness_ecm,
+									angleConstant_ecm, d_theta0_ECM,
+									d_ECM_neighbor);
         
        	CudaErrorCheck();
        
 
         	
-        	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy,
-									d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+        	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+									d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
 									d_ECM_neighbor_updated, d_Num_Nei_ECM,
 									vis_damp_ecm, gamma_env_ecm);                                                
 
@@ -7825,7 +8085,7 @@ int main(int argc, char *argv[])
                                		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
                                		                      	MaxNeighList,
                                		                      	ECM,
-                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z,
                                                      		d_ECM_x, d_ECM_y, d_ECM_z,
                            						attraction_strength_ecm, attraction_range_ecm,
                            						repulsion_strength_ecm, repulsion_range_ecm,
@@ -7849,9 +8109,9 @@ int main(int argc, char *argv[])
                        	                                 	d_fDisList, d_ConFricForces,
                        	                                 	impurity,f_range,MaxNeighList,
                        	                                 	ECM,
-                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
                                    					d_ECM_x, d_ECM_y, d_ECM_z,
-                                   					d_ECM_Vx, d_ECM_Vy,
+                                   					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
 				    					attraction_range_ecm, vis_ecm_cell,
                            	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
                            	    					MaxNeighList_ecm);
@@ -7883,21 +8143,23 @@ int main(int argc, char *argv[])
   if(ECM && Num_ECM > 0) {  
 
 
-		VelocityUpdateA_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_Vx, d_ECM_Vy, 
-                                				d_Con_ECM_force_x, d_Con_ECM_force_y, delta_t, Num_ECM, mass_ecm);
+		VelocityUpdateA_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+                                				d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, delta_t, Num_ECM, mass_ecm,
+                                				Clamped, d_clamped_node);
       	
       		CudaErrorCheck();  
       		
       		
-      		VelocityUpdateB_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_Vx, d_ECM_Vy, 
-                                				     d_Dis_ECM_force_x, d_Dis_ECM_force_y,
-                                				     delta_t, Num_ECM, mass_ecm);
+      		VelocityUpdateB_ECM<<<(Num_ECM/256)+1,256>>>(d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+                                				     d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
+                                				     delta_t, Num_ECM, mass_ecm,
+                                				     Clamped, d_clamped_node);
           		
           	CudaErrorCheck();
 
         	
-          	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy,
-          								d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+          	CalculateDisForce_ECM<<<(Num_ECM/128)+1,128>>>( Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+          								d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
 									d_ECM_neighbor_updated, d_Num_Nei_ECM,
 									vis_damp_ecm, gamma_env_ecm);                                                
 
@@ -7922,9 +8184,9 @@ int main(int argc, char *argv[])
                	                                         	d_fDisList, d_ConFricForces, 
                	                                         	impurity,f_range, MaxNeighList,
                	                                         	ECM,
-                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
                                    					d_ECM_x, d_ECM_y, d_ECM_z,
-                                   					d_ECM_Vx, d_ECM_Vy,
+                                   					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
 				    					attraction_range_ecm, vis_ecm_cell,
                            	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
                            	    					MaxNeighList_ecm);
@@ -8351,12 +8613,12 @@ int main(int argc, char *argv[])
      		if(Num_ECM > 0){
      			
      			reductionblocks =  (Num_ECM - 1)/1024+1;
-      			SysCMpost_ECM<<<reductionblocks,1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, 
-					   			d_SysCx_ecm, d_SysCy_ecm);
+      			SysCMpost_ECM<<<reductionblocks,1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+					   			d_SysCx_ecm, d_SysCy_ecm, d_SysCz_ecm);
       			CudaErrorCheck();
       			
       			SysCM_ecm<<<1,1024>>>(Num_ECM, reductionblocks,
-        				    	d_SysCx_ecm, d_SysCy_ecm,
+        				    	d_SysCx_ecm, d_SysCy_ecm, d_SysCz_ecm,
 					    	d_sysVCM_ecm);
       
      			CudaErrorCheck(); 
@@ -8400,7 +8662,7 @@ int main(int argc, char *argv[])
         	
         	*h_sysCM_All.x = (*h_sysCM_All.x*mass*180 + *h_sysCM_All_ecm.x*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
         	*h_sysCM_All.y = (*h_sysCM_All.y*mass*180 + *h_sysCM_All_ecm.y*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
-        	//*h_sysCM_All.x = (*h_sysCM_All.z*mass*180 + *h_sysCM_All_ecm.z*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
+        	*h_sysCM_All.x = (*h_sysCM_All.z*mass*180 + *h_sysCM_All_ecm.z*mass_ecm)/(No_cells_All*mass*180 + No_nodes_All*mass_ecm);
         		
       	
       	}
@@ -8421,7 +8683,7 @@ int main(int argc, char *argv[])
   	
   	if (ECM && Num_ECM > 0){
       
-            	CorrectCoMVelocity_ecm<<<Num_ECM/1024 + 1, 1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_sysCM_All);
+            	CorrectCoMVelocity_ecm<<<Num_ECM/1024 + 1, 1024>>>(Num_ECM, d_ECM_Vx, d_ECM_Vy, d_ECM_Vz, d_sysCM_All);
           
      		 CudaErrorCheck(); 
       
@@ -9218,9 +9480,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   		centerZ = 0.5*boxMax.z;
   			
   		float3 CM;
-  		float yoffset;
-  		yoffset = BoxMin.y + 1;
- 		if (LineCenter == 1) yoffset = centerY; 
+  		float xoffset;
+  		xoffset = BoxMin.x + 1;
+ 		if (LineCenter == 1) xoffset = centerX; 
 
   		if (colloidal_dynamics){
   
@@ -9336,7 +9598,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
                        		               rands[1]*((boxMax.y - BoxMin.y) - 1.f)  + BoxMin.y + 1.f,
                        	               	0.f);
         	      			if (flatbox == 1){
-        	         			 CM.z = (boxMax.z - BoxMin.z)/2;
+        	         			CM.z = (boxMax.z - BoxMin.z)/2;
         	      			} else {
         	          			CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
         	      			}
@@ -9427,8 +9689,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 				for ( cell = 0; cell < Orig_Cells ; cell++ )
         	        	{
         	                         
-        	   			CM.x = L*cell + 0.5*L + BoxMin.x;
-        	    		      	CM.y = yoffset;
+        	    		      	CM.x = xoffset;
+        	  		      	CM.y = L*cell + 0.5*L + BoxMin.y;
         	  		      	CM.z = centerZ;
 					allCMs[cell] = CM; 
 	
@@ -9574,10 +9836,13 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
         	 		{
         	 			 ey=cell%Side_length;
         				 ex=cell/Side_length;
-        	          		 CM.x = L1*ex + 0.5*L1 + centerX;
-        	          		 CM.y = L1*ey + 0.5*L1 + centerY;
+        	          		 //CM.x = L1*ex + 0.5*L1 + centerX;
+        	          		 //CM.y = L1*ey + 0.5*L1 + centerY;
+        	          		 CM.x = L1*ex + centerX;
+        	          		 CM.y = L1*ey + centerY;
         	          		 CM.z = centerZ;
         	          		 allCMs[cell] = CM;
+        	          		 
 
         	  		}  
 	
@@ -9765,12 +10030,6 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 			AllCMsZ[i] = allCMs[i].z;
 			
 		}
-
-
-	   	if(impurity){
-
-
-   		}
 
 	}
 
@@ -10571,6 +10830,7 @@ int generate_random(int no_of_ran1_vectors)
 int read_ECM(void)
 {
 
+
   Num_All_ECM = 0;
   Num_ECM = 0;
   
@@ -10607,6 +10867,7 @@ int read_ECM(void)
   ECM_Num32 = (Num_All_ECM / 32) * 32 + 32;
   
   if (nprocs > 1) {
+  	
   	MaxNoofECMs = ( ( 2*Num_All_ECM/nprocs ) / 32 ) * 32 + 32;
   	printf("Max ECM: %d\n", MaxNoofECMs);
   
@@ -10620,7 +10881,7 @@ int read_ECM(void)
   ECM_ind_buffer = (int *)calloc(BufferSize_ECM,sizeof(int));
   ECM_ind_ecm = (int *)calloc(BufferSize_ECM,sizeof(int));
   
-  
+  All_ECM_ind_glob = (int *)calloc(Num_All_ECM,sizeof(int));
   All_ECM_x = (float *)calloc(Num_All_ECM,sizeof(float));
   All_ECM_y = (float *)calloc(Num_All_ECM,sizeof(float));
   All_ECM_z = (float *)calloc(Num_All_ECM,sizeof(float));
@@ -10635,14 +10896,27 @@ int read_ECM(void)
   
   h_Con_ECM_force_x = (float *)calloc(MaxNoofECMs,sizeof(float));
   h_Con_ECM_force_y = (float *)calloc(MaxNoofECMs,sizeof(float));
+  h_Con_ECM_force_z = (float *)calloc(MaxNoofECMs,sizeof(float));
   	
   ECM_x_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
   ECM_y_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
-  ECM_z_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));	
+  ECM_z_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
+  
+  ECM_Vx_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_Vy_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_Vz_buffer = (float *)calloc(BufferSize_ECM,sizeof(float));	
   
   ECM_x_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
   ECM_y_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
   ECM_z_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  
+  ECM_Vx_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_Vy_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  ECM_Vz_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  
+  //ECM_x_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  //ECM_y_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
+  //ECM_z_ecm = (float *)calloc(BufferSize_ECM,sizeof(float));
   
   Num_Nei_ECM_All = (int *)calloc(Num_All_ECM,sizeof(int));
   ECM_neighbor_All = (int *)calloc(Num_All_ECM*32,sizeof(int));
@@ -10704,8 +10978,8 @@ int read_ECM(void)
 		
 		
 	MPI_Bcast(All_ECM_x, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
-	MPI_Bcast(All_ECM_x, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
-	MPI_Bcast(All_ECM_x, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(All_ECM_y, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
+	MPI_Bcast(All_ECM_z, Num_All_ECM, MPI_FLOAT, 0, cart_comm);
 	
 	MPI_Bcast(Num_Nei_ECM_All, Num_All_ECM, MPI_INT, 0, cart_comm);
 	MPI_Bcast(ECM_neighbor_All, Num_All_ECM*32, MPI_INT, 0, cart_comm);
@@ -10739,9 +11013,11 @@ int read_ECM(void)
        	
        	
        	}      		
-       		
+	
+   	
    	}
-   		
+   	
+   	//printf("number of ECM node in GPU: %d, is %d", rank, c);	
    	
    	Num_ECM = c;
    	
@@ -10749,37 +11025,62 @@ int read_ECM(void)
    	
    	Num_Nei_ECM = (int *)calloc(Num_ECM,sizeof(int));
    	ECM_neighbor = (int *)calloc(Num_Nei32,sizeof(int));
+	clamped_node = (int *)calloc(Num_ECM,sizeof(int));
 	h_R0_ECM = (float *)calloc(Num_Nei32,sizeof(float));
-	h_theta0_ECM.ak = (float *)calloc(Num_Nei32,sizeof(float));
-	h_theta0_ECM.ai = (float *)calloc(Num_Nei32,sizeof(float));
-	h_theta0_ECM.aj = (float *)calloc(Num_Nei32,sizeof(float));
+	h_stiffness_ecm = (float *)calloc(Num_Nei32,sizeof(float));
+	h_theta0_ECM = (float *)calloc(Num_Nei32,sizeof(float));
+	
    	
    	int k;
+   	float x_clamp, y_clamp;
    	for (int i = 0; i < Num_ECM; i++){
    	
    		k = ECM_ind_glob[i];
    		Num_Nei_ECM[i] = Num_Nei_ECM_All[k];
    		
-   		for (int j = 0; j < 32; j++) ECM_neighbor[i*32+j] = ECM_neighbor_All[k*32+j]; 
-
+   		for (int j = 0; j < 32; j++){
+   		
+   		 	ECM_neighbor[i*32+j] = ECM_neighbor_All[k*32+j]; 
+   		
+   		}
+   		
+   		x_clamp = ECM_x[i];
+   		y_clamp = ECM_y[i];
+   		
+		if (x_clamp <= 0.3 || x_clamp >= boxMax.x - 0.3 || y_clamp <= 0.3 || y_clamp >= boxMax.y - 0.3){
+		
+			clamped_node[i] = 1;
+		
+		} else {
+		
+			clamped_node[i] = 0;
+			
+		}
+   	
    	}
    	
    	for (int i = 0; i < Num_ECM; ++i){
+      		
       		
       		k = Num_Nei_ECM[i];
       		
       		ECM_neighbor[i*32 + k] = ECM_neighbor[i*32];
       		for (int j = k+1; j < 32; ++j) ECM_neighbor[i*32+j] = -1;
    	
+   	
    	}
    	
    	
    	float3 a, b;
    	int Nei;
+   	int steep = 21;
+   	float L_box = boxMax.x - BoxMin.x;
+   	float stiff_diff = (stiffness_ecm_max - stiffness_ecm_min)/(steep - 1);
+
    	for (int i = 0; i < Num_ECM; ++i){
       		
       		k = ECM_ind_glob[i];
-      		a = make_float3(ECM_x[k], ECM_y[k], ECM_z[k]);
+      		a = make_float3(All_ECM_x[k], All_ECM_y[k], All_ECM_z[k]);
       		
       		for (int j=0; j < 32; ++j){
       		
@@ -10787,8 +11088,16 @@ int read_ECM(void)
       			
       			if(Nei > -1){      		 
       				
-      				b = make_float3(ECM_x[Nei], ECM_y[Nei], ECM_z[Nei]);
+      				b = make_float3(All_ECM_x[Nei], All_ECM_y[Nei], All_ECM_z[Nei]);
       				h_R0_ECM[i*32+j] = mag(a-b);
+      				
+      				if ( h_R0_ECM[i*32+j] > 10 ) printf("oh shit, fix me, R: %f\n",h_R0_ECM[i*32+j]);
+      				
+      				float loc_edges = (All_ECM_x[k] + All_ECM_x[Nei])/2;
+      				
+      				int edge_mode_loc =  (int) ((loc_edges/L_box)*steep);
+      				h_stiffness_ecm[i*32+j] = stiffness_ecm_min + stiff_diff*edge_mode_loc;
+      				
       			
       			}
       		
@@ -10797,13 +11106,15 @@ int read_ECM(void)
   	}
    	
    	float3 nck, nci, ncj;
-   	float3 ni, nj, nk;
+   	float3 ni, nj;
+   	//float3 nk;
    	int Ni, Nj;
+   	float ang;
    	
    	for (int i = 0; i < Num_ECM; ++i){
       		
       		k = ECM_ind_glob[i];
-      		nck = make_float3(ECM_x[k], ECM_y[k], ECM_z[k]);
+      		nck = make_float3(All_ECM_x[k], All_ECM_y[k], All_ECM_z[k]);
       		
       		for (int j=0; j < 32; ++j){
   			
@@ -10812,26 +11123,19 @@ int read_ECM(void)
   			
         		if(Nj > -1){
         		
-        			nci = make_float3(ECM_x[Ni], ECM_y[Ni], ECM_z[Ni]); 
-          			ncj = make_float3(ECM_x[Nj], ECM_y[Nj], ECM_z[Nj]);
+        			nci = make_float3(All_ECM_x[Ni], All_ECM_y[Ni], All_ECM_z[Ni]); 
+          			ncj = make_float3(All_ECM_x[Nj], All_ECM_y[Nj], All_ECM_z[Nj]);
           
           			
           			ni = nci-nck;
           			nj = ncj-nck;
-
-          			h_theta0_ECM.ak[i*32+j] = acos(dot(ni, nj)/(mag(ni)*mag(nj)));
           			
-          			nj = ncj - nci;
-          			nk = nck - nci;
+          			ang = dot(ni, nj)/(mag(ni)*mag(nj));
+				
+				if ( ang < -0.995f ) ang = -0.995f;                   
+    				if ( ang > +0.995f ) ang = +0.995f; 
           			
-          			h_theta0_ECM.ai[i*32+j] = acos(dot(nj, nk)/(mag(nj)*mag(nk)));
-          			
-          			ni = nci - ncj;
-          			nk = nck - ncj;  
-          			
-          			h_theta0_ECM.aj[i*32+j] = acos(dot(ni, nk)/(mag(ni)*mag(nk)));
-          			
-          			
+				h_theta0_ECM[i*32+j] = acos(ang);
           		
           		
           		}
@@ -10845,16 +11149,19 @@ int read_ECM(void)
 	
   } else {
 
+  	
   	Num_ECM = Num_All_ECM;
   	Num_Nei32 = Num_ECM*32;
   	        
   	Num_Nei_ECM = (int *)calloc(Num_ECM,sizeof(int));
    	ECM_neighbor = (int *)calloc(Num_Nei32,sizeof(int));
+   	clamped_node = (int *)calloc(Num_ECM,sizeof(int));
    	h_R0_ECM = (float *)calloc(Num_Nei32,sizeof(float));
-   	h_theta0_ECM.ak = (float *)calloc(Num_Nei32,sizeof(float));
-	h_theta0_ECM.ai = (float *)calloc(Num_Nei32,sizeof(float));
-	h_theta0_ECM.aj = (float *)calloc(Num_Nei32,sizeof(float));
+   	h_stiffness_ecm = (float *)calloc(Num_Nei32,sizeof(float));
+   	h_theta0_ECM = (float *)calloc(Num_Nei32,sizeof(float));
   	
+  	
+  	float x_clamp, y_clamp;
   	for (int i = 0; i < Num_All_ECM; i++){
   		
   		ECM_x[i] =  All_ECM_x[i];
@@ -10863,6 +11170,18 @@ int read_ECM(void)
   		
   		ECM_Map_ind[i] = i;
   		ECM_ind_glob[i] = i;
+  		
+  		x_clamp = ECM_x[i];
+   		y_clamp = ECM_y[i];
+   		
+		if (x_clamp <= 0.3 || x_clamp >= boxMax.x - 0.3 || y_clamp <= 0.3 || y_clamp >= boxMax.y - 0.3){
+		
+			clamped_node[i] = 1;
+		} else {
+		
+			clamped_node[i] = 0;
+			
+		}
   	
   	}
         
@@ -10885,8 +11204,13 @@ int read_ECM(void)
   	
   	}
   	  
+     	
      	float3 a, b;
    	int Nei;
+   	int steep = 21;
+   	float L_box = boxMax.x - BoxMin.x;
+   	float stiff_diff = (stiffness_ecm_max - stiffness_ecm_min)/(steep - 1);
+   	
    	for (int i = 0; i < Num_ECM; ++i){
       		
       		k = ECM_ind_glob[i];
@@ -10902,6 +11226,12 @@ int read_ECM(void)
       				b = make_float3(ECM_x[Nei], ECM_y[Nei], ECM_z[Nei]);
       			
       				h_R0_ECM[i*32+j] = mag(a-b);
+      				
+      				float loc_edges = (ECM_x[k] + ECM_x[Nei])/2;
+      				
+      				int edge_mode_loc =  (int) ((loc_edges/L_box)*steep);      				
+      				h_stiffness_ecm[i*32+j] = stiffness_ecm_min + stiff_diff*edge_mode_loc;
+      				
       			
       			}
       		
@@ -10911,7 +11241,8 @@ int read_ECM(void)
   	
   	
   	float3 nck, nci, ncj;
-  	float3 nk, ni, nj;
+  	float3 ni, nj;
+   	//float3 nk;
    	int Ni, Nj;
    	float ang;
    	
@@ -10929,7 +11260,8 @@ int read_ECM(void)
         		
         			nci = make_float3(ECM_x[Ni], ECM_y[Ni], ECM_z[Ni]); 
           			ncj = make_float3(ECM_x[Nj], ECM_y[Nj], ECM_z[Nj]);
-          
+
+
           			ni = nci-nck;
           			nj = ncj-nck;
 				ang = dot(ni, nj)/(mag(ni)*mag(nj));
@@ -10937,35 +11269,8 @@ int read_ECM(void)
 				if ( ang < -0.995f ) ang = -0.995f;                   
     				if ( ang > +0.995f ) ang = +0.995f; 
     				
-          			h_theta0_ECM.ak[i*32+j] = acos(ang);
-          			
-          			
-          			
-          			nj = ncj - nci;
-          			nk = nck - nci;		
-				ang = dot(nj, nk)/(mag(nj)*mag(nk));
-				
-				if ( ang < -0.995f ) ang = -0.995f;                   
-    				if ( ang > +0.995f ) ang = +0.995f; 
-          			
-          			h_theta0_ECM.ai[i*32+j] = acos(ang);
-          			
-          			
-          			
-          			ni = nci - ncj;
-          			nk = nck - ncj;  
-          			
-          			ang = dot(ni, nk)/(mag(ni)*mag(nk));
-				
-				if ( ang < -0.995f ) ang = -0.995f;                   
-    				if ( ang > +0.995f ) ang = +0.995f; 
-          			
-          			h_theta0_ECM.aj[i*32+j] = acos(ang);
-          			
-          			
-          			
-          			//float test_ang = dot(ni, nj)/(mag(ni)*mag(nj));
-          			//if(test_ang > 1 || test_ang < -1) printf("shit. angle: %f\n",test_ang);
+          			h_theta0_ECM[i*32+j] = acos(ang);
+          
           		}
           		
 		
@@ -10976,7 +11281,9 @@ int read_ECM(void)
   
   }
 
+
   return(0);
+
 
 }
 
@@ -11266,12 +11573,15 @@ int read_json_params(const char* inpFile){
     } else{
 	
 	ECM = ECMparams["ECM"].asBool();
+	Clamped = ECMparams["clamped"].asBool();
 	MaxNoofECMs = ECMparams["Max_ECM_nodes"].asInt();
 	DL_ecm = ECMparams["Div_size"].asFloat();
 	Max_Buffer_ECM = ECMparams["Buffer_size"].asInt();
 	MaxNeighList_ecm = ECMparams["MaxNeighList"].asInt();
 	mass_ecm = ECMparams["mass"].asFloat();
-	stiffness_ecm = ECMparams["stiffness"].asFloat()*1000;
+	stiffness_ecm_min = ECMparams["stiffness_min"].asFloat()*1000;
+	stiffness_ecm_max = ECMparams["stiffness_max"].asFloat()*1000;
+	angleConstant_ecm = ECMparams["stiffness"].asFloat()*1000;
 	vis_damp_ecm = ECMparams["vis_damp"].asFloat();
 	gamma_env_ecm = ECMparams["gamma_env"].asFloat();
 	vis_ecm_cell = ECMparams["vis_ecm_cell"].asFloat();
@@ -12177,56 +12487,145 @@ void WriteBinaryTrajECM(int t_step, FILE* traj, int frameCount){
     
     float x_e, y_e, z_e;
     int Ind_e;
-    	    
-    for (int i = 0; i < nprocs; i++){
-    		
-	if (i !=0 && nprocs > 1) { 
-	
-	    	ECM_x_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
-    		ECM_y_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
-    		ECM_z_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
-    		ECM_Index_OtherGPU = (int*)malloc(sizeof(int)*numberofECMs_InGPUs[i]);
     
-    		MPI_Recv(ECM_x_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(ECM_y_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(ECM_z_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
-    		MPI_Recv(ECM_Index_OtherGPU, numberofECMs_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    if ( nprocs > 1) {
+    
+    	for (int i = 0; i < nprocs; i++){
+    		
+    		if (i == 0) {
+    				
+    			for (int c = 0; c < numberofECMs_InGPUs[i]; c++){
+    				
+    				Ind_e = ECM_ind_glob[c];
+    				
+    				All_ECM_x[Ind_e] = ECM_x[c];
+    				All_ECM_y[Ind_e] = ECM_y[c];
+    				All_ECM_z[Ind_e] = ECM_z[c];
+    				All_ECM_ind_glob[Ind_e] = Ind_e;
+    			}
+    			
+   		
+   		} else {
 
-	}
-
-	for (int c = 0; c < numberofECMs_InGPUs[i]; c++){
 	
-	
-		if (i == 0) {
-		
-			x_e = ECM_x[c];
-			y_e = ECM_y[c];
-        		z_e = ECM_z[c];
-        		Ind_e = ECM_ind_glob[c];
+	    		ECM_x_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+    			ECM_y_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+    			ECM_z_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+    			ECM_Index_OtherGPU = (int*)malloc(sizeof(int)*numberofECMs_InGPUs[i]);
+    
+    			MPI_Recv(ECM_x_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(ECM_y_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(ECM_z_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    			MPI_Recv(ECM_Index_OtherGPU, numberofECMs_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				
+    			for (int c = 0; c < numberofECMs_InGPUs[i]; c++){
+    			
+    				Ind_e = ECM_Index_OtherGPU[c];
+    				
+    				All_ECM_x[Ind_e] = ECM_x_OtherGPU[c];
+    				All_ECM_y[Ind_e] = ECM_y_OtherGPU[c];
+    				All_ECM_z[Ind_e] = ECM_z_OtherGPU[c];
+    				All_ECM_ind_glob[Ind_e] = Ind_e;
+    				
+    			}
+    		
+    		}
+    		
+    	}
+    	
+    	
+    	for (int i = 0; i < No_of_All_ECMs; i++){
+    	
+    			x_e = All_ECM_x[i];
+			y_e = All_ECM_y[i];
+        		z_e = All_ECM_z[i];
+        		Ind_e = All_ECM_ind_glob[i];
 				
         		fwrite(&Ind_e, sizeof(int), 1, traj);
         		fwrite(&x_e, sizeof(float), 1, traj); 
         		fwrite(&y_e, sizeof(float), 1, traj); 
         		fwrite(&z_e, sizeof(float), 1, traj);
-        			
-        	} else if (nprocs > 1) {        
-			
-			x_e = ECM_x_OtherGPU[c];
-			y_e = ECM_y_OtherGPU[c];
-        		z_e = ECM_z_OtherGPU[c];
-        		Ind_e = ECM_Index_OtherGPU[c];			
-					
+    	
+    	}
+    	
+    	
+    	
+    	
+    
+    } else {
+   
+   
+   
+       for (int i = 0; i < No_of_All_ECMs; i++){
+    	
+    			x_e = ECM_x[i];
+			y_e = ECM_y[i];
+        		z_e = ECM_z[i];
+        		Ind_e = ECM_ind_glob[i];
+				
         		fwrite(&Ind_e, sizeof(int), 1, traj);
         		fwrite(&x_e, sizeof(float), 1, traj); 
         		fwrite(&y_e, sizeof(float), 1, traj); 
         		fwrite(&z_e, sizeof(float), 1, traj);
+    	
+    	
+    	}
+   
+   
+   
+   
+   }
+    
+    	    
+//    for (int i = 0; i < nprocs; i++){
+    		
+//	if (i !=0 && nprocs > 1) { 
+	
+//	    	ECM_x_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+//    		ECM_y_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+//    		ECM_z_OtherGPU = (float*)malloc(sizeof(float)*numberofECMs_InGPUs[i]);
+//    		ECM_Index_OtherGPU = (int*)malloc(sizeof(int)*numberofECMs_InGPUs[i]);
+    
+//    		MPI_Recv(ECM_x_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+//    		MPI_Recv(ECM_y_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+//    		MPI_Recv(ECM_z_OtherGPU, numberofECMs_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+//    		MPI_Recv(ECM_Index_OtherGPU, numberofECMs_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+
+//	}
+
+//	for (int c = 0; c < numberofECMs_InGPUs[i]; c++){
+	
+	
+//		if (i == 0) {
+		
+//			x_e = ECM_x[c];
+//			y_e = ECM_y[c];
+//        		z_e = ECM_z[c];
+//        		Ind_e = ECM_ind_glob[c];
+				
+//        		fwrite(&Ind_e, sizeof(int), 1, traj);
+//        		fwrite(&x_e, sizeof(float), 1, traj); 
+//        		fwrite(&y_e, sizeof(float), 1, traj); 
+//        		fwrite(&z_e, sizeof(float), 1, traj);
+        			
+//        	} else if ( nprocs > 1) {        
+			
+//			x_e = ECM_x_OtherGPU[c];
+//			y_e = ECM_y_OtherGPU[c];
+//        		z_e = ECM_z_OtherGPU[c];
+//        		Ind_e = ECM_Index_OtherGPU[c];			
+					
+//        		fwrite(&Ind_e, sizeof(int), 1, traj);
+//        		fwrite(&x_e, sizeof(float), 1, traj); 
+//        		fwrite(&y_e, sizeof(float), 1, traj); 
+//        		fwrite(&z_e, sizeof(float), 1, traj);
     
     	
-    		}
+//    		}
 	
-	}		
+//	}		
               
-   }        
+//   }        
 
        
 }
