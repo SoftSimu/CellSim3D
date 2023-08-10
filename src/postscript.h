@@ -7,7 +7,8 @@
 
 //__constant__ float d_dt;
 
-cudaDeviceProp getDevice(int idev);
+//cudaDeviceProp getDevice(int idev);
+int getDevice(int idev);
 
 
 
@@ -678,5 +679,9 @@ void Send_Recv_ghost_ECM( int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM, int r
 			     float* ECM_Vx_ecm, float* ECM_Vy_ecm, float* ECM_Vz_ecm,
 			     bool ind_comm, int* ECM_ind_buffer, int* ECM_ind_ecm);
 			  
+__global__ void CellStressTensor( float *d_X,  float *d_Y,  float *d_Z,
+				   float *d_CMx, float *d_CMy, float *d_CMz,
+				   float *d_volume, R3Nptrs d_ExtForces,
+				   float* d_Stress);
 
-
+__global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_Polarity_Vec );

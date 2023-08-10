@@ -9590,8 +9590,8 @@ void SetDeviceBeforeInit()
     printf("local rank=%d: and idev %d\n", local_rank, idev);
 
     cudaSetDevice(idev);
-    cudaDeviceProp deviceProp = getDevice(idev);    
-    
+    //cudaDeviceProp deviceProp = getDevice(idev);    
+    if (  getDevice(idev) != 0 ) return(-1);
     CudaErrorCheck();
 }
 

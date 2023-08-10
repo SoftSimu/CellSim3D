@@ -115,7 +115,7 @@ bool checkSphericity;
 bool useDivPlaneBasis;
 float divPlaneBasis[3]; 
 
-
+bool Polarity;
 
 int   countOnlyInternal; // 0 - Count all new cells
                          // 1 - Count only the cells born within 0.6Rmax from
@@ -231,6 +231,9 @@ R3Nptrs h_contactForces;
 R3Nptrs h_ExtForces;
 R3Nptrs h_ConFricForces;
 
+float* d_Stress;
+
+R3Nptrs d_Polarity_Vec, h_Polarity_Vec;
 
 float DL;
 float3 DLp;
@@ -675,8 +678,9 @@ int main(int argc, char *argv[])
   //idev = rank%4; 
   printf("local rank=%d: and idev %d\n", local_rank, idev);
   cudaSetDevice(idev);
-  cudaDeviceProp deviceProp = getDevice(idev);  
- 
+  //cudaDeviceProp deviceProp = getDevice(idev);  
+  if (  getDevice(idev) != 0 ) return(-1);
+  
   if (nprocs > 1) MPI_Barrier(cart_comm);
    
   
@@ -886,12 +890,14 @@ int main(int argc, char *argv[])
   h_ConFricForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ConFricForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ConFricForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
-  
-  
-  
+    
   DivPlane.x = (float *)calloc(MaxNoofC180s, sizeof(float));
   DivPlane.y = (float *)calloc(MaxNoofC180s, sizeof(float));
   DivPlane.z = (float *)calloc(MaxNoofC180s, sizeof(float));
+  
+  h_Polarity_Vec.x = (float *)calloc(MaxNoofC180s, sizeof(float));
+  h_Polarity_Vec.y = (float *)calloc(MaxNoofC180s, sizeof(float));
+  h_Polarity_Vec.z = (float *)calloc(MaxNoofC180s, sizeof(float));
   
   CMx = (float *)calloc(MaxNoofC180s, sizeof(float));
   CMy = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -1106,7 +1112,8 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_R0, 192*3*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_velListX, 192*MaxNoofC180s*sizeof(float))) return -1; 
   if ( cudaSuccess != cudaMalloc((void **)&d_velListY, 192*MaxNoofC180s*sizeof(float))) return -1; 
-  if ( cudaSuccess != cudaMalloc((void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_velListZ, 192*MaxNoofC180s*sizeof(float))) return -1; 
+  if ( cudaSuccess != cudaMalloc((void **)&d_Stress, 32*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
@@ -1125,6 +1132,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.x, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.y, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_DivPlane.z, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_Polarity_Vec.x, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_Polarity_Vec.y, MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_Polarity_Vec.z, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_asym, MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCx, 1024*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_SysCy, 1024*sizeof(float))) return -1;
@@ -1273,6 +1283,10 @@ int main(int argc, char *argv[])
   cudaMemset(d_velListZ, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
+
+  cudaMemset(d_Stress, 0, 32*MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+	
   cudaMemset(d_fConList.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fConList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fConList.z, 0, 192*MaxNoofC180s*sizeof(float));
@@ -1286,6 +1300,7 @@ int main(int argc, char *argv[])
   cudaMemset(d_fRanList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
+
   cudaMemset(d_ExtForces.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_ExtForces.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_ExtForces.z, 0, 192*MaxNoofC180s*sizeof(float));
@@ -1299,6 +1314,11 @@ int main(int argc, char *argv[])
   cudaMemset(d_DivPlane.x, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_DivPlane.y, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_DivPlane.z, 0, MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+
+  cudaMemset(d_Polarity_Vec.x, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Polarity_Vec.y, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Polarity_Vec.z, 0, MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
     
   cudaMemset(d_SysCx, 0, 1024*sizeof(float));
@@ -8195,7 +8215,43 @@ int main(int argc, char *argv[])
        	
    }
    
+   if( Polarity && No_of_C180s > 0 ){
    
+   	
+   		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+
+        	CudaErrorCheck();
+   	
+   	
+   		cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
+		cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));
+   	
+   		volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+        	       	              d_X, d_Y, d_Z,
+        	       	              d_CMx , d_CMy, d_CMz,
+        	       	              d_volume, d_cell_div, d_DivisionVolume,
+        	       	              checkSphericity, d_area,
+        	       	              stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
+        	       	              recalc_r0, ApoVol, d_ScaleFactor,
+        	       	              d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
+        
+        	CudaErrorCheck();
+   	
+   		cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
+   	
+   	
+   		CellStressTensor<<<No_of_C180s,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz,
+							d_volume, d_ExtForces, d_Stress);
+   		
+   		CudaErrorCheck();
+   		
+   		//printf("I am here\n");
+   		PowerItr<<<No_of_C180s,32>>>( No_of_C180s, step, d_Stress, d_Polarity_Vec);
+   
+   		CudaErrorCheck();
+   
+   
+   }
    
 // ------------------------------ Begin Cell Division ------------------------------------------------
    
@@ -8205,28 +8261,34 @@ int main(int argc, char *argv[])
   	if (No_of_C180s > 0 ){
         		
          	
-         	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+         	if(!Polarity){
+         	
+         		
+         		CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
 
-         	CudaErrorCheck();
+         		CudaErrorCheck();
 
 
-	 	cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
-	 	cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));
+	 		cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
+	 		cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));
 	
 	
-        	volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
-               	                      d_X, d_Y, d_Z,
-               	                      d_CMx , d_CMy, d_CMz,
-               	                      d_volume, d_cell_div, d_DivisionVolume,
-               	                      checkSphericity, d_area,
-               	                      stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
-               	                      recalc_r0, ApoVol, d_ScaleFactor,
-               	                      d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
-        	CudaErrorCheck();
+        		volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+               		                      d_X, d_Y, d_Z,
+               		                      d_CMx , d_CMy, d_CMz,
+               		                      d_volume, d_cell_div, d_DivisionVolume,
+               		                      checkSphericity, d_area,
+               		                      stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
+               		                      recalc_r0, ApoVol, d_ScaleFactor,
+               		                      d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
+        		CudaErrorCheck();
 
 
-		cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
-	
+			cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
+		
+		 
+		 }
+		
 		if (No_of_C180s + num_cell_div > MaxNoofC180s){                                    
               		printf("ERROR: Population is %d, only allocated enough memory for %d\n",     
                      	No_of_C180s, MaxNoofC180s);                                           
@@ -11503,6 +11565,7 @@ int read_json_params(const char* inpFile){
         std::strcpy(forces_file, coreParams["forces_file"].asString().c_str());
         correct_com = coreParams["correct_com"].asBool();
         correct_Vcom = coreParams["correct_Vcom"].asBool(); 
+        Polarity = coreParams["Polarity"].asBool();
                                 
     }
 
@@ -11767,6 +11830,11 @@ int read_json_params(const char* inpFile){
     }
     
     
+
+
+    if (Polarity){
+        printf("Polarity is on \n");
+    }
 
     if (asymDivision){
         printf("asymmetric cell division \n");

@@ -113,7 +113,8 @@ int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271])
 
 
 
-cudaDeviceProp getDevice( int idev)
+//cudaDeviceProp getDevice( int idev)
+int getDevice( int idev)
 {
 
   //int deviceCount;
@@ -136,12 +137,15 @@ cudaDeviceProp getDevice( int idev)
   printf("      warpSize                     =    %8d\n", deviceProp.warpSize);
   printf("      clockRate                    =    %8.2lf MHz\n", deviceProp.clockRate/1000.0);
   printf("      maxThreadsPerBlock           =    %8d\n", deviceProp.maxThreadsPerBlock);
-  printf("      asyncEngineCount             =    %8d\n", deviceProp.asyncEngineCount);
+  //printf("      asyncEngineCount             =    %8d\n", deviceProp.asyncEngineCount);
   printf("      concurrentKernels            =    ");
   if(deviceProp.concurrentKernels==1) printf("   yes\n"); else printf("   no\n");
 
   printf("      ComputeMode                  =    %8d\n", deviceProp.computeMode);
   //}
 
-  return deviceProp; 
+  //return deviceProp;
+  return(0); 
+
+
 }

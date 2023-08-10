@@ -54,8 +54,8 @@ __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
     // float3 F_i =  -2*k/(imag*kmag) * (cos_theta - cos_thetao) * kPos; 
     
     if (!good_float3(F_i)){
-        printf("c1: %f, c2: %f, theta: %f, %d %d\n", c1, c2, theta, blockIdx.x, threadIdx.x);
-        printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, blockIdx.x, threadIdx.x);
+        printf("c1: %f, c2: %f, theta: %f, %d %d\n", c1, c2, theta, (int)blockIdx.x, (int)threadIdx.x);
+        printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, (int)blockIdx.x, (int)threadIdx.x);
         printf("iPos %f, %f, %f, and kPos %f, %f, %f\n", iPos.x, iPos.y, iPos.z, kPos.x, kPos.y, kPos.z);
         asm("trap;");
     }
@@ -300,7 +300,7 @@ __global__ void CalculateConForce_ECM( int Num_ECM,
 		
 		}
 
-		// need to fix this
+		// need to change this
 		atomicAdd( &d_Con_ECM_force_x[NodeInd] , nodeForce.x); 
 		atomicAdd( &d_Con_ECM_force_y[NodeInd] , nodeForce.y); 
 		atomicAdd( &d_Con_ECM_force_z[NodeInd] , nodeForce.z); 
@@ -844,9 +844,16 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	d_forceList.y[atomInd] = FY;
         	d_forceList.z[atomInd] = FZ;
        	
-       	d_ExtForces.x[atomInd] = FX_ext;
-        	d_ExtForces.y[atomInd] = FY_ext;
-       	d_ExtForces.z[atomInd] = FZ_ext;
+       	d_ExtForces.x[atomInd] = contactForce.x;
+        	d_ExtForces.y[atomInd] = contactForce.y;
+       	d_ExtForces.z[atomInd] = contactForce.z;
+   	
+       	//d_ExtForces.x[atomInd] = FX_ext;
+        	//d_ExtForces.y[atomInd] = FY_ext;
+       	//d_ExtForces.z[atomInd] = FZ_ext;
+
+   	
+   	
    	}
 
 }
@@ -1098,7 +1105,6 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 				//float3 vTau = v_ij - dot(v_ij, normal)*normal;
 				
         	    		// Tangential component of the node velocity
-        	    		//F_ecm = vis_ecm_cell*vTau;
         	    		F_ecm = vis_ecm_cell*v_ij;
         	    		
         	    		atomicAdd( &d_Dis_ECM_force_x[nn_rank] , F_ecm.x); 
@@ -1106,9 +1112,10 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 				atomicAdd( &d_Dis_ECM_force_z[nn_rank] , F_ecm.z); 	
 		
 				force = force - F_ecm;
-		
+				force_fric = force_fric - F_ecm;
+				
 			}
-
+				
 			
         	
         	}
@@ -1130,6 +1137,8 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	
         		
 	} 
+
+
 
 }
 
@@ -1161,9 +1170,7 @@ __global__ void Integrate(float *d_X, float *d_Y, float *d_Z,
     
     const int cellInd = blockIdx.x;
     const int node = threadIdx.x;
-
-
-     
+ 
     
     if ( cellInd < numCells && node < 180){
         

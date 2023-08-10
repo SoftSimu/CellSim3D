@@ -40,7 +40,8 @@
 	"write_vcm_file": 1,
         "write_fcm_file": 1,
 	"correct_com" : 0,
-        "correct_Vcom" : 1
+        "correct_Vcom" : 1,
+        "Polarity": 0
     },
     "counting": {
 

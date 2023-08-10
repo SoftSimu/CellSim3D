@@ -437,3 +437,242 @@ __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, floa
 
 }
   
+  
+__global__ void CellStressTensor( float *d_X,  float *d_Y,  float *d_Z,
+				   float *d_CMx, float *d_CMy, float *d_CMz,
+				   float *d_volume, R3Nptrs d_ExtForces,
+				   float* d_Stress)
+				   
+{  
+
+
+	__shared__ float  Sxx[256];
+	__shared__ float  Sxy[256];
+	__shared__ float  Sxz[256];
+	
+	__shared__ float  Syx[256];
+	__shared__ float  Syy[256];
+	__shared__ float  Syz[256];
+	
+	__shared__ float  Szx[256];
+	__shared__ float  Szy[256];
+	__shared__ float  Szz[256];
+
+
+    	int rank = blockIdx.x;
+    	int atom = threadIdx.x;
+	long int atomInd = rank*192+atom;
+	
+	
+	Sxx[atom] = 0.0;
+	Sxy[atom] = 0.0;
+	Sxz[atom] = 0.0;
+	
+	Syx[atom] = 0.0;
+	Syy[atom] = 0.0;
+	Syz[atom] = 0.0;
+	
+	Szx[atom] = 0.0;
+	Szy[atom] = 0.0;
+	Szz[atom] = 0.0;
+	
+	if (atom < 180){
+	
+		
+		
+		float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
+					   d_Y[atomInd] - d_CMy[rank],
+					   d_Z[atomInd] - d_CMz[rank]);
+					   
+		float3 Force = make_float3(d_ExtForces.x[atomInd], 
+					    d_ExtForces.y[atomInd],
+					    d_ExtForces.z[atomInd]);
+		
+		Sxx[atom] = Force.x*r_CM.x;
+		Sxy[atom] = Force.x*r_CM.y;
+		Sxz[atom] = Force.x*r_CM.z;					   
+
+		Syx[atom] = Force.y*r_CM.x;
+		Syy[atom] = Force.y*r_CM.y;
+		Syz[atom] = Force.y*r_CM.z;
+
+		Szx[atom] = Force.z*r_CM.x;
+		Szy[atom] = Force.z*r_CM.y;
+		Szz[atom] = Force.z*r_CM.z;
+		
+		//printf("F_Z: %f, X : %f, Y : %f, Z : %f\n",Force.z,r_CM.x,r_CM.y,r_CM.z);
+
+	}
+				   
+	__syncthreads();
+
+	//if(atom == 0) printf("\n");
+
+	for ( int s = blockDim.x/2; s > 0; s>>=1)
+   	{
+   		if ( atom < s )
+      		{
+      		
+      			Sxx[atom] += Sxx[atom+s];
+      			Sxy[atom] += Sxy[atom+s];
+      			Sxz[atom] += Sxz[atom+s];
+      			
+      			Syx[atom] += Syx[atom+s];
+      			Syy[atom] += Syy[atom+s];
+      			Syz[atom] += Syz[atom+s];
+      		
+      			Szx[atom] += Szx[atom+s];
+      			Szy[atom] += Szy[atom+s];
+      			Szz[atom] += Szz[atom+s];
+      		
+      		
+      		}
+   		
+   		__syncthreads();
+   	
+   	}
+
+	
+	if ( atom == 0 ) 
+   	{
+   		
+   		float Vol = d_volume[rank];
+   		
+   		int shift = rank*32;
+   			
+   		d_Stress[shift + 0] = Sxx[0]/Vol;
+   		d_Stress[shift + 1] = Sxy[0]/Vol;
+   		d_Stress[shift + 2] = Sxz[0]/Vol;
+   		
+   		d_Stress[shift + 3] = Syx[0]/Vol;
+   		d_Stress[shift + 4] = Syy[0]/Vol;
+   		d_Stress[shift + 5] = Syz[0]/Vol;
+   		
+   		d_Stress[shift + 6] = Szx[0]/Vol;
+   		d_Stress[shift + 7] = Szy[0]/Vol;
+   		d_Stress[shift + 8] = Szz[0]/Vol;
+   		
+   		//printf("Matrix\n");
+		//printf("%.4f, %.4f, %.4f\n", d_Stress[shift + 0], d_Stress[shift + 1], d_Stress[shift + 2]);
+		//printf("%.4f, %.4f, %.4f\n", d_Stress[shift + 3], d_Stress[shift + 4], d_Stress[shift + 5]);
+		//printf("%.4f, %.4f, %.4f\n", d_Stress[shift + 6], d_Stress[shift + 7], d_Stress[shift + 8]);
+		//printf("\n");
+   		
+	}
+
+
+}  
+
+
+__global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_Polarity_Vec)
+{				   
+
+	
+    	int tid = threadIdx.x;
+    	int rank = blockIdx.x;
+    	int tInd = blockIdx.x*blockDim.x + threadIdx.x;
+    	
+    	if (rank < No_of_C180s){ 
+
+
+		__shared__ float matrix[9];
+		__shared__ float eigenVector[3];
+		__shared__ float prevEigenVector[3];
+    		
+    		float S = d_Stress[tInd];
+    		float lambda = 0.0;
+    	 
+		if (tid < 9){
+	
+			matrix[tid] = S;
+			if (tid < 3) eigenVector[tid] = - 1.0;
+	
+		}
+	
+		__syncthreads();
+	
+	
+		if(tid == 0 ){
+			
+
+			
+			
+		}
+	
+	
+		if (tid < 3){
+	
+		
+			float normDiff = 1.0;
+			float norm = 1.0;
+		
+			while (normDiff > 1e-3)
+    			{
+			
+				prevEigenVector[tid] = eigenVector[tid];
+
+				__syncthreads();
+
+        			float result = 0.0;
+        			for (int j = 0; j < 3; j++) result += matrix[tid*3+j]*prevEigenVector[j];
+            			
+            			eigenVector[tid] = result;		
+			
+				__syncthreads();
+			
+			
+				norm = sqrtf(eigenVector[0]*eigenVector[0] + eigenVector[1]*eigenVector[1] + eigenVector[2]*eigenVector[2]);
+			
+				eigenVector[tid] /= norm;
+			
+			
+				__syncthreads();
+			
+			
+				normDiff = sqrtf( (eigenVector[0]-prevEigenVector[0])*(eigenVector[0]-prevEigenVector[0]) +
+               	        		   (eigenVector[1]-prevEigenVector[1])*(eigenVector[1]-prevEigenVector[1]) +
+               	        		   (eigenVector[2]-prevEigenVector[2])*(eigenVector[2]-prevEigenVector[2]) );
+			
+				//printf("EigenVector: [%.4f, %.4f, %.4f] and difference is: %.4f\n", eigenVector[0], eigenVector[1], eigenVector[2], normDiff);	
+		
+			}
+	
+	
+	    		// Calculate the eigenValue ???
+    	    	
+    			for (int i = 0; i < 3; i++)
+        		lambda += matrix[tid * 3 + i] * eigenVector[i];
+	
+	
+	
+		}
+	
+	
+		if (tid == 0){
+	
+			d_Polarity_Vec.x[blockIdx.x] = eigenVector[0];
+			d_Polarity_Vec.y[blockIdx.x] = eigenVector[1];
+			d_Polarity_Vec.z[blockIdx.x] = eigenVector[2];
+	
+			if ( (step)%10 == 0 ){
+			
+				printf("step: %d\n",step);
+				printf("Matrix\n");
+				printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
+				printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
+				printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
+			
+				printf("EigenVector: [%.4f, %.4f, %.4f]\n", eigenVector[0], eigenVector[1], eigenVector[2]);
+    			
+    				printf("\n");
+			}
+	
+		}
+	
+	}
+
+
+}				   
+				   
+				   
+				   
