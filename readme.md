@@ -33,6 +33,33 @@ make -j12 CellDiv to compile the simulator.
 
 The simulator can be found in the bin directory
 
+## Simulations
+After compiling CellSim3D, transfer the coordinate files to the bin directory.
+Change the variables in the input file (inp.json) to represent your desired system and transfer that file to the bin directory as well. 
+
+More details on the features and input variables can be found in the description.md file (to be added later).
+
+### Main branch
+Move to the bin directory. If you are using the main branch, run
+~~~
+./CellDiv <# initial cells> inp.json <GPU number> 
+~~~
+For example:
+~~~bash
+./CellDiv 1 inp.json 0 
+~~~
+To start the simulation with a single cell on one GPU.
+
+### multigpu branch
+
+To use the multigpu branch, make sure you have mpi installed on your system. Move to the bin directory.
+
+Run
+~~~
+mpirun -np <# processors> ./CellDiv <# initial cells> inp.json <# sections in x> <# setions in y> <# sections in z>
+~~~
+The last three inputs divide the simulation box in the x,y, and z directions and create subsystems. Each GPU will handle one subsystem, so make sure the multiplication of these three terms equals the number of GPUs you have specified!
+
 
 ## Simulator Source Code Description (note: subject to change):
 
