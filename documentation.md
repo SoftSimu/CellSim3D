@@ -1,0 +1,271 @@
+# CellSim3D Documentation
+
+Welcome to the documentation of CellSim3D. Let's start with a description of the variables in the input file.
+
+Implemented features include:
+
++ Symmetric and asymmetric cell division
++ Cellular apoptosis
++ Extracellular Matrix
++ Growth of heterogenous or homogenous tissue
++ Flexible boundary conditions
++ Simulation of colloids with two or less components
+
+
+Features in the works:
++ Cell Polarity
+
+
+
+## input file
+
+### Geometry
+
+The geometry used to describe the cells is that of a C180 fullerene, a structure that gives our cells a spherical shape while keeping the simulation time reasonable.
+
++ particle_mass : 
+
+
+### Force field
+
+a. Intracellular forces 
+
+#### Modelling cell membrane
+We model the cell membrane using simple, damped Hookean springs.
+
+#### Sphericity
+To keep the spherical shape of the cell, we introduce the angle force, $F_{angle}$, described by 
+
+#### Modelling growth
+The internal pressure driving cell growth can be described using two variables:
+
+b. Intercellular forces
+#### Adhesion
+
+#### Repulsion
+
+#### Friction between cells
+
+
+#### Friction between cells and medium
+
+
+### Division 
+We assume that cells divide symmetrically through their centers of mass and asymmetrically by placing the division plane off-center.
+
+### ECM
+
+
+
+
+### Apoptosis
+
+In the apoptosis process, cells lose their internal pressure and shrink. This shrinkage is modeled by changing the growth rate
+from positive to negative. After the volume of these cells passes a certain threshold, the cells are completely removed from the
+system.
+
+### Boundary
+
+
+
+## To add
+
+- [ ] Write a description for all input variables
+- [ ] Can include an animation & description for each feature (can change the color of cells you would like to point out later, eg. those going through apoptosis or polar ones, can have different colors for colloids that have more than one component.))
+- [ ] Add the force equations
+- [ ] Write better descriptions for each force
+
+
+Remaining variables:
+
+
+    "core": {
+        "MaxNoofC180s": 400000,
+        "MaxBuffer": 12000,
+        "particle_mass": 0.04,
+        "repulsion_range": 0.1,
+        "attraction_range": 0.1,
+        "repulsion_strength": 50.0,
+        "attraction_strength": 0.0,
+        "Youngs_mod": 1000,
+        "stiffFactor1": 30.0,
+        "viscotic_damping": 0.1,
+        "internal_damping": 100.0,
+        "gamma_visc": 0.05,
+        "shear_rate": 0.00001,
+        "division_Vol": 2.9,
+        "div_time_steps": 2000000,
+        "time_interval": 0.0001,
+        "Restart": 1,
+        "trajWriteInt": 2000,
+        "non_div_time_steps": 0,
+        "MaxNeighList": 128,
+        "trajFileName": "inp.xyz",
+        "binaryOutput": 1,
+        "maxPressure": 65.0,
+        "minPressure": 50.0,
+        "growth_rate": 0.002,
+        "checkSphericity": 1,
+        "constrainAngles": 1,
+        "doAdaptive_dt": 0,
+        "dt_max": 1e-4,
+        "dt_tol": 1e-8,
+        "phase_count": 2000000000,
+        "write_cont_force": 0,
+        "forces_file": "inp.csv",
+        "write_vel_file": 0,
+	"write_for_file": 0,
+	"write_traj_file": 0,
+	"write_cm_file": 1,
+	"write_vcm_file": 1,
+        "write_fcm_file": 1,
+	"correct_com" : 0,
+        "correct_Vcom" : 1,
+        "Polarity": 0
+    },
+    "counting": {
+
+        "countcells": 0,
+        "mit-index_file_name": "inp.dat",
+        "count_only_internal_cells?": 0,
+        "radius_cutoff": 0.6,
+        "overwrite_mit_ind_file?": 0,
+        "cell_count_int": 1
+    },
+
+    "population": {
+
+        "doPopModel": 0,
+        "totalFood": 5000.0,
+        "regular_consumption": 2.0,
+        "division_consumption": 10.0,
+        "death_release_food": 10.0,
+        "haylimit": 10,
+        "cellLifeTime": 20000
+    },
+    
+    "apoptosis": {
+
+	 "apoptosis": 0,
+	 "popToStartApo": 100,
+         "Apo_ratio": 0.000003,
+         "squeeze_rate": 0.005,
+         "apoptosis_Vol": 0.7
+    },
+
+
+    "ECMparams":{
+
+        "ECM": 1,
+        "Max_ECM_nodes": 10000,
+        "Div_size": 1.0,
+        "Buffer_size": 1000,
+        "MaxNeighList": 512, 
+        "mass": 0.04,
+        "stiffness_min": 1.0,
+        "stiffness_max": 1.0,
+        "angleConstant": 1.0,
+        "vis_damp": 0.01,
+        "gamma_env": 0.1,
+        "vis_ecm_cell": 0.05,
+        "attraction_range_ecm": 0.2,
+        "repulsion_range_ecm" : 0.1,
+        "attraction_strength_ecm": 0.4,
+        "repulsion_strength_ecm" : 100,
+        "write_traj_Ecm_file": 1
+    },
+
+    "divParams":{
+
+        "useDivPlaneBasis": 0,
+        "divPlaneBasisX": 0,
+        "divPlaneBasisY": 0,
+        "divPlaneBasisZ": 1,
+	 "asymDivision": 0
+    },
+
+    "NewCell":{
+    
+        "useDifferentCell": 0,
+        "SizeFactor": 0.75,
+        "StiffFactor": 0.7,
+        "GrowthRate": 0.005,
+        "divisionV": 2.0,
+        "gammaV": 0.01,
+        "VisDamping" : 0.01,
+        "Apo_rate2": 0.001,
+        "squeeze_rate2": 0.005,
+        "numberOfCells": 0,
+        "fractionOfCells": 0.5,
+        "closenessToCenter": 0.0,
+        "Yseparation": 0.0,
+        "chooseRandomCellindices": 0,
+        "daughtSame": 1,
+        "duringGrowth": 1,
+        "recalc_r0": 0
+        
+    },
+    
+    "ColloidParams":{
+    
+	"colloidal_dynamics": 1,
+	"dispersity": 0,
+	"dispersity_max": 1,
+	"dispersity_min": 0.7,
+	"rand_vel": 0,
+	"Two_Components": 1,
+	"SizeFactor": 0.9,
+	"Friction": 0.1,
+	"Fraction": 0.3,    	
+    	"Xratio": 1.0,
+    	"Yratio": 1.0,
+    	"Zratio": 1.0,
+    	"RandInitDir": 0,
+	"ReadInitialConf" : 0,
+	"Compressor": 0,
+    	"Compress_Value_X": 0.000025,
+    	"Compress_Value_Y": 0.000025,
+    	"Compress_Value_Z": 0.000025
+       
+    },
+
+    "boxParams":{
+        
+	"useRigidSimulationBox": 0,
+        "usePBCs": 0,
+        "useLEbc": 1,
+        "useRigidBoxZ": 0,
+        "useRigidBoxY": 0,
+        "useRigidBoxX": 0,
+	"threshDist": 0.01,
+        "box_len_x": 115.5,
+        "box_len_y": 115.5,
+        "box_len_z": 115.5,
+        "BoxMin_x": 0.0,
+	"BoxMin_y": 0.0,
+	"BoxMin_z": 0.0,
+        "flatbox": 0,
+	"LineCenter": 0,
+        "dom_len": 1.5,
+        "rand_pos": 1,
+	"impurity": 0,
+	"impurityNum": 0,
+	"line": 0,
+	"plane": 0
+    },
+
+    "rand_params":{
+        "add_rands": 1,
+        "rand_seed": -1, // use time if < 0
+        "rand_dist": 0, /*
+                          0 - uniform (default)
+                          Others to be impimented
+                        */
+        "rand_scale_factor": 0.1
+    }
+
+
+## Reference
+
+More details on this package can be found at:
+1. https://ir.lib.uwo.ca/etd/9239/
