@@ -46,23 +46,33 @@ The geometry used to describe the cells is that of a C180 fullerene, a structure
 ### Intracellular forces 
 
 #### Modelling cell membrane
-We model the visco-elasticity of cell membranes with damped harmonic oscillators. The input variables used to describe 
-$F_B$, accounting for the bonded interactions between each node and its three neighboring nodes are:
+We model the visco-elasticity of cell membranes with damped harmonic oscillators.
+```math
+F_i^B=\Sigma^{3}_{j=1} k^{B} \hat{b}_{ij}(R_{ij} - R_0) - \gamma_{int} v_{ij}
+```
+
+The input variables used to describe This force accounting for the bonded interactions between each node and its three neighboring nodes are:
 
 
-$$
-F_i^B = \Sigma^{3}_{j=1} k^{B} (R_{i,j} - R_0 ) 
-$$
-
-+ We have "stiffFactor1" and "Youngs_mod" such that the product of these two is the intercellular bond stiffness.
-+ "internal_damping": Bond damping coefficient
++ "stiffFactor1" and "Youngs_mod" whose product is the intercellular bond stiffness $k^{B}$.
++ "internal_damping": Bond damping coefficient $\gamma_{int}$.
 
 
 #### Sphericity
 To keep the spherical shape of the cell, we introduce the angle force, $F_{angle}$, described by 
+```math
+F^{\theta}=-\nabla \left( \frac{1}{2} k_{\theta} (\theta - \theta_0)^2  \right)
+```
+
+
 
 #### Modelling growth
 The internal pressure driving cell growth can be described using two variables:
+```math
+F^P= P S \hat{n}
+```
+Where P is the internal pressure of the cell, and S is the unit element of the surface area.
+
 
 ### Intercellular forces
 
@@ -77,10 +87,20 @@ The internal pressure driving cell growth can be described using two variables:
 
 
 #### Friction between cells
-+ "viscotic_damping": Inter-membrane friction
+
+
+```math
+F^{F,e}_{ij}= -\gamma_{ext} v_{ij}^{\tau}
+```
++ "viscotic_damping": Inter-membrane friction $\gamma_{ext}$
+
 
 #### Friction between cells and medium
-+ "gamma_visc": Medium friction
+```math
+F^{F,m} = -\gamma_m v
+```
+
++ "gamma_visc": Medium friction $\gamma_m$
 
 ## Division 
 We assume that cells divide symmetrically through their centers of mass and asymmetrically by placing the division plane off-center.
