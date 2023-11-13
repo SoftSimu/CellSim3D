@@ -49,6 +49,11 @@ The geometry used to describe the cells is that of a C180 fullerene, a structure
 We model the visco-elasticity of cell membranes with damped harmonic oscillators. The input variables used to describe 
 $F_B$, accounting for the bonded interactions between each node and its three neighboring nodes are:
 
+
+$$
+F_i^B = \Sigma^{3}_{j=1} k^{B} (R_{i,j} - R_0 ) 
+$$
+
 + We have "stiffFactor1" and "Youngs_mod" such that the product of these two is the intercellular bond stiffness.
 + "internal_damping": Bond damping coefficient
 
