@@ -143,8 +143,8 @@ float *d_area;
 float *area; 
 
 
-char* cell_div;
-char* d_cell_div;
+char* cell_div;  #checks to see if spherecity is more than 95% or not, to see if division is allowed or not.
+char* d_cell_div; #an array the size of max_number_of_cells, to see if cell is divisable or not.
 int num_cell_div;
 int *d_num_cell_div;
 int* cell_div_inds;
