@@ -66,12 +66,13 @@ F^{\theta}=-\nabla \left( \frac{1}{2} k_{\theta} (\theta - \theta_0)^2  \right)
 
 
 
-#### Modelling growth
+#### Growth
 The internal pressure driving cell growth can be described using two variables:
 ```math
 F^P= P S \hat{n}
 ```
 Where P is the internal pressure of the cell, and S is the unit element of the surface area.
++ "growth_rate" : Product of S and P, Pressure growth rate.
 
 
 ### Intercellular forces
