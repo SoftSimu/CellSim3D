@@ -22,6 +22,10 @@ Let's start with a description of the variables in the input file.
 ## Some variables
 
 + "MaxNoofC180s": Maximum number of cells we might have in the simulation (To construct arrays).
++ "div_time_steps": simulation time in which we have diviosion #check<---
++ "non_div_time_steps": simulation time in which system progresses with no division #check <----
++ "trajWriteInt": Growth count interval, the interval in which details of the simulation are recorded
++ "binaryOutput": Write binary trajectory file -  0 for false & 1 for true
 + "time_interval": time step of simulation
 + "trajFileName": Name of the coordinates file (eg. "inp.xyz")
 + "forces_file": Force file name (eg."inp.csv")
@@ -40,6 +44,8 @@ Let's start with a description of the variables in the input file.
 The geometry used to describe the cells is that of a C180 fullerene, a structure that gives our cells a spherical shape while keeping the simulation time reasonable. The input variables used to describe each cell include: 
 
 + "particle_mass": mass of each node constructing a cell
++ "checkSphericity": Check whether or not cells are spherical to determine if they are suitable for division,  0 for false & 1 for true
++ 
 
 ## Force field
 - [ ] Would it be better to classify based on bonded/non-bonded or intracellular/Intercellular forces? 
@@ -73,6 +79,8 @@ F^P= P S \hat{n}
 ```
 Where P is the internal pressure of the cell, and S is the unit element of the surface area.
 + "growth_rate" : Product of S and P, Pressure growth rate.
++ "minPressure": Initial pressure force
++ "maxPressure": Final pressure force
 
 
 ### Intercellular forces
@@ -127,7 +135,7 @@ system.
 + "apoptosis_Vol": Cells are removed from the system after reaching this threshold volume
 
 ### Boundary
-
++ "shear_rate": shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
 
 
 ## To add
