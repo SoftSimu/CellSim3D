@@ -19,10 +19,10 @@ Features in the works:
 # input file
 Let's start with a description of the variables in the input file.
 
-## Some variables
+## Core variables
 
 + "MaxNoofC180s": Maximum number of cells we might have in the simulation (To construct arrays).
-+ "div_time_steps": simulation time in which we have diviosion #check<---
++ "div_time_steps": simulation time in which we have division #check<---
 + "non_div_time_steps": simulation time in which system progresses with no division #check <----
 + "trajWriteInt": Growth count interval, the interval in which details of the simulation are recorded
 + "binaryOutput": Write binary trajectory file -  0 for false & 1 for true
@@ -36,7 +36,11 @@ Let's start with a description of the variables in the input file.
 + "write_vcm_file": Write the center of mass velocities to file - 0 for false & 1 for true
 + "write_fcm_file": Write the center of mass forces to file - 0 for false & 1 for true
 + "correct_com": Set the center of mass of the system to zero - 0 for false & 1 for true 
-+ "correct_Vcom": Set the velocity of the center of mass of the system to zero - 0 for false & 1 for true 
++ "correct_Vcom": Set the velocity of the center of mass of the system to zero - 0 for false & 1 for true
+
+Parallelization Parameters
++ "MaxBuffer": Buffersize
++ "MaxNeighList":
 
 
 ## Geometry
@@ -78,7 +82,7 @@ The internal pressure driving cell growth can be described using two variables:
 F^P= P S \hat{n}
 ```
 Where P is the internal pressure of the cell, and S is the unit element of the surface area.
-+ "growth_rate" : Product of S and P, Pressure growth rate.
++ "growth_rate": Product of S and P, Pressure growth rate.
 + "minPressure": Initial pressure force
 + "maxPressure": Final pressure force
 
