@@ -37,6 +37,22 @@ Let's start with a description of the variables in the input file.
 + "write_fcm_file": Write the center of mass forces to file - 0 for false & 1 for true
 + "correct_com": Set the center of mass of the system to zero - 0 for false & 1 for true 
 + "correct_Vcom": Set the velocity of the center of mass of the system to zero - 0 for false & 1 for true
++ "Restart": Allows changing of boundary conditions. After repositioning the walls and all cells in the previous system, the new simulation will continue where the previous one was left.
++ "doAdaptive_dt": Changes the time steps used in the integration- cant find where it was actually implemented? #check <----
++ "dt_max": Maximum time step used
++ "dt_tol": Minimum time step used
++ "phase_count": Updates Youngs Modules after "phase_count" steps #check <---
++ "write_cont_force": Write contact forces (attraction and repulsion) to inp.CSV file.
+
+Counting Cells:
++ "countcells": Write a File to keep track of mitosis - 0 for false & 1 for true
++ "mit-index_file_name": Specify the name of the file (e.g. "inp.dat")
++ "count_only_internal_cells?": Count cells within a certain interval- 0 for false & 1 for true
++ "radius_cutoff": Cutoff radius of internal cells
++ "overwrite_mit_ind_file?": 0 for false & 1 for true
++ "cell_count_int": The interval in which cells are counted 
+
+
 
 Parallelization Parameters
 + "MaxBuffer": Buffersize
@@ -73,6 +89,7 @@ To keep the spherical shape of the cell, we introduce the angle force, $F_{angle
 ```math
 F^{\theta}=-\nabla \left( \frac{1}{2} k_{\theta} (\theta - \theta_0)^2  \right)
 ```
++ "constrainAngles": Calculates the equilibrium angle for the specific input structure- 0 for false & 1 for true
 
 
 
@@ -112,8 +129,9 @@ F^{F,e}_{ij}= -\gamma_{ext} v_{ij}^{\tau}
 ```math
 F^{F,m} = -\gamma_m v
 ```
-
 + "gamma_visc": Medium friction $\gamma_m$
+
+
 
 ## Division 
 We assume that cells divide symmetrically through their centers of mass and asymmetrically by placing the division plane off-center.
@@ -137,6 +155,9 @@ system.
 + "Apo_ratio": Probability of apoptosis for each individual cell
 + "squeeze_rate": rate of shrinkage of a cell in apoptosis (replaces growth rate)
 + "apoptosis_Vol": Cells are removed from the system after reaching this threshold volume
+
+### Polarity 
++ "Polarity": Not successful yet, CellStressTensor needs to be calculated using a new algorithm.
 
 ### Boundary
 + "shear_rate": shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
