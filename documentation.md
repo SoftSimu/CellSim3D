@@ -161,7 +161,43 @@ system.
 
 ### Boundary
 + "shear_rate": shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
++ "useRigidSimulationBox": Use rigid boundary condition, 0 for false & 1 for true
++ "usePBCs": Use Periodic Boundary Condition - 0 for false & 1 for true
++ "useLEbc": Use Lees Edwards boundary condition (LEbc) - 0 for false & 1 for true
++ "useRigidBoxZ": have Rigid walls in Z direction - 0 for false & 1 for true
++ "useRigidBoxY": have Rigid walls in Y direction - 0 for false & 1 for true
++ "useRigidBoxX": have Rigid walls in X direction - 0 for false & 1 for true
 
+ allCMsPin[i].x < 1.5 #?
+
++ "threshDist": 0.01,
++ "box_len_x": Maximum position of the box in the x direction
++ "box_len_y": Maximum position of the box in the x direction
++ "box_len_z": Maximum position of the box in the x direction
++ "BoxMin_x": Minimum position of the box in the x direction (usually set to 0.0)
++ "BoxMin_y": Minimum position of the box in the y direction (usually set to 0.0)
++ "BoxMin_z": Minimum position of the box in the z-direction (usually set to 0.0)
++ "flatbox": Position the z position of all cells in the middle of the box - 0 for false & 1 for true
++ "dom_len": 1.5 #Ask <-----
++ "rand_pos": gives the initial cells random positions - 0 for false & 1 for true
++ "impurity": 0 for false & 1 for true , #Ask<---
++ "impurityNum": Number of #? Cells #Ask
++ "line": 0 for false & 1 for true
++ "LineCenter": If "line" is set to one, It sets the x position of the COM of cells to the center of the box #check <---
++ "plane": Positions all cells on a plane with fixed Z - 0 for false & 1 for true
+
+~~~
+If (colliodal_dynamics) {
+  If (ReadInitialConf) {}
+  else  {#sets random position} 
+}
+
+else {
+  If randompositon{} #Impurity ?  #Ask
+  If line{}
+  If plane{}
+}
+~~~
 
 ## To add
 
