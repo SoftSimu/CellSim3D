@@ -212,8 +212,33 @@ system.
 + "squeeze_rate": rate of shrinkage of a cell in apoptosis (replaces growth rate)
 + "apoptosis_Vol": Cells are removed from the system after reaching this threshold volume
 
+
+## Colloidal Dynamics
+
++ "colloidal_dynamics": 1,
++ "dispersity": 0,
++ "dispersity_max": 1,
++ "dispersity_min": 0.7,
++ "rand_vel": 0,
++ "Two_Components": 1,
++ "SizeFactor": 0.9,
++ "Friction": 0.1,
++ "Fraction": 0.3,    	
++ "Xratio": 1.0,
++ "Yratio": 1.0,
++ "Zratio": 1.0,
++ "RandInitDir": 0,
++ "ReadInitialConf" : 0,
++ "Compressor": 0,
++ "Compress_Value_X": 0.000025,
++ "Compress_Value_Y": 0.000025,
++ "Compress_Value_Z": 0.000025
+
+
+  
 ## Polarity 
 + "Polarity": Not successful yet, CellStressTensor needs to be calculated using a new algorithm.
+
 
 ## Boundary
 + "shear_rate": shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
@@ -254,27 +279,11 @@ else {
   If plane{}
 }
 ~~~
-
-## Colloidal Dynamics
-
-+ "colloidal_dynamics": 1,
-+ "dispersity": 0,
-+ "dispersity_max": 1,
-+ "dispersity_min": 0.7,
-+ "rand_vel": 0,
-+ "Two_Components": 1,
-+ "SizeFactor": 0.9,
-+ "Friction": 0.1,
-+ "Fraction": 0.3,    	
-+ "Xratio": 1.0,
-+ "Yratio": 1.0,
-+ "Zratio": 1.0,
-+ "RandInitDir": 0,
-+ "ReadInitialConf" : 0,
-+ "Compressor": 0,
-+ "Compress_Value_X": 0.000025,
-+ "Compress_Value_Y": 0.000025,
-+ "Compress_Value_Z": 0.000025
+## Random number Generator
++ "add_rands": 1,
++ "rand_seed": -1, // use time if < 0
++ "rand_dist": 0, # 0 - uniform (default) / Others to be impimented
++ "rand_scale_factor": 0.1
 
 ## To add
 
