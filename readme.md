@@ -37,7 +37,7 @@ The simulator can be found in the bin directory
 After compiling CellSim3D, transfer the coordinate files to the bin directory.
 Change the variables in the input file (inp.json) to represent your desired system and transfer that file to the bin directory as well. 
 
-More details on the features and input variables can be found in the description.md file (to be added later).
+More details on the features and input variables can be found in the description.md file.
 
 ### Main branch
 Move to the bin directory. If you are using the main branch, run
@@ -59,6 +59,22 @@ Run
 mpirun -np <# processors> ./CellDiv <# initial cells> inp.json <# sections in x> <# setions in y> <# sections in z>
 ~~~
 The last three inputs divide the simulation box in the x,y, and z directions and create subsystems. Each GPU will handle one subsystem, so make sure the multiplication of these three terms equals the number of GPUs you have specified!
+
+## Visualization in Blender
+
+We use Blender to view the results of the simulations. 
+
+From the bin directory, transfer the inp.xyz file you get to the scripts file. Transfer the "C180_pentahexa.csv" and "CellDiv.blend" files to the scripts folder as well. You may need to adjust the CellDiv file's camera settings to capture the whole system.
+
+In the render.py file in scripts, change the module search path to the appropriate one in your system:
+~~~
+sys.path.append("/path/to/scripts")
+~~~
+after the adjustments, run the following command in the terminal while you are in the scripts directory:
+~~~
+blender --background CellDiv.blend --python render.py -- inp.xyz
+~~~
+You can view your results in the inp folder.
 
 
 ## Simulator Source Code Description (note: subject to change):
