@@ -137,9 +137,65 @@ F^{F,m} = -\gamma_m v
 We assume that cells divide symmetrically through their centers of mass and asymmetrically by placing the division plane off-center.
 
 + "division_Vol": Volume threshold for division
-+ 
++ "useDivPlaneBasis": use the specified division plane - 0 for false & 1 for true
++ "divPlaneBasisX": set the division plane normal to the X direction if "useDivPlaneBasis" is set to one
++ "divPlaneBasisY": set the division plane normal to the Y direction if "useDivPlaneBasis" is set to one
++ "divPlaneBasisZ": set the division plane normal to the Z direction if "useDivPlaneBasis" is set to one
++ "asymDivision": Do assymetric division - 0 for false & 1 for true
+
+### New cell characteristics
+
++ "useDifferentCell": Set different characteristics for new cells -  0 for false & 1 for true
++ "SizeFactor": 0.75,
++ "StiffFactor": 0.7,
++ "GrowthRate": growth rate of the new cell
++ "divisionV": division volume of the new cell
++ "gammaV": 0.01,
++ "VisDamping" : 0.01,
++ "Apo_rate2": Probability of apoptosis for each new cell
++ "squeeze_rate2": rate of shrinkage of the new cell in apoptosis (replaces growth rate)
++ "numberOfCells": 0,
++ "fractionOfCells": fraction of new cells that will have these properties
++ "closenessToCenter": 0.0,
++ "Yseparation": 0.0,
++ "chooseRandomCellindices": 0,
++ "daughtSame": 1,
++ "duringGrowth": 1,
++ "recalc_r0": 0
+
+
+### Population regulation
+
++ "doPopModel": 0,
++ "totalFood": 5000.0,
++ "regular_consumption": 2.0,
++ "division_consumption": 10.0,
++ "death_release_food": 10.0,
++ "haylimit": 10,
++ "cellLifeTime": 20000
+
+
+
 
 ## ECM
+
++ "ECM": Have Extracellular Matrix in simulation - 0 for false & 1 for true
++ "Max_ECM_nodes": Maximum number of nodes in the ECM #can't find,ask <---
++ "Div_size": 1.0, #can't find
++ "Buffer_size": 1000,
++ "MaxNeighList": 512, 
++ "mass": 0.04,
++ "stiffness_min": Minimum stifness of bonds in ECM #stifness varies across ECM
++ "stiffness_max": Maximum stifness of bonds in ECM
++ "angleConstant": 1.0,
++ "vis_damp": 0.01,
++ "gamma_env": 0.1,
++ "vis_ecm_cell": 0.05,
++ "attraction_range_ecm": 0.2,
++ "repulsion_range_ecm" : 0.1,
++ "attraction_strength_ecm": 0.4,
++ "repulsion_strength_ecm" : 100,
++ "write_traj_Ecm_file": 0 for false & 1 for true
 
 
 
@@ -156,10 +212,10 @@ system.
 + "squeeze_rate": rate of shrinkage of a cell in apoptosis (replaces growth rate)
 + "apoptosis_Vol": Cells are removed from the system after reaching this threshold volume
 
-### Polarity 
+## Polarity 
 + "Polarity": Not successful yet, CellStressTensor needs to be calculated using a new algorithm.
 
-### Boundary
+## Boundary
 + "shear_rate": shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
 + "useRigidSimulationBox": Use rigid boundary condition, 0 for false & 1 for true
 + "usePBCs": Use Periodic Boundary Condition - 0 for false & 1 for true
@@ -198,6 +254,27 @@ else {
   If plane{}
 }
 ~~~
+
+## Colloidal Dynamics
+
++ "colloidal_dynamics": 1,
++ "dispersity": 0,
++ "dispersity_max": 1,
++ "dispersity_min": 0.7,
++ "rand_vel": 0,
++ "Two_Components": 1,
++ "SizeFactor": 0.9,
++ "Friction": 0.1,
++ "Fraction": 0.3,    	
++ "Xratio": 1.0,
++ "Yratio": 1.0,
++ "Zratio": 1.0,
++ "RandInitDir": 0,
++ "ReadInitialConf" : 0,
++ "Compressor": 0,
++ "Compress_Value_X": 0.000025,
++ "Compress_Value_Y": 0.000025,
++ "Compress_Value_Z": 0.000025
 
 ## To add
 
