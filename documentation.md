@@ -38,11 +38,11 @@ Let's start with a description of the variables in the input file.
 + "correct_com": Set the center of mass of the system to zero - 0 for false & 1 for true 
 + "correct_Vcom": Set the velocity of the center of mass of the system to zero - 0 for false & 1 for true
 + "Restart": Allows changing of boundary conditions. After repositioning the walls and all cells in the previous system, the new simulation will continue where the previous one was left.
-+ "doAdaptive_dt": Changes the time steps used in the integration- cant find where it was actually implemented? #check <----
++ "doAdaptive_dt": Changes the time steps used in the integration- can't find where it was implemented? #check <----
 + "dt_max": Maximum time step used
 + "dt_tol": Minimum time step used
 + "phase_count": Updates Youngs Modules after "phase_count" steps #check <---
-+ "write_cont_force": Write contact forces (attraction and repulsion) to inp.CSV file.
++ "write_cont_force": Write contact forces (attraction and repulsion) to the inp.CSV file.
 
 Counting Cells:
 + "countcells": Write a File to keep track of mitosis - 0 for false & 1 for true
@@ -141,13 +141,13 @@ We assume that cells divide symmetrically through their centers of mass and asym
 + "divPlaneBasisX": set the division plane normal to the X direction if "useDivPlaneBasis" is set to one
 + "divPlaneBasisY": set the division plane normal to the Y direction if "useDivPlaneBasis" is set to one
 + "divPlaneBasisZ": set the division plane normal to the Z direction if "useDivPlaneBasis" is set to one
-+ "asymDivision": Do assymetric division - 0 for false & 1 for true
++ "asymDivision": Do asymmetric division - 0 for false & 1 for true
 
 ### New cell characteristics
 
 + "useDifferentCell": Set different characteristics for new cells -  0 for false & 1 for true
 + "SizeFactor": Ratio of the size of the new type of cell compared to the old one
-+ "StiffFactor": Ratio of the stiffness of the bonds of new type of cell compared to the old one
++ "StiffFactor": Ratio of the stiffness of the bonds of the new type of cell compared to the old one
 + "GrowthRate": growth rate of the new cell
 + "divisionV": division volume of the new cell
 + "gammaV": 0.01,
@@ -156,9 +156,9 @@ We assume that cells divide symmetrically through their centers of mass and asym
 + "squeeze_rate2": rate of shrinkage of the new cell in apoptosis (replaces growth rate)
 + "numberOfCells": 0,
 + "fractionOfCells": fraction of new cells that will have these properties
-+ "closenessToCenter": (daughter cells / cells themselves?) in this specific radius will be of the new type
++ "closenessToCenter": (daughter cells/cells themselves?) in this specific radius will be of the new type
 + "Yseparation": Apply changes for cells in range y $\in$ Yseperation*boxMax.y
-+ "chooseRandomCellindices": Chosse random cells to (change properties of existing cell/ have the daughter cells be of the new kind?) , 0 for false & 1 for true #Ask <
++ "chooseRandomCellindices": Choose random cells to (change properties of existing cell/ have the daughter cells be of the new kind?), 0 for false & 1 for true #Ask <
 + "daughtSame": 1,
 + "duringGrowth": 1,
 + "recalc_r0": 0
@@ -180,21 +180,21 @@ We assume that cells divide symmetrically through their centers of mass and asym
 ## ECM
 
 + "ECM": Have Extracellular Matrix in simulation - 0 for false & 1 for true
-+ "Max_ECM_nodes": Maximum number of nodes in the ECM, for constructing an array #can't find,ask <---
++ "Max_ECM_nodes": Maximum number of nodes in the ECM, for constructing an array #can't find, ask <---
 + "Div_size": 1.0, #can't find
 + "Buffer_size": 1000,
 + "MaxNeighList": 512, 
 + "mass": 0.04,
-+ "stiffness_min": Minimum stifness of bonds in ECM #stifness varies across ECM
-+ "stiffness_max": Maximum stifness of bonds in ECM
++ "stiffness_min": Minimum stiffness of bonds in ECM #stifness varies across ECM
++ "stiffness_max": Maximum stiffness of bonds in ECM
 + "angleConstant": 1.0,
 + "vis_damp": 0.01,
 + "gamma_env": 0.1,
 + "vis_ecm_cell": 0.05,
 + "attraction_range_ecm": 0.2,
-+ "repulsion_range_ecm" : 0.1,
++ "repulsion_range_ecm": 0.1,
 + "attraction_strength_ecm": 0.4,
-+ "repulsion_strength_ecm" : 100,
++ "repulsion_strength_ecm": 100,
 + "write_traj_Ecm_file": 0 for false & 1 for true
 
 
@@ -208,7 +208,7 @@ system.
 
 + "apoptosis": (0,1) Apoptosis True/False
 + "popToStartApo": Number of cells we should have in the system to start apoptosis
-+ "Apo_ratio": Probability of apoptosis for each individual cell
++ "Apo_ratio": Probability of apoptosis for each cell
 + "squeeze_rate": rate of shrinkage of a cell in apoptosis (replaces growth rate)
 + "apoptosis_Vol": Cells are removed from the system after reaching this threshold volume
 
@@ -274,7 +274,7 @@ If (colliodal_dynamics) {
 }
 
 else {
-  If randompositon{} #Impurity ?  #Ask
+  If randompositon{} #Impurity?  #Ask
   If line{}
   If plane{}
 }
@@ -282,7 +282,7 @@ else {
 ## Random number Generator
 + "add_rands": 1,
 + "rand_seed": -1, // use time if < 0
-+ "rand_dist": 0, # 0 - uniform (default) / Others to be impimented
++ "rand_dist": 0, # 0 - uniform (default) / Others to be implemented
 + "rand_scale_factor": 0.1
 
 ## To add
