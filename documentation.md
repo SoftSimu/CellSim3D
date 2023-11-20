@@ -146,8 +146,8 @@ We assume that cells divide symmetrically through their centers of mass and asym
 ### New cell characteristics
 
 + "useDifferentCell": Set different characteristics for new cells -  0 for false & 1 for true
-+ "SizeFactor": 0.75,
-+ "StiffFactor": 0.7,
++ "SizeFactor": Ratio of the size of the new type of cell compared to the old one
++ "StiffFactor": Ratio of the stiffness of the bonds of new type of cell compared to the old one
 + "GrowthRate": growth rate of the new cell
 + "divisionV": division volume of the new cell
 + "gammaV": 0.01,
@@ -156,9 +156,9 @@ We assume that cells divide symmetrically through their centers of mass and asym
 + "squeeze_rate2": rate of shrinkage of the new cell in apoptosis (replaces growth rate)
 + "numberOfCells": 0,
 + "fractionOfCells": fraction of new cells that will have these properties
-+ "closenessToCenter": 0.0,
-+ "Yseparation": 0.0,
-+ "chooseRandomCellindices": 0,
++ "closenessToCenter": (daughter cells / cells themselves?) in this specific radius will be of the new type
++ "Yseparation": Apply changes for cells in range y $\in$ Yseperation*boxMax.y
++ "chooseRandomCellindices": Chosse random cells to (change properties of existing cell/ have the daughter cells be of the new kind?) , 0 for false & 1 for true #Ask <
 + "daughtSame": 1,
 + "duringGrowth": 1,
 + "recalc_r0": 0
@@ -180,7 +180,7 @@ We assume that cells divide symmetrically through their centers of mass and asym
 ## ECM
 
 + "ECM": Have Extracellular Matrix in simulation - 0 for false & 1 for true
-+ "Max_ECM_nodes": Maximum number of nodes in the ECM #can't find,ask <---
++ "Max_ECM_nodes": Maximum number of nodes in the ECM, for constructing an array #can't find,ask <---
 + "Div_size": 1.0, #can't find
 + "Buffer_size": 1000,
 + "MaxNeighList": 512, 
