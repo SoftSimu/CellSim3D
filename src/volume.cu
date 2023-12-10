@@ -80,7 +80,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
 
 	    	
 
-            if (checkSphericity){
+            //if (checkSphericity){
        
                 // Get vectors that define a triangle 1, 2
                 float x1 = locX[C180_56[7*tid+i]] - avX;
@@ -99,14 +99,15 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
                 // area of triangle is then 0.5*|1|
                 faceArea += 0.5 * sqrtf(xx*xx + yy*yy + zz*zz);
                 
-            }
+            //}
         
        }
         
         
         atomicAdd(&volume, totvol);
+        atomicAdd(&area, faceArea);
         
-        if (checkSphericity) atomicAdd(&area, faceArea);     
+        //if (checkSphericity) atomicAdd(&area, faceArea);     
     
     }
 
@@ -116,6 +117,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
     
         volume = volume/6.0;
         vol[fullerene] = volume;
+        areaList[fullerene] = area;
         
         
         if (!isfinite(volume)){
@@ -132,7 +134,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
             
             if (checkSphericity){
         
-            	areaList[fullerene] = area;
+            	//areaList[fullerene] = area;
             	float c = cbrtf(volume);
             	float psi = 4.835975862049408 * c * c/area;
             	if (abs(1.0f - psi) > 0.05) cell_div[fullerene] = 0;
@@ -203,7 +205,8 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
 }
 
 
-__global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
+__global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
+				float *d_X,  float *d_Y,  float *d_Z,
                                float* AllCMx, float* AllCMy, float* AllCMz,
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
                                int No_of_C180s, float repulsion_range, float* d_asym,
@@ -213,7 +216,8 @@ __global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                float* d_squeeze_rate, float* d_Apo_rate,
                                float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
-				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure){ 
+				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, int* d_Generation, int* d_Fibre_index,
+				float minPressure){ 
    
          
     __shared__ float CMx, CMy, CMz;
@@ -242,15 +246,35 @@ __global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
     if ( atom < 180 ) 
     {
 
-        // planeN is the division plane's normal vector
-        //loat planeNx = d_randNorm[0];
-        //float planeNy = d_randNorm[1];
-        //float planeNz = d_randNorm[2];
+        float planeNx, planeNy, planeNz;
         
+        if(Random_Div_Rule){
+        	
+        	if(Fibre){
+
+	        	int loc = d_Fibre_index[rank];
+	        	planeNx = d_DivPlane.x[loc];                 
+	        	planeNy = d_DivPlane.y[loc];                 
+	        	planeNz = d_DivPlane.z[loc];                 
+        	
+        	
+        	} else {
+        	
+        		planeNx = d_DivPlane.x[newrank];                 
+        		planeNy = d_DivPlane.y[newrank];                 
+        		planeNz = d_DivPlane.z[newrank];                 
+        	
+        	}
         
-        float planeNx = d_DivPlane.x[newrank];                 
-        float planeNy = d_DivPlane.y[newrank];                 
-        float planeNz = d_DivPlane.z[newrank];                 
+        } else {
+        	
+        	int loc = d_Generation[rank];
+        	planeNx = d_DivPlane.x[loc];                 
+        	planeNy = d_DivPlane.y[loc];                 
+        	planeNz = d_DivPlane.z[loc];                 
+        
+        }
+        
         float asym = d_asym[newrank];                          
 
 
@@ -301,6 +325,7 @@ __global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
     
     if (tid == 0){
     
+    	
     	if (useDifferentCell && daughtSame){
 	
 		d_ScaleFactor[newrank] = d_ScaleFactor[rank];
@@ -334,8 +359,14 @@ __global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
           	  	
         }
         
-        pressList[rank] = minPressure;             
-	pressList[newrank] = minPressure;          
+        pressList[rank] = minPressure;
+        pressList[newrank] = minPressure;
+        
+        d_Generation[rank] = d_Generation[rank] + 1;
+        d_Generation[newrank] = d_Generation[rank];
+        
+        d_Fibre_index[newrank] = d_Fibre_index[rank];
+         
     
     }
     
@@ -348,7 +379,7 @@ __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               float* d_Apo_rate, float* d_squeeze_rate,
+                               float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 				int* d_cell_Apo_inds, char* cell_Apo){
 
 	
@@ -399,6 +430,8 @@ __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter
 			d_CellINdex[dead_cell] = d_CellINdex[moving_Cell];
 			d_Apo_rate[dead_cell] = d_Apo_rate[moving_Cell];
 			d_squeeze_rate[dead_cell] = d_squeeze_rate[moving_Cell];
+			d_Generation[dead_cell] = d_Generation[moving_Cell];
+			d_Fibre_index[dead_cell] = d_Fibre_index[moving_Cell]; 
 	
 		}
 	
@@ -606,7 +639,7 @@ __global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_
 			float normDiff = 1.0;
 			float norm = 1.0;
 		
-			while (normDiff > 1e-3)
+			while (normDiff > 1e-2)
     			{
 			
 				prevEigenVector[tid] = eigenVector[tid];
@@ -650,21 +683,21 @@ __global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_
 	
 		if (tid == 0){
 	
-			d_Polarity_Vec.x[blockIdx.x] = eigenVector[0];
-			d_Polarity_Vec.y[blockIdx.x] = eigenVector[1];
-			d_Polarity_Vec.z[blockIdx.x] = eigenVector[2];
+			d_Polarity_Vec.x[rank] = eigenVector[0];
+			d_Polarity_Vec.y[rank] = eigenVector[1];
+			d_Polarity_Vec.z[rank] = eigenVector[2];
 	
 			if ( (step)%10 == 0 ){
 			
 				printf("step: %d\n",step);
-				printf("Matrix\n");
-				printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
-				printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
-				printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
+			//	printf("Matrix\n");
+			//	printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
+			//	printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
+			//	printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
 			
-				printf("EigenVector: [%.4f, %.4f, %.4f]\n", eigenVector[0], eigenVector[1], eigenVector[2]);
+			//	printf("EigenVector: [%.4f, %.4f, %.4f]\n", eigenVector[0], eigenVector[1], eigenVector[2]);
     			
-    				printf("\n");
+    			//	printf("\n");
 			}
 	
 		}

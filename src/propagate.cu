@@ -87,8 +87,8 @@ __device__ float3 GetAngleForceECM(const float3 iPos, const float3 kPos,
     float3 F_i = -k * c1 * (theta - theta_o)*(kPos - c2*iPos);
     
     if (!good_float3(F_i)){
-        printf("c1: %f, c2: %f, theta: %f, theta_o: %f, %d %d\n", c1, c2, theta, theta_o, blockIdx.x, threadIdx.x);
-        printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, blockIdx.x, threadIdx.x);
+        printf("c1: %f, c2: %f, theta: %f, theta_o: %f, %d %d\n", c1, c2, theta, theta_o, (int)blockIdx.x, (int)threadIdx.x);
+        printf("i.k %f ri2 %f rk2 %f, %d %d\n", i_dot_k, ri_2, rk_2, (int)blockIdx.x, (int)threadIdx.x);
         printf("iPos %f, %f, %f, and kPos %f, %f, %f\n", iPos.x, iPos.y, iPos.z, kPos.x, kPos.y, kPos.z);
         asm("trap;");
     }
@@ -385,7 +385,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           int MaxNeighList_ecm)
+                           int MaxNeighList_ecm,
+                           R3Nptrs d_Polarity_Vec, bool Polarity)
 {
 
 
@@ -470,13 +471,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         	}
 
         	// new growth force
-
         	float3 r_CM = make_float3(X - d_CMx[rank], 
                	                  Y - d_CMy[rank], 
                	                  Z - d_CMz[rank]);
+        	r_CM = calcUnitVec(r_CM);
+        	
         	float3 gForce  = make_float3(0.f, 0.f, 0.f);
 
-        	gForce = 3*Pressure*calcUnitVec(r_CM);
+        	gForce = 3*Pressure*r_CM;
 
         
         	FX += gForce.x; 
@@ -509,7 +511,24 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 #endif
 
         	// interfullerene attraction and repulsion
-        
+        	
+        	float attraction_stiff = attraction_strength;
+        	float attraction_stiff_ecm = attraction_strength_ecm;
+        	
+        	float Polarity_Stiffness = 0.f;
+        	
+        	if(Polarity){
+        	
+        		float3 Pol_vec = make_float3(d_Polarity_Vec.x[rank], 
+               		                     d_Polarity_Vec.y[rank], 
+               		                     d_Polarity_Vec.z[rank]);
+        	
+        		Polarity_Stiffness = 0.1*dot(r_CM, Pol_vec);
+        		
+        		attraction_stiff_ecm = attraction_strength_ecm + attraction_strength_ecm*Polarity_Stiffness;
+        	
+        	}
+        	
 
         	int posX = (int)((X - Subdivision_min.x)/DL);
         	if ( posX < 0 ) posX = 0;
@@ -528,7 +547,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
 
-
+		
 	        float3 contactForce = make_float3(0.f, 0.f, 0.f);
         
 	        for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist[index]; ++nn_rank1 )
@@ -538,10 +557,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	            
 	            	if ( nn_rank == rank )
 	                	continue;
-                
-	            	deltaX  = X - d_CMx[nn_rank];
-	            	deltaY  = Y - d_CMy[nn_rank];                
-	            	deltaZ  = Z - d_CMz[nn_rank];
+                	
+                	float3 CM_neigh = make_float3(d_CMx[nn_rank], 
+               		                      d_CMy[nn_rank], 
+               		                      d_CMz[nn_rank]);
+                	
+	            	deltaX  = X - CM_neigh.x;
+	            	deltaY  = Y - CM_neigh.y;                
+	            	deltaZ  = Z - CM_neigh.z;
 	            
 		    	//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
 		    	range = f_range + attraction_range;	
@@ -555,10 +578,14 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             	    	{
                		 
                		 //nnAtomInd += nn_atom;
+               		 
+               		 float3 Pos_neigh = make_float3(d_X[nnAtomInd+nn_atom], 
+               		 	                        d_Y[nnAtomInd+nn_atom], 
+               		 	                        d_Z[nnAtomInd+nn_atom]);
 
-               		 deltaX = X - d_X[nnAtomInd+nn_atom];
-               		 deltaY = Y - d_Y[nnAtomInd+nn_atom];
-               		 deltaZ = Z - d_Z[nnAtomInd+nn_atom];
+               		 deltaX = X - Pos_neigh.x;
+               		 deltaY = Y - Pos_neigh.y;
+               		 deltaZ = Z - Pos_neigh.z;
         
             
                		 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
@@ -567,10 +594,27 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                		 
                		 if ( R >= attraction_range )
                		     continue;
-
-               		 contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
-               		 contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
-               		 contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+				
+				
+				 if(Polarity){
+				 	
+				 	
+				 	float3 Pol_vec_neigh = make_float3(d_Polarity_Vec.x[nn_rank], 
+               		 		                     	   d_Polarity_Vec.y[nn_rank], 
+               		 		                     	   d_Polarity_Vec.z[nn_rank]);
+				 	
+				 	float3 r_CM_neigh = calcUnitVec(Pos_neigh - CM_neigh);
+				 	
+				 	float Polarity_Stiffness_neigh = 0.1*dot(r_CM_neigh, Pol_vec_neigh);
+				 	
+				 
+				 	attraction_stiff += attraction_strength*(Polarity_Stiffness_neigh + Polarity_Stiffness)/2;
+				 
+				 }
+				 
+               		 contactForce.x += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaX;
+               		 contactForce.y += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaY;
+               		 contactForce.z += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaZ;
 
 
                		 if ( R <= repulsion_range )
@@ -646,7 +690,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 			
 			float3 F_ecm = make_float3(0.f, 0.f, 0.f);
 			
-			
 			posX = (int)((X - Subdivision_min.x)/DL_ecm);
         		if ( posX < 0 ) posX = 0;
         		if ( posX > Xdiv_ecm - 1 ) posX = Xdiv_ecm-1;
@@ -677,9 +720,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                		if ( R >= attraction_range_ecm )
                		     		continue;
 				 
-				F_ecm.x = -attraction_strength_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaX;
-				F_ecm.y = -attraction_strength_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaY;
-				F_ecm.z = -attraction_strength_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaZ;
+				F_ecm.x = -attraction_stiff_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaX;
+				F_ecm.y = -attraction_stiff_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaY;
+				F_ecm.z = -attraction_stiff_ecm*Youngs_mod*(attraction_range_ecm-R)/R*deltaZ;
 				 
 				 
                		if ( R <= repulsion_range_ecm )

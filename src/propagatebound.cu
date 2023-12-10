@@ -977,13 +977,14 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics)
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics)
 {
 	
 	int migrated_cell = d_migrated_cells_ind[blockIdx.x];
@@ -1083,8 +1084,13 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
 				
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
 					d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
-		
-		
+					
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Generation[migrated_cell] = d_Generation[moving_Cell];
+					
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
+					d_Fibre_index[migrated_cell] = d_Fibre_index[moving_Cell];
+					
 				}		
 		
 		
@@ -1122,6 +1128,8 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
 					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
 					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
 				}
 		
 			}			
@@ -1143,13 +1151,14 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics)
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics)
 {
 
 	
@@ -1259,7 +1268,12 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
 				
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
 					d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
-		
+					
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Generation[migrated_cell] = d_Generation[moving_Cell];
+					
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
+					d_Fibre_index[migrated_cell] = d_Fibre_index[moving_Cell];
 		
 				}		
 		
@@ -1298,6 +1312,8 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
 					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
 					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
 				}
 		
 			}			
@@ -1320,13 +1336,14 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migr
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics)
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics)
 {
 
 	
@@ -1437,7 +1454,12 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migr
 				
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
 					d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
-		
+					
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Generation[migrated_cell] = d_Generation[moving_Cell];
+					
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
+					d_Fibre_index[migrated_cell] = d_Fibre_index[moving_Cell];
 		
 				}		
 		
@@ -1475,6 +1497,8 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migr
 					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
 					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
 				}
 		
 			}			
@@ -1496,13 +1520,14 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migr
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics)
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics)
 {
 
 	
@@ -1613,7 +1638,12 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migr
 				
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
 					d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
-		
+					
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Generation[migrated_cell] = d_Generation[moving_Cell];
+					
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
+					d_Fibre_index[migrated_cell] = d_Fibre_index[moving_Cell];
 		
 				}		
 		
@@ -1651,6 +1681,8 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migr
 					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
 					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
 				}
 		
 			}			
@@ -1671,13 +1703,14 @@ __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_mig
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics)
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics)
 {
 
 	
@@ -1791,8 +1824,13 @@ __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_mig
 				
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
 					d_squeeze_rate[migrated_cell] = d_squeeze_rate[moving_Cell];
-		
-		
+					
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Generation[migrated_cell] = d_Generation[moving_Cell];
+					
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
+					d_Fibre_index[migrated_cell] = d_Fibre_index[moving_Cell];
+				
 				}		
 		
 		
@@ -1829,6 +1867,8 @@ __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_mig
 					d_DivisionVolume_mc_buffer[cell] = d_DivisionVolume[migrated_cell];
 					d_Apo_rate_mc_buffer[cell] = d_Apo_rate[migrated_cell];
 					d_squeeze_rate_mc_buffer[cell] = d_squeeze_rate[migrated_cell];
+					d_Generation_mc_buffer[cell] = d_Generation[migrated_cell];
+					d_Fibre_index_mc_buffer[cell] = d_Fibre_index[migrated_cell];
 				}
 		
 			}			

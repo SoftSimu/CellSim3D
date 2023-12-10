@@ -98,7 +98,7 @@ int PSNET(int NN,int sl,float L1, float *X, float *Y, float *Z, int CCI[2][271])
          SX2=X2+40.0;
          SZ1=Z1-10.0;
          SZ2=Z2-10.0;
-         if  (fabsf((Y1+Y2)/2.0-sl*L1) < 0.2) PSLINE(SX1,SZ1,SX2,SZ2,outfile);
+         if  (fabs((Y1+Y2)/2.0-sl*L1) < 0.2) PSLINE(SX1,SZ1,SX2,SZ2,outfile);
          fprintf(outfile,"stroke\n");
          }
 

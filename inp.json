@@ -96,12 +96,17 @@
     },
 
     "divParams":{
-
-        "useDivPlaneBasis": 0,
+	
+        "Random_Div_Rule": 0,
+        "Fibre": 0,
+        "useDivPlaneBasis":1,
         "divPlaneBasisX": 0,
         "divPlaneBasisY": 0,
         "divPlaneBasisZ": 1,
-	 "asymDivision": 0
+        "Rotation_angle": 10,
+        "Rotation_rate": 0.1,
+        "asymDivision": 0
+    
     },
 
     "NewCell":{

@@ -68,10 +68,11 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 			     float* X_mc_buffer, float* Y_mc_buffer, float* Z_mc_buffer, float* velListX_mc_buffer, float* velListY_mc_buffer, float* velListZ_mc_buffer,
 			     float* CMx_mc_buffer, float* CMy_mc_buffer, float* CMz_mc_buffer, float* ScaleFactor_mc_buffer, float* Youngs_mod_mc_buffer, float* Growth_rate_mc_buffer,
 			     float* DivisionVolume_mc_buffer, float* gamma_env_mc_buffer, float* viscotic_damp_mc_buffer, float* pressList_mc_buffer,float* Apo_rate_mc_buffer,
-			     float* squeeze_rate_mc_buffer, int* CellINdex_mc_buffer,	
+			     float* squeeze_rate_mc_buffer, int* CellINdex_mc_buffer, int* h_Generation_mc_buffer, int* h_Fibre_index_mc_buffer,	
 			     float* X_mc, float* Y_mc, float* Z_mc, float* velListX_mc,
 			     float* velListY_mc, float* velListZ_mc,float* CMx_mc, float* CMy_mc, float* CMz_mc, float* ScaleFactor_mc, float* Youngs_mod_mc, float* Growth_rate_mc,
-			     float* DivisionVolume_mc, float* gamma_env_mc, float* viscotic_damp_mc, float* pressList_mc,float* Apo_rate_mc, float* squeeze_rate_mc, int* CellINdex_mc,
+			     float* DivisionVolume_mc, float* gamma_env_mc, float* viscotic_damp_mc, float* pressList_mc,float* Apo_rate_mc, float* squeeze_rate_mc, int* CellINdex_mc, 
+			     int* h_Generation_mc, int* h_Fibre_index_mc,
 			     bool colloidal_dynamics)
 {
 		    	
@@ -140,7 +141,12 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
                  	
                  		MPI_Sendrecv( squeeze_rate_mc_buffer + shift_sender, No_of_migrated_cells_buffer, MPI_FLOAT, receiver, tag,
                  				squeeze_rate_mc + shift_receiver, No_of_migrated_cells, MPI_FLOAT, sender, tag, cart_comm, MPI_STATUS_IGNORE);
-                 	
+                 				
+                 		MPI_Sendrecv( h_Generation_mc_buffer + shift_sender, No_of_migrated_cells_buffer, MPI_INT, receiver, tag,
+                 				h_Generation_mc + shift_receiver, No_of_migrated_cells, MPI_INT, sender, tag, cart_comm, MPI_STATUS_IGNORE); 
+                 		
+                 		MPI_Sendrecv( h_Fibre_index_mc_buffer + shift_sender, No_of_migrated_cells_buffer, MPI_INT, receiver, tag,
+                 				h_Fibre_index_mc + shift_receiver, No_of_migrated_cells, MPI_INT, sender, tag, cart_comm, MPI_STATUS_IGNORE); 		 
 			}
                  			
 }

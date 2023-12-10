@@ -17,7 +17,7 @@
 
 #include <cuda.h>
 #include <curand.h>
-#include <vector_functions.h>
+//#include <vector_functions.h>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/fill.h>
@@ -1311,9 +1311,10 @@ int main(int argc, char *argv[])
 
   // initialize device rng
 
-
+  curandGenerator_t gen;
+  
   if (add_rands){
-      curandGenerator_t gen;
+      
       
       if (cudaMalloc((void **)&d_rngStates, sizeof(curandState)*192*MaxNoofC180s) != cudaSuccess){
           fprintf(stderr, "ERROR: Failed to allocate rng state memory in %s, at %d\n", __FILE__, __LINE__);
@@ -1329,7 +1330,7 @@ int main(int argc, char *argv[])
       time_t secs_since_1970;
       
       
-      curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MT19937);
+      curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_XORWOW);
       CudaErrorCheck();
 
       curandSetPseudoRandomGeneratorSeed(gen, time(&secs_since_1970) + rank*11111UL);
@@ -1351,9 +1352,10 @@ int main(int argc, char *argv[])
   }
 
 
+  curandGenerator_t genApo;
+  
   if (apoptosis){
       
-      	curandGenerator_t genApo;
       
       	if (cudaMalloc((void **)&d_rngStatesApo, sizeof(curandState)*MaxNoofC180s) != cudaSuccess){
         	  fprintf(stderr, "ERROR: Failed to allocate rng state memory in %s, at %d\n", __FILE__, __LINE__);
@@ -1369,7 +1371,7 @@ int main(int argc, char *argv[])
       	time_t secs_since_1970;
       
       
-      	curandCreateGenerator(&genApo, CURAND_RNG_PSEUDO_MT19937);
+      	curandCreateGenerator(&genApo, CURAND_RNG_PSEUDO_XORWOW);
       	CudaErrorCheck();
 
       	curandSetPseudoRandomGeneratorSeed(genApo, time(&secs_since_1970) + (rank+1)*1111UL);

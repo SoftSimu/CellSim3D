@@ -7,6 +7,7 @@
 #include "marsaglia.h"
 
 void GetRandomVector (float* n){
+    
     float ran2[2];
     float s = 0;
     do {
@@ -22,6 +23,7 @@ void GetRandomVector (float* n){
     n[0] = 2*x1*sqrt(1 - x1*x1 - x2*x2);
     n[1] = 2*x2*sqrt(1 - x1*x1 - x2*x2);
     n[2] = 1 - 2*(x1*x1 + x2*x2);
+
 }
 
 void GetRandomVectorBasis (float* n, float* v, float* w){

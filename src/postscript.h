@@ -12,17 +12,19 @@ int getDevice(int idev);
 
 
 
-__global__ void  cell_division(float *d_X,  float *d_Y,  float *d_Z,
-                               float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float repulsion_range, float* d_asym,
-                               bool useDifferentCell, bool daughtSame,
-                               int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
-                               float squeeze_rate1, float Apo_rate1,
-                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
-                               float* d_squeeze_rate, float* d_Apo_rate,
-                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
-				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, float minPressure);
+__global__ void cell_division( bool Random_Div_Rule, bool Fibre,
+			       float *d_X,  float *d_Y,  float *d_Z,
+                              float* AllCMx, float* AllCMy, float* AllCMz,
+                              float* d_velListX, float* d_velListY, float* d_velListZ, 
+                              int No_of_C180s, float repulsion_range, float* d_asym,
+                              bool useDifferentCell, bool daughtSame,
+                              int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+                              float squeeze_rate1, float Apo_rate1,
+                              float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+                              float* d_squeeze_rate, float* d_Apo_rate,
+                              float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex, 
+                              R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, int* d_Generation, int* d_Fibre_index,
+                              float minPressure);
 
 
 __global__ void makeNNlist(int No_of_C180s, float *CMx, float *CMy,float *CMz, float *CMxNNlist, float *CMyNNlist, float *CMzNNlist,
@@ -148,7 +150,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           int MaxNeighList_ecm);
+                           int MaxNeighList_ecm,
+                           R3Nptrs d_Polarity_Vec, bool Polarity);
 
 
 __global__ void CalculateConForce_ECM( int Num_ECM,
@@ -459,7 +462,7 @@ __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter
                                float* d_velListX, float* d_velListY, float* d_velListZ, 
                                float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                float* d_gamma_env, float* d_viscotic_damp,float* d_pressList, int* d_CellINdex,
-                               float* Apo_rate, float* squeeze_rate,
+                               float* Apo_rate, float* squeeze_rate, int* d_Generation, int* d_Fibre_index,
 				int* d_cell_Apo_inds, char* cell_Apo);
 
 __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, float* d_Apo_rate,
@@ -566,13 +569,14 @@ __global__ void migrated_Cells_Remove_Pack(int No_of_C180s, int No_of_migration_
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics);
 
 __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
@@ -581,13 +585,14 @@ __global__ void migrated_Cells_Remove_Pack_PBC_X(int No_of_C180s, int No_of_migr
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics);
                                		
 __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
@@ -596,13 +601,14 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Y(int No_of_C180s, int No_of_migr
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics);
 
 __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
@@ -611,13 +617,14 @@ __global__ void migrated_Cells_Remove_Pack_PBC_Z(int No_of_C180s, int No_of_migr
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);      
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics);      
 
 __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_migration_cells_buffer, int* d_counter, float Pshift, float Vshift,
 					 	int* d_migrated_cells_ind, char* d_cell_mig, double3 boxMax,
@@ -626,13 +633,14 @@ __global__ void migrated_Cells_Remove_Pack_LEbc_X(int No_of_C180s, int No_of_mig
                                		float* d_CMx, float* d_CMy, float* d_CMz,
                                		float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                                		float* d_gamma_env, float* d_viscotic_damp, float* d_pressList, int* d_CellINdex, 
-                               		float* d_Apo_rate, float* d_squeeze_rate,
+                               		float* d_Apo_rate, float* d_squeeze_rate, int* d_Generation, int* d_Fibre_index,
 						float *d_X_mc_buffer,  float *d_Y_mc_buffer,  float *d_Z_mc_buffer,
                                		float* d_velListX_mc_buffer, float* d_velListY_mc_buffer, float* d_velListZ_mc_buffer,
                                		float* d_CMx_mc_buffer, float* d_CMy_mc_buffer, float* d_CMz_mc_buffer,
                                		float* d_ScaleFactor_mc_buffer,float* d_Youngs_mod_mc_buffer, float* d_Growth_rate_mc_buffer, float* d_DivisionVolume_mc_buffer,
                                		float* d_gamma_env_mc_buffer, float* d_viscotic_damp_mc_buffer, float* d_pressList_mc_buffer, int* d_CellINdex_mc_buffer, 
-                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, bool colloidal_dynamics);
+                               		float* d_Apo_rate_mc_buffer, float* d_squeeze_rate_mc_buffer, int* d_Generation_mc_buffer, int* d_Fibre_index_mc_buffer,
+                               		bool colloidal_dynamics);
 
 __global__ void migrated_cells_finder(int No_of_C180s, float *d_CM,
                          		float Sub_max, float Sub_min, float BMin, float BMax,
@@ -665,10 +673,11 @@ void Send_Recv_migrated_cells(int No_of_migrated_cells_buffer, int No_of_migrate
 			     float* X_mc_buffer, float* Y_mc_buffer, float* Z_mc_buffer, float* velListX_mc_buffer, float* velListY_mc_buffer, float* velListZ_mc_buffer,
 			     float* CMx_mc_buffer, float* CMy_mc_buffer, float* CMz_mc_buffer, float* ScaleFactor_mc_buffer, float* Youngs_mod_mc_buffer, float* Growth_rate_mc_buffer,
 			     float* DivisionVolume_mc_buffer, float* gamma_env_mc_buffer, float* viscotic_damp_mc_buffer, float* pressList_mc_buffer,float* Apo_rate_mc_buffer,
-			     float* squeeze_rate_mc_buffer, int* CellINdex_mc_buffer,	
+			     float* squeeze_rate_mc_buffer, int* CellINdex_mc_buffer, int* h_Generation_mc_buffer, int* h_Fibre_index_mc_buffer,	
 			     float* X_mc, float* Y_mc, float* Z_mc, float* velListX_mc,
 			     float* velListY_mc, float* velListZ_mc,float* CMx_mc, float* CMy_mc, float* CMz_mc, float* ScaleFactor_mc, float* Youngs_mod_mc, float* Growth_rate_mc,
 			     float* DivisionVolume_mc, float* gamma_env_mc, float* viscotic_damp_mc, float* pressList_mc,float* Apo_rate_mc, float* squeeze_rate_mc, int* CellINdex_mc,
+			     int* h_Generation_mc, int* h_Fibre_index_mc,
 			     bool colloidal_dynamics);
 			     
 void Send_Recv_ghost_ECM( int No_of_Ghost_ECM_buffer, int No_of_Ghost_ECM, int receiver, int sender, int tag, MPI_Comm cart_comm,
