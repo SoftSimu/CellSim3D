@@ -140,11 +140,13 @@ where $R_0$ is the equilibrium bond length, $v_{ij}$ is the relative velocity be
 The input variables used to describe this force are:
 
 + "stiffFactor1" and "Youngs_mod" whose product is the intercellular bond stiffness $k^{B}$.
-+ "internal_damping": Bond damping coefficient $\gamma_{int}$.
++ "internal_damping"
+
+  Bond damping coefficient $\gamma_{int}$.
 
 
 #### Cell Curvature
-The angle force, $F_{angle}$ , is a harmonic force exerted on three neighboring nodes which oppose the deformation of the angle between these three nodes and maintains cell curvature. It is defined as
+The angle force, $F_{angle}$, is a harmonic force exerted on three neighboring nodes which opposes the deformation of the angle between these three nodes and maintains cell curvature. It is defined as
 ```math
 F_i^{\theta}=-\frac{1}{2}  \sum_j \sum_{k\neq i}  k_{\theta} \nabla (\theta_{i j k} - \theta_0)^2
 ```
@@ -160,20 +162,43 @@ The internal pressure driving cell growth can be described using two variables:
 F^P= P S \hat{n}
 ```
 Where P is the internal pressure of the cell, and S is the unit element of the surface area.
-+ "growth_rate": Product of S and P, Pressure growth rate.
-+ "minPressure": Initial pressure force
-+ "maxPressure": Final pressure force
++ "growth_rate"
+
+  Product of S and P, Pressure growth rate.
++ "minPressure"
+
+  Initial pressure force
++ "maxPressure"
+
+  Final pressure force
 
 
 ### Intercellular forces
 
 #### Adhesion
-+ "attraction_range": Attraction range between two neighboring cells
+When two cell membranes come into contact, the adhesive component holds them together. $F_A$, the attractive force between nodes in different cells is defined as
+
+
+```math
+\mathbf{F}_{i, m}^{\mathrm{A}}=\sum_n \sum_j \begin{cases}\mathrm{k}^{\mathrm{A}}\left(\mathrm{r}_{i j, n}-R_0^{\mathrm{A}}\right) \hat{\mathbf{r}}_{i j, n} & \text { if } r_{i j, n}< R_0^{A} ; \\ 0 & \text { if } r_{i j, n} \geq R_0^{\mathrm{A}},\end{cases}
+```
+
++ "attraction_range"
+
+  Attraction range between two neighboring cells
 + We have "attraction_strength" and "Youngs_mod" such that the product of these two is the attraction stiffness.
 
 
 #### Repulsion
-+ "repulsion_range": Repulsion range between two neighboring cells
+When two cell membranes come into contact, the repulsive force keeps them apart. $F_R$, the repulsive force between nodes in different cells is defined as
+```math
+\begin{gathered}\mathbf{F}_{i, m}^{\mathrm{R}}=\sum_n \sum_j \begin{cases}-\mathrm{k}^{\mathrm{R}}\left(r_{i j, n}-R_0^{\mathrm{R}}\right) \hat{\mathbf{r}}_{i j, n} & \text { if } r_{i j, n}< R_0^{\mathrm{R}} ; \\ 0 & \text { if } r_{i j, n} \geq R_0^{\mathrm{R}},\end{cases} \end{gathered}
+```
+
+
++ "repulsion_range"
+
+  Repulsion range between two neighboring cells
 + We have "repulsion_strength" and "Youngs_mod" such that the product of these two is the repulsion stiffness.
 
 
@@ -183,48 +208,100 @@ $F^F$ is the friction term separated into viscous drag due to cell-extracellular
 ```math
 F^{F,e}_{ij}= -\gamma_{ext} v_{ij}^{\tau}
 ```
-+ "viscotic_damping": Inter-membrane friction $\gamma_{ext}$
++ "viscotic_damping"
+
+  Inter-membrane friction $\gamma_{ext}$
 
 
 #### Friction between cells and medium
-The viscous drag due to medium is defined as
+The viscous drag due to the medium is defined as
 
 ```math
 F^{F,m} = -\gamma_m v
 ```
-+ "gamma_visc": Medium friction $\gamma_m$
++ "gamma_visc"
+
+  Medium friction $\gamma_m$
 
 
 
 ## Division 
 We assume that cells divide symmetrically through their centers of mass and asymmetrically by placing the division plane off-center.
 
-+ "division_Vol": Volume threshold for division
-+ "useDivPlaneBasis": use the specified division plane - 0 for false & 1 for true
-+ "divPlaneBasisX": set the division plane normal to the X direction if "useDivPlaneBasis" is set to one
-+ "divPlaneBasisY": set the division plane normal to the Y direction if "useDivPlaneBasis" is set to one
-+ "divPlaneBasisZ": set the division plane normal to the Z direction if "useDivPlaneBasis" is set to one
-+ "asymDivision": Do asymmetric division - 0 for false & 1 for true
++ "division_Vol"
+
+   Volume threshold for division
++ "useDivPlaneBasis"::Boolean
+
+   use the specified division plane 
++ "divPlaneBasisX"
+
+  set the division plane normal to the X direction if "useDivPlaneBasis" is set to one
++ "divPlaneBasisY"
+
+  set the division plane normal to the Y direction if "useDivPlaneBasis" is set to one
++ "divPlaneBasisZ"
+
+  set the division plane normal to the Z direction if "useDivPlaneBasis" is set to one
++ "asymDivision"::Boolean
+
+  Do asymmetric division 
+
 
 ### New cell characteristics
 
-+ "useDifferentCell": Set different characteristics for new cells -  0 for false & 1 for true
-+ "SizeFactor": Ratio of the size of the new type of cell compared to the old one
-+ "StiffFactor": Ratio of the stiffness of the bonds of the new type of cell compared to the old one
-+ "GrowthRate": growth rate of the new cell
-+ "divisionV": division volume of the new cell
-+ "gammaV": 0.01,
-+ "VisDamping" : 0.01,
-+ "Apo_rate2": Probability of apoptosis for each new cell
-+ "squeeze_rate2": rate of shrinkage of the new cell in apoptosis (replaces growth rate)
-+ "numberOfCells": 0,
-+ "fractionOfCells": fraction of new cells that will have these properties
-+ "closenessToCenter": (daughter cells/cells themselves?) in this specific radius will be of the new type
-+ "Yseparation": Apply changes for cells in range y $\in$ Yseperation*boxMax.y
-+ "chooseRandomCellindices": Choose random cells to (change properties of existing cell/ have the daughter cells be of the new kind?), 0 for false & 1 for true #Ask <
-+ "daughtSame": 1,
-+ "duringGrowth": 1,
-+ "recalc_r0": 0
++ "useDifferentCell"::Boolean
+  
+  Have two different types of cells in the simulation, sets different characteristics for new cells 
++ "SizeFactor"::Boolean
+
+  Ratio of the size of the new type of cell compared to the old one
++ "StiffFactor"
+
+   Ratio of the stiffness of the bonds of the new type of cell compared to the old one
++ "GrowthRate"
+
+  The growth rate of the new cell
++ "division"
+
+  division volume of the new cell
++ "gammaV" #check
+
+  Medium Friction for the new cell
++ "VisDamping" 
+  
+  Intermembrane friction
++ "Apo_rate2"
+
+  Probability of apoptosis for each new cell
++ "squeeze_rate2"
+
+  rate of shrinkage of the new cell in apoptosis (replaces growth rate)
++ "numberOfCells": numberofCells=roundf(fractionofCells*No_of_C180s), whats the point of having it in the code?
+
+  The number of this second type of cells in the system.
++ "fractionOfCells"
+
+  fraction of new cells that will have these properties
++ "closenessToCenter"
+
++ "numberofCells"
+
+  cells will be turned into the second type in this specific radius.
++ "Yseparation"
+
+   Apply changes for cells in range y $\in$ Yseperation*boxMax.y
++ "chooseRandomCellindices"::Boolean  #check
+
+  Choose random cells to be of the new type
++ "daughtSame":: Boolean
+  
++ "duringGrowth"::Boolean
+  
+  Does not change the property of cells if the system has growth 
++ "recalc_r0":: Boolean #Ask
+
+  If true, does not divide the cell into a fullerene
 
 
 ### Population regulation
