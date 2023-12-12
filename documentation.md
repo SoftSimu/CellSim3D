@@ -305,37 +305,77 @@ We assume that cells divide symmetrically through their centers of mass and asym
 
 
 ### Population regulation
+#Ask 
 
-+ "doPopModel": 0,
-+ "totalFood": 5000.0,
-+ "regular_consumption": 2.0,
-+ "division_consumption": 10.0,
-+ "death_release_food": 10.0,
-+ "haylimit": 10,
-+ "cellLifeTime": 20000
++ "doPopModel"::Boolean
 
+  
++ "totalFood"
+
+  Total food available to the system
+
++ "regular_consumption"
+  
+  Consumption of food by cells in the system 
++ "division_consumption"
+
+  Each cell consumes this much food when going through division
++ "death_release_food"
+
+  Death of cell releases "death_release_food" units of food back into the system
++ "haylimit": 10?
+  
++ "cellLifeTime"
+
+  The lifetime of each cell is "cellLifeTime" time steps
 
 
 
 ## ECM
 
-+ "ECM": Have Extracellular Matrix in simulation - 0 for false & 1 for true
-+ "Max_ECM_nodes": Maximum number of nodes in the ECM, for constructing an array #can't find, ask <---
-+ "Div_size": 1.0, #can't find
++ "ECM"::Boolean
+
+  Have Extracellular Matrix in simulation
++ "Max_ECM_nodes"
+
+  Maximum number of nodes in the ECM, for constructing an array 
++ "Div_size":
+
+  Division size in ECM
 + "Buffer_size": 1000,
 + "MaxNeighList": 512, 
-+ "mass": 0.04,
-+ "stiffness_min": Minimum stiffness of bonds in ECM #stifness varies across ECM
-+ "stiffness_max": Maximum stiffness of bonds in ECM
++ "mass"
+
+  The mass of each node
++ "stiffness_min"
+
+  Minimum stiffness of bonds in ECM #stifness varies across ECM
++ "stiffness_max"
+
+  Maximum stiffness of bonds in ECM
 + "angleConstant": 1.0,
-+ "vis_damp": 0.01,
-+ "gamma_env": 0.1,
-+ "vis_ecm_cell": 0.05,
-+ "attraction_range_ecm": 0.2,
-+ "repulsion_range_ecm": 0.1,
-+ "attraction_strength_ecm": 0.4,
-+ "repulsion_strength_ecm": 100,
-+ "write_traj_Ecm_file": 0 for false & 1 for true
++ "vis_damp"
+
+  Inter node friction
++ "gamma_env"
+
+  Environment friction
++ "vis_ecm_cell"
+
+  Friction between ECM and cell
++ "attraction_range_ecm"
+
+  Attraction range between two neighboring nodes
++ "repulsion_range_ecm"
+
+  Repulsion range between two neighboring nodes
++ "attraction_strength_ecm"
+
+  We have "attraction_strength_ecm" and "Youngs_mod" such that the product of these two is the ECM attraction stiffness.
++ "repulsion_strength_ecm"
+
+  We have "repulsion_strength_ecm" and "Youngs_mod" such that the product of these two is the ECM repulsion stiffness.
++ "write_traj_Ecm_file": Boolean
 
 
 
@@ -346,21 +386,29 @@ In the apoptosis process, cells lose their internal pressure and shrink. This sh
 from positive to negative. After the volume of these cells passes a certain threshold, the cells are removed from the
 system.
 
-+ "apoptosis": (0,1) Apoptosis True/False
-+ "popToStartApo": Number of cells we should have in the system to start apoptosis
-+ "Apo_ratio": Probability of apoptosis for each cell
-+ "squeeze_rate": rate of shrinkage of a cell in apoptosis (replaces growth rate)
-+ "apoptosis_Vol": Cells are removed from the system after reaching this threshold volume
++ "apoptosis"::Boolean 
++ "popToStartApo":
+
+  Number of cells we should have in the system to start apoptosis
++ "Apo_ratio"
+
+  Probability of apoptosis for each cell
++ "squeeze_rate"
+
+  rate of shrinkage of a cell in apoptosis (replaces growth rate)
++ "apoptosis_Vol"
+
+  Cells are removed from the system after reaching this threshold volume
 
 
 ## Colloidal Dynamics
 
-+ "colloidal_dynamics": 1,
++ "colloidal_dynamics":: Boolean
 + "dispersity": 0,
 + "dispersity_max": 1,
 + "dispersity_min": 0.7,
-+ "rand_vel": 0,
-+ "Two_Components": 1,
++ "rand_vel":: Boolean
++ "Two_Components": have two different types of colloid in system
 + "SizeFactor": 0.9,
 + "Friction": 0.1,
 + "Fraction": 0.3,    	
