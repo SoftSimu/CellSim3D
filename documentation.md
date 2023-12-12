@@ -342,8 +342,12 @@ We assume that cells divide symmetrically through their centers of mass and asym
 + "Div_size":
 
   Division size in ECM
-+ "Buffer_size": 1000,
-+ "MaxNeighList": 512, 
++ "Buffer_size"
+
+  Buffer size for ECM
++ "MaxNeighList"
+
+  Maximum number of cells we can have in a 
 + "mass"
 
   The mass of each node
@@ -353,7 +357,9 @@ We assume that cells divide symmetrically through their centers of mass and asym
 + "stiffness_max"
 
   Maximum stiffness of bonds in ECM
-+ "angleConstant": 1.0,
++ "angleConstant"
+
+  Bond stiffness k
 + "vis_damp"
 
   Inter node friction
@@ -404,7 +410,7 @@ system.
 ## Colloidal Dynamics
 
 + "colloidal_dynamics":: Boolean
-+ "dispersity": Boolean
++ "dispersity":: Boolean
 
   The colloids in the system will be scaled in the range "dispercity_min" to "dispercity_max"
 + "dispersity_max"
@@ -415,9 +421,9 @@ system.
   Minimum size of particles in the system
 + "rand_vel":: Boolean
 + "Two_Components": have two different types of colloid in the system
-+ "SizeFactor" #ask
++ "SizeFactor"
 
-  Scales all the particles in the system by "SizeFactor" amount 
+  If set to one, all new cells in the system would have the same size as the old cells. If set to any thing else, size of the new cells would be scaled by "SizeFactor".
 + "Friction"
 
   Friction coefficient 
@@ -426,61 +432,99 @@ system.
   The fraction of colloids that are of type 2
 + "Xratio"
 
-  scales 
-+ "Yratio": 1.0,
-+ "Zratio": 1.0,
-+ "RandInitDir": 0,
-+ "ReadInitialConf" : 0,
-+ "Compressor": 0,
-+ "Compress_Value_X": 0.000025,
-+ "Compress_Value_Y": 0.000025,
-+ "Compress_Value_Z": 0.000025
+  For non-spherical particles- scales them in x direction
++ "Yratio"
+
+  For non-spherical particles- scales them in y direction
++ "Zratio"
+
+  For non-spherical particles- scales them in z direction
+  
++ "RandInitDir"::Boolean
++ "ReadInitialConf" :: Boolean
++ "Compressor":: Boolean
+
+  When we want a system with a specific density, we use the compressor. We run an initial system and save all of its data to the Restart file. Then we reposition the cells and walls to have a system with a different total volume and density. After that we resume the simulation.
+    
++ "Compress_Value_X"
+
+  Compress the system in the x direction using scaling factor "Compress_Value_X" 
++ "Compress_Value_Y"
+
+  Compress the system in the y direction using scaling factor "Compress_Value_Y"
+  
++ "Compress_Value_Z"
+
+  Compress the system in the Z direction using scaling factor "Compress_Value_Z" 
 
 
   
 ## Polarity 
-+ "Polarity": Not successful yet, CellStressTensor needs to be calculated using a new algorithm.
++ "Polarity"
+
+  Not successful yet, CellStressTensor needs to be calculated using a new algorithm.
 
 
 ## Boundary
-+ "shear_rate": shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
-+ "useRigidSimulationBox": Use rigid boundary condition, 0 for false & 1 for true
-+ "usePBCs": Use Periodic Boundary Condition - 0 for false & 1 for true
-+ "useLEbc": Use Lees Edwards boundary condition (LEbc) - 0 for false & 1 for true
-+ "useRigidBoxZ": have Rigid walls in Z direction - 0 for false & 1 for true
-+ "useRigidBoxY": have Rigid walls in Y direction - 0 for false & 1 for true
-+ "useRigidBoxX": have Rigid walls in X direction - 0 for false & 1 for true
++ "shear_rate"
+
+  shear rate for Lees Edwards boundary condition (LEbc), #Vshift = shear_rate*boxMax.x ?
++ "useRigidSimulationBox"::Boolean
+
+  Use rigid boundary condition
++ "usePBCs"::Boolean
+
+  Use Periodic Boundary Condition
++ "useLEbc"
+  
+  Use Lees Edwards boundary condition (LEbc)
++ "useRigidBoxZ"
+
+  have Rigid walls in Z direction
++ "useRigidBoxY"::Boolean
+
+  have Rigid walls in Y direction 
++ "useRigidBoxX"
+
+  have Rigid walls in X direction 
 
  allCMsPin[i].x < 1.5 #?
 
 + "threshDist": 0.01,
-+ "box_len_x": Maximum position of the box in the x direction
-+ "box_len_y": Maximum position of the box in the x direction
-+ "box_len_z": Maximum position of the box in the x direction
-+ "BoxMin_x": Minimum position of the box in the x direction (usually set to 0.0)
-+ "BoxMin_y": Minimum position of the box in the y direction (usually set to 0.0)
-+ "BoxMin_z": Minimum position of the box in the z-direction (usually set to 0.0)
-+ "flatbox": Position the z position of all cells in the middle of the box - 0 for false & 1 for true
++ "box_len_x"
+
+  Maximum position of the box in the x direction
++ "box_len_y"
+  Maximum position of the box in the x direction
++ "box_len_z"
+
+  Maximum position of the box in the x direction
++ "BoxMin_x"
+
+  Minimum position of the box in the x direction (usually set to 0.0)
++ "BoxMin_y"
+
+  Minimum position of the box in the y direction (usually set to 0.0)
++ "BoxMin_z"
+
+  Minimum position of the box in the z-direction (usually set to 0.0)
++ "flatbox"::Boolean
+
+  Position the z position of all cells in the middle of the box
 + "dom_len": 1.5 #Ask <-----
-+ "rand_pos": gives the initial cells random positions - 0 for false & 1 for true
-+ "impurity": 0 for false & 1 for true , #Ask<---
++ "rand_pos"::Boolean
+
+  gives the initial cells random positions 
++ "impurity"::Boolean , #Ask<---
 + "impurityNum": Number of #? Cells #Ask
-+ "line": 0 for false & 1 for true
-+ "LineCenter": If "line" is set to one, It sets the x position of the COM of cells to the center of the box #check <---
-+ "plane": Positions all cells on a plane with fixed Z - 0 for false & 1 for true
++ "line":: Boolean
++ "LineCenter"
 
-~~~
-If (colliodal_dynamics) {
-  If (ReadInitialConf) {}
-  else  {#sets random position} 
-}
+  If "line" is set to one, It sets the x position of the COM of cells to the center of the box #check <---
++ "plane"::Boolean
 
-else {
-  If randompositon{} #Impurity?  #Ask
-  If line{}
-  If plane{}
-}
-~~~
+  Positions all cells on a plane with fixed Z 
+
 ## Random number Generator
 + "add_rands": 1,
 + "rand_seed": -1, // use time if < 0
@@ -488,12 +532,7 @@ else {
 + "rand_scale_factor": 0.1
 
 ## To add
-
-- [ ] Write a description for all input variables
-- [ ] Can include an animation & description for each feature (can change the color of cells you would like to point out later, eg. those going through apoptosis or polar ones, can have different colors for colloids that have more than one component.))
-- [ ] Add the force equations
-- [ ] Write better descriptions for each force
-
+- [ ] Can include an animation & description for each feature (can change the color of cells you would like to point out later, eg. those going through apoptosis or polar ones, can have different colors for colloids that have more than one component.)
 
 
 
