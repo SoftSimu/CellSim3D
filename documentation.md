@@ -404,15 +404,29 @@ system.
 ## Colloidal Dynamics
 
 + "colloidal_dynamics":: Boolean
-+ "dispersity": 0,
-+ "dispersity_max": 1,
-+ "dispersity_min": 0.7,
++ "dispersity": Boolean
+
+  The colloids in the system will be scaled in the range "dispercity_min" to "dispercity_max"
++ "dispersity_max"
+
+  Maximum size of particles in the system
++ "dispersity_min"
+
+  Minimum size of particles in the system
 + "rand_vel":: Boolean
-+ "Two_Components": have two different types of colloid in system
-+ "SizeFactor": 0.9,
-+ "Friction": 0.1,
-+ "Fraction": 0.3,    	
-+ "Xratio": 1.0,
++ "Two_Components": have two different types of colloid in the system
++ "SizeFactor" #ask
+
+  Scales all the particles in the system by "SizeFactor" amount 
++ "Friction"
+
+  Friction coefficient 
++ "Fraction"
+
+  The fraction of colloids that are of type 2
++ "Xratio"
+
+  scales 
 + "Yratio": 1.0,
 + "Zratio": 1.0,
 + "RandInitDir": 0,
