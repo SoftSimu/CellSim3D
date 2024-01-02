@@ -113,7 +113,10 @@ float* asym;
 float* d_asym;
 bool checkSphericity; 
 bool useDivPlaneBasis;
+bool Random_Div_Rule;
+bool Fibre;
 float divPlaneBasis[3]; 
+float Rotation_angle, Rotation_rate;
 
 
 
@@ -225,8 +228,11 @@ R3Nptrs d_fConList;
 R3Nptrs d_fDisList;
 R3Nptrs d_fRanList; 
 R3Nptrs d_ExtForces;
+R3Nptrs d_ConFricForces;
+
 R3Nptrs h_contactForces;
 R3Nptrs h_ExtForces;
+R3Nptrs h_ConFricForces;
 
 
 float DL;
@@ -355,6 +361,13 @@ float* d_Apo_rate;
 float* squeeze_rate;
 float* d_squeeze_rate;
 
+int* d_Generation;
+int* h_Generation;
+
+int* d_Fibre_index;
+int* h_Fibre_index;
+
+
 
 float SizeFactor;
 float Stiffness2;
@@ -411,8 +424,12 @@ float *XPin_OtherGPU, *YPin_OtherGPU, *ZPin_OtherGPU;
 float *velListX_OtherGPU, *velListY_OtherGPU, *velListZ_OtherGPU;
 float *CmX_OtherGPU, *CmY_OtherGPU, *CmZ_OtherGPU;
  
+int *h_Generation_OtherGPU;
+int* h_Fibre_index_OtherGPU; 
+ 
 R3Nptrs h_contactForces_OtherGPU;
 R3Nptrs h_ExtForces_OtherGPU;
+R3Nptrs h_ConFricForces_OtherGPU;
 
 
 
@@ -459,7 +476,8 @@ float  *d_CMx_mc_buffer, *d_CMy_mc_buffer, *d_CMz_mc_buffer;
 float *d_ScaleFactor_mc_buffer, *d_Youngs_mod_mc_buffer, *d_Growth_rate_mc_buffer, *d_DivisionVolume_mc_buffer;
 float *d_gamma_env_mc_buffer, *d_viscotic_damp_mc_buffer, *d_pressList_mc_buffer;
 float *d_Apo_rate_mc_buffer, *d_squeeze_rate_mc_buffer;
-int *d_CellINdex_mc_buffer;                               		
+int *d_CellINdex_mc_buffer, *d_Generation_mc_buffer, *d_Fibre_index_mc_buffer;                               		
+  
                                		 
 float  *X_mc,  *Y_mc,  *Z_mc;    
 float  *velListX_mc, *velListY_mc, *velListZ_mc; 
@@ -467,7 +485,26 @@ float  *CMx_mc, *CMy_mc, *CMz_mc;
 float *ScaleFactor_mc, *Youngs_mod_mc, *Growth_rate_mc, *DivisionVolume_mc;
 float *gamma_env_mc, *viscotic_damp_mc, *pressList_mc;
 float *Apo_rate_mc, *squeeze_rate_mc;
-int *CellINdex_mc;
+int *CellINdex_mc, *h_Generation_mc, *h_Fibre_index_mc;
+
+
+bool ECM;
+float DL_ecm;
+int Xdiv_ecm, Ydiv_ecm;
+float *d_Con_ECM_force_x, *d_Con_ECM_force_y, *d_Con_ECM_force_z;
+float *d_Dis_ECM_force_x, *d_Dis_ECM_force_y, *d_Dis_ECM_force_z;	
+float *h_Con_ECM_force_x, *h_Con_ECM_force_y, *h_Con_ECM_force_z;
+float *d_ECM_x,  *d_ECM_y,  *d_ECM_z; 
+float *d_ECM_Vx,  *d_ECM_Vy,  *d_ECM_Vz;
+float vis_ecm_cell;
+float attraction_range_ecm, repulsion_range_ecm; 
+float attraction_strength_ecm, repulsion_strength_ecm;
+int *d_NoofNNlist_ECM;
+int *d_NNlist_ECM;
+int MaxNeighList_ecm;
+R3Nptrs d_Polarity_Vec, h_Polarity_Vec;
+bool Polarity;
+
 
 int main(int argc, char *argv[])
 {
@@ -482,7 +519,7 @@ int main(int argc, char *argv[])
   }
 
 
-   SetDeviceBeforeInit();
+   //SetDeviceBeforeInit();
    
    MPI_Init(&argc, &argv);
    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
@@ -515,7 +552,11 @@ int main(int argc, char *argv[])
   	
   }
 
-
+  // zero for now, not implemented
+  ECM = 0;
+  DL_ecm = 2.0;
+  Polarity = 0;
+  
   if(useLEbc) {
   	
   	if (dims[1] != 1) {
@@ -570,17 +611,23 @@ int main(int argc, char *argv[])
 
   if (nprocs > 1) MPI_Barrier(cart_comm);
 
-  //int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
-  //idev = local_rank;
-  //int local_rank = atoi(getenv("PMIX_RANK"));
-  //idev = local_rank; 
+  int local_rank; 
+  
+  MPI_Comm node_comm;
+  MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &node_comm);
+  MPI_Comm_rank(node_comm, &local_rank);
+  MPI_Comm_free(&node_comm);
+  
+  idev = local_rank;
     
   //idev = rank%4; 
-  //printf("local rank=%d: and idev %d\n", local_rank, idev);
-  //cudaSetDevice(idev);
+  printf("local rank=%d: and idev %d\n", local_rank, idev);
+  cudaSetDevice(idev);
   //cudaDeviceProp deviceProp = getDevice(idev);  
- 
-  //if (nprocs > 1) MPI_Barrier(cart_comm);
+  if (  getDevice(idev) != 0 ) return(-1);
+  
+  if (nprocs > 1) MPI_Barrier(cart_comm);
+
    
   
   for (int i = 0; i < 6 ; i++){
@@ -748,6 +795,8 @@ int main(int argc, char *argv[])
   squeeze_rate = (float *)calloc(MaxNoofC180s, sizeof(float));
   viscotic_damp = (float *)calloc(MaxNoofC180s, sizeof(float));
   area= (float *)calloc(MaxNoofC180s, sizeof(float));
+  h_Generation = (int *)calloc(MaxNoofC180s, sizeof(int));
+  h_Fibre_index =  (int *)calloc(MaxNoofC180s, sizeof(int));
   
   
   if (Restart == 1 ) {
@@ -765,6 +814,9 @@ int main(int argc, char *argv[])
   h_ExtForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ExtForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ConFricForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ConFricForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_ConFricForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   
   DivPlane.x = (float *)calloc(MaxNoofC180s, sizeof(float));
   DivPlane.y = (float *)calloc(MaxNoofC180s, sizeof(float));
@@ -903,6 +955,8 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc( (void **)&d_pressList, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_resetIndices, MaxNoofC180s*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_Youngs_mod, MaxNoofC180s*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Generation, MaxNoofC180s*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc( (void **)&d_Fibre_index, MaxNoofC180s*sizeof(int))) return(-1);  
   if ( cudaSuccess != cudaMalloc( (void **)&d_Growth_rate, MaxNoofC180s*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_CellINdex, MaxNoofC180s*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc( (void **)&d_ScaleFactor, MaxNoofC180s*sizeof(float))) return(-1); 
@@ -918,6 +972,9 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_ExtForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_ConFricForces.x, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_ConFricForces.y, 192*MaxNoofC180s*sizeof(float))) return -1;
+  if ( cudaSuccess != cudaMalloc((void **)&d_ConFricForces.z, 192*MaxNoofC180s*sizeof(float))) return -1;  
   if ( cudaSuccess != cudaMalloc((void **)&d_fConList.x, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fConList.y, 192*MaxNoofC180s*sizeof(float))) return -1;
   if ( cudaSuccess != cudaMalloc((void **)&d_fConList.z, 192*MaxNoofC180s*sizeof(float))) return -1;
@@ -986,6 +1043,8 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_CMz_mc_buffer  , BufferSize*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_ScaleFactor_mc_buffer  , BufferSize*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_Youngs_mod_mc_buffer  , BufferSize*sizeof(float))) return(-1);
+  if ( cudaSuccess != cudaMalloc((void **)&d_Generation_mc_buffer  , BufferSize*sizeof(int))) return(-1);
+  if ( cudaSuccess != cudaMalloc((void **)&d_Fibre_index_mc_buffer  , BufferSize*sizeof(int))) return(-1);  
   if ( cudaSuccess != cudaMalloc((void **)&d_Growth_rate_mc_buffer  , BufferSize*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_DivisionVolume_mc_buffer  , BufferSize*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_gamma_env_mc_buffer  , BufferSize*sizeof(float))) return(-1);
@@ -1052,6 +1111,8 @@ int main(int argc, char *argv[])
   cudaMemset(d_R0, 0, 3*192*sizeof(float));
   cudaMemset(d_pressList, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_Youngs_mod, 0, MaxNoofC180s*sizeof(float));
+  cudaMemset(d_Generation, 0, MaxNoofC180s*sizeof(int));
+  cudaMemset(d_Fibre_index, 0, MaxNoofC180s*sizeof(int));
   cudaMemset(d_Growth_rate, 0, MaxNoofC180s*sizeof(float));
   cudaMemset(d_CellINdex, 0, MaxNoofC180s*sizeof(int));
   cudaMemset(d_ScaleFactor, 0, MaxNoofC180s*sizeof(int));
@@ -1077,13 +1138,20 @@ int main(int argc, char *argv[])
   cudaMemset(d_fDisList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fDisList.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
+  
   cudaMemset(d_fRanList.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_fRanList.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
+  
   cudaMemset(d_ExtForces.x, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_ExtForces.y, 0, 192*MaxNoofC180s*sizeof(float));
   cudaMemset(d_ExtForces.z, 0, 192*MaxNoofC180s*sizeof(float));
+  CudaErrorCheck();
+  
+  cudaMemset(d_ConFricForces.x, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ConFricForces.y, 0, 192*MaxNoofC180s*sizeof(float));
+  cudaMemset(d_ConFricForces.z, 0, 192*MaxNoofC180s*sizeof(float));
   CudaErrorCheck();
 
   
@@ -1183,6 +1251,8 @@ int main(int argc, char *argv[])
   
   cudaMemset(d_pressList_mc_buffer, 0, BufferSize*sizeof(float));
   cudaMemset(d_Youngs_mod_mc_buffer, 0, BufferSize*sizeof(float));
+  cudaMemset(d_Generation_mc_buffer, 0, BufferSize*sizeof(int));
+  cudaMemset(d_Fibre_index_mc_buffer, 0, BufferSize*sizeof(int));  
   cudaMemset(d_Growth_rate_mc_buffer, 0, BufferSize*sizeof(float));
   cudaMemset(d_ScaleFactor_mc_buffer, 0, BufferSize*sizeof(int));
   cudaMemset(d_DivisionVolume_mc_buffer, 0, BufferSize*sizeof(float));
@@ -1241,7 +1311,10 @@ int main(int argc, char *argv[])
   		}
   	}
 	
-	
+	for (int i =  0; i < MaxNoofC180s; ++i){
+      		h_Generation[i] = 0; 
+  	}
+  	
   	for (int i =  0; i < MaxNoofC180s; ++i){
       		youngsModArray[i] = stiffness1; 
   	}
@@ -1305,6 +1378,10 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_squeeze_rate, squeeze_rate, No_of_C180s*sizeof(float), cudaMemcpyHostToDevice);
   CudaErrorCheck();
   cudaMemcpy(d_Num_shrink_Cell, &NumApoCell ,sizeof(int), cudaMemcpyHostToDevice);  
+  CudaErrorCheck();
+  cudaMemcpy(d_Generation, h_Generation, MaxNoofC180s*sizeof(int), cudaMemcpyHostToDevice);
+  CudaErrorCheck();
+  cudaMemcpy(d_Fibre_index, h_Fibre_index, MaxNoofC180s*sizeof(int), cudaMemcpyHostToDevice);
   CudaErrorCheck();
 /**************************************************************************************************************/
 
@@ -1459,7 +1536,7 @@ int main(int argc, char *argv[])
 #endif 
 
 
-  float rGrowth = 0;
+  //float rGrowth = 0;
   bool growthDone = false;
   
 
@@ -1523,8 +1600,8 @@ int main(int argc, char *argv[])
   // Precalculate random plane
   initialize_Plane(MaxNoofC180s);
   
-  float sysCx_local, sysCy_local, sysCz_local;
-  float sysCxAll, sysCyAll, sysCzAll; 
+  //float sysCx_local, sysCy_local, sysCz_local;
+  //float sysCxAll, sysCyAll, sysCzAll; 
   int No_cells_All;
   
   if (correct_com == true && !Restart){
@@ -1635,7 +1712,7 @@ int main(int argc, char *argv[])
    
    
    int Sending_cell_Num_total = 0;
-   int Received_New_cell = 0;
+   //int Received_New_cell = 0;
    	
    if (useRigidSimulationBox){
 
@@ -1686,7 +1763,7 @@ int main(int argc, char *argv[])
         	                       						d_CMx, d_CMy, d_CMz,
         	                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         	                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        	                       						d_Apo_rate, d_squeeze_rate,
+        	                       						d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         	                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -1694,7 +1771,8 @@ int main(int argc, char *argv[])
         	                       						d_DivisionVolume_mc_buffer,
         	                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	                       						d_CellINdex_mc_buffer, 
-        	                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        	                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
+        	                       						colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -1712,9 +1790,10 @@ int main(int argc, char *argv[])
         	 			0, No_of_C180s, d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 			d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index,
+     					colloidal_dynamics);
         		
         		
         		
@@ -1726,9 +1805,11 @@ int main(int argc, char *argv[])
     					No_of_migrated_cells_buffer[EAST], No_of_C180s + No_of_migrated_cells[WEST] , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer,
     					d_velListY_mc_buffer, d_velListZ_mc_buffer, d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer,
     					d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer, d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer,
-        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,	
+        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,
+        				d_Generation_mc_buffer, d_Fibre_index_mc_buffer,	
  					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index,
+     					colloidal_dynamics);
         			
         		
         	
@@ -1778,7 +1859,7 @@ int main(int argc, char *argv[])
         	               	        					d_CMx, d_CMy, d_CMz,
         	               	        					d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         	               	        					d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        	               	        					d_Apo_rate, d_squeeze_rate,
+        	               	        					d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         	               	        					d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	               	        					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -1786,7 +1867,8 @@ int main(int argc, char *argv[])
         	               	        					d_DivisionVolume_mc_buffer,
         	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	               	        					d_CellINdex_mc_buffer, 
-        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        	               	        					d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -1804,9 +1886,10 @@ int main(int argc, char *argv[])
    		     			 0, No_of_C180s, d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			 d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			 d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			 d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			 d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 			 d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					 d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					 d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index,
+     					 colloidal_dynamics);
         		
         		
       	        MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
@@ -1816,10 +1899,12 @@ int main(int argc, char *argv[])
    	        Send_Recv_migrated_cells(No_of_migrated_cells_buffer[SOUTH], No_of_migrated_cells[NORTH], neighbours_ranks[SOUTH], neighbours_ranks[NORTH], 17, cart_comm,
    		     			 No_of_migrated_cells_buffer[NORTH], No_of_C180s + No_of_migrated_cells[SOUTH] , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer,
     					d_velListY_mc_buffer, d_velListZ_mc_buffer, d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer,
-    					d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer, d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer,
-        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,	
+    					d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer, d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, 
+        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        				d_Generation_mc_buffer, d_Fibre_index_mc_buffer,	
  					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index,
+     					colloidal_dynamics);
         		
    	        
    	        No_of_C180s  += No_of_migrated_cells[NORTH] + No_of_migrated_cells[SOUTH];
@@ -1867,7 +1952,7 @@ int main(int argc, char *argv[])
         	               	        					d_CMx, d_CMy, d_CMz,
         	               	        					d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         	               	        					d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        	               	        					d_Apo_rate, d_squeeze_rate,
+        	               	        					d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         	               	        					d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	               	        					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -1875,7 +1960,8 @@ int main(int argc, char *argv[])
         	               	        					d_DivisionVolume_mc_buffer,
         	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	               	        					d_CellINdex_mc_buffer, 
-        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        	               	        					d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -1893,9 +1979,10 @@ int main(int argc, char *argv[])
        		 		0, No_of_C180s , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 			d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index,
+     					colloidal_dynamics);
         		
         	MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
         			1, MPI_INT, neighbours_ranks[UP], 38, cart_comm, MPI_STATUS_IGNORE);
@@ -1905,9 +1992,11 @@ int main(int argc, char *argv[])
         				 No_of_migrated_cells_buffer[UP], No_of_migrated_cells[DOWN] + No_of_C180s,  d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer,
     					d_velListY_mc_buffer, d_velListZ_mc_buffer, d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer,
     					d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer, d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer,
-        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,	
+        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,
+        				d_Generation_mc_buffer, d_Fibre_index_mc_buffer,	
  					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index,
+     					colloidal_dynamics);
         		
         		
         	
@@ -2171,7 +2260,7 @@ int main(int argc, char *argv[])
         		                       						d_CMx, d_CMy, d_CMz,
         		                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         		                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        		                       						d_Apo_rate, d_squeeze_rate,
+        		                       						d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 												d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         		                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         		                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -2179,7 +2268,8 @@ int main(int argc, char *argv[])
         		                       						d_DivisionVolume_mc_buffer,
         		                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         		                       						d_CellINdex_mc_buffer, 
-        		                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        		                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        		                       						d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         			CudaErrorCheck();
         		
@@ -2192,7 +2282,7 @@ int main(int argc, char *argv[])
         			                       						d_CMx, d_CMy, d_CMz,
         			                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         			                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        			                       						d_Apo_rate, d_squeeze_rate,
+        			                       						d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         			                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         			                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -2200,7 +2290,8 @@ int main(int argc, char *argv[])
         			                       						d_DivisionVolume_mc_buffer,
         			                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         			                       						d_CellINdex_mc_buffer, 
-        			                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        			                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        			                       						d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         			CudaErrorCheck();
         		
@@ -2220,9 +2311,10 @@ int main(int argc, char *argv[])
         	 			0, No_of_C180s , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer, 
         	 			d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index, 
+     					colloidal_dynamics);
         			
         		
         		
@@ -2234,9 +2326,11 @@ int main(int argc, char *argv[])
     					No_of_migrated_cells_buffer[EAST], No_of_migrated_cells[WEST] + No_of_C180s, d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer,
     					d_velListY_mc_buffer, d_velListZ_mc_buffer, d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer,
     					d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer, d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer,
-        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,	
+        				d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,
+        				d_Generation_mc_buffer, d_Fibre_index_mc_buffer,	
  					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index, 
+     					colloidal_dynamics);
         			
         		
         	
@@ -2285,7 +2379,7 @@ int main(int argc, char *argv[])
         	               	        					d_CMx, d_CMy, d_CMz,
         	               	        					d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         	               	        					d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        	               	        					d_Apo_rate, d_squeeze_rate,
+        	               	        					d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 											d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         	               	        					d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	               	        					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -2293,7 +2387,8 @@ int main(int argc, char *argv[])
         	               	        					d_DivisionVolume_mc_buffer,
         	               	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	               	        					d_CellINdex_mc_buffer, 
-        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        	               	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        	               	        					d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -2311,9 +2406,10 @@ int main(int argc, char *argv[])
    		     			 0, No_of_C180s , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			 d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			 d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			 d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			 d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer,  d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 			 d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					 d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					 d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index, 
+     					 colloidal_dynamics);
         		
       	        MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
    		     		1, MPI_INT, neighbours_ranks[NORTH], 28, cart_comm, MPI_STATUS_IGNORE);
@@ -2324,9 +2420,10 @@ int main(int argc, char *argv[])
    		     			 d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			 d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			 d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			 d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			 d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer, 
         	 			 d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					 d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					 d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index, 
+     					 colloidal_dynamics);
         	
         	
    	        No_of_C180s += No_of_migrated_cells[NORTH] + No_of_migrated_cells[SOUTH];
@@ -2374,7 +2471,7 @@ int main(int argc, char *argv[])
         	        	       	        					d_CMx, d_CMy, d_CMz,
         	        	       	        					d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         	        	       	        					d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        	        	       	        					d_Apo_rate, d_squeeze_rate,
+        	        	       	        					d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 												d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         	        	       	        					d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	        	       	        					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -2382,7 +2479,8 @@ int main(int argc, char *argv[])
         	        	       	        					d_DivisionVolume_mc_buffer,
         	        	       	        					d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	        	       	        					d_CellINdex_mc_buffer, 
-        	        	       	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        	        	       	        					d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        	        	       	        					d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         		CudaErrorCheck();
         		
@@ -2400,9 +2498,10 @@ int main(int argc, char *argv[])
        			 	0, No_of_C180s , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 			d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index, 
+     					colloidal_dynamics);
         		
         	MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
         				1, MPI_INT, neighbours_ranks[UP], 38, cart_comm, MPI_STATUS_IGNORE);
@@ -2413,9 +2512,10 @@ int main(int argc, char *argv[])
         				d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 			d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 			d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 			d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 			d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics); 
+     					d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, d_Generation, d_Fibre_index, 
+     					colloidal_dynamics); 
         		
         	
 		No_of_C180s += No_of_migrated_cells[UP] + No_of_migrated_cells[DOWN];
@@ -2688,7 +2788,14 @@ int main(int argc, char *argv[])
                                                      		constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                                      		impurity,f_range,
                                                      		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
-                                                     		MaxNeighList); 
+                                                     		MaxNeighList,
+                                                     		ECM,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, d_ECM_x, d_ECM_y, d_ECM_z,
+                           						attraction_strength_ecm, attraction_range_ecm,
+                           						repulsion_strength_ecm, repulsion_range_ecm,
+                           						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           						MaxNeighList_ecm,
+                           						d_Polarity_Vec, Polarity); 
                                                      	
         CudaErrorCheck();
                                                      	
@@ -2703,8 +2810,15 @@ int main(int argc, char *argv[])
         	                                                	Xdiv, Ydiv, Zdiv, Subdivision_min,
         	                                                	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
         	                                                	d_velListX, d_velListY, d_velListZ,
-        	                                                	d_fDisList,impurity,f_range,
-        	                                                	MaxNeighList);
+        	                                                	d_fDisList, d_ConFricForces,
+        	                                                	impurity,f_range, MaxNeighList,
+									ECM,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
+                                   					d_ECM_x, d_ECM_y, d_ECM_z,
+                                   					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+				    					attraction_range_ecm, vis_ecm_cell,
+                           	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           	    					MaxNeighList_ecm);
                                                         
                                                         
         CudaErrorCheck();                                                  
@@ -2850,19 +2964,28 @@ int main(int argc, char *argv[])
       		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		CudaErrorCheck();
+      		
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		CudaErrorCheck();
+		
+		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		CudaErrorCheck();
+		
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      		cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);	
+      		cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
       		CudaErrorCheck();
       		
 
         	if( lenforceFile == 0 ) {
       		
-      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,P,Vol,Area\n");
+      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,FX_fric,FY_fric,FZ_fric,F_fric,P,Vol,Area,Generation,Fibre\n");
       
       			if (Restart ==0) 
      				writeForces(forceFile, 0, No_of_C180s);
@@ -3039,23 +3162,37 @@ int main(int argc, char *argv[])
 		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 		CudaErrorCheck();
 		
+		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		CudaErrorCheck();
+		
 		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
-      		CudaErrorCheck();
+      		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+      		cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);      			
+      		CudaErrorCheck();	
       		
       		if( lenforceFile == 0 ) {
       		
       			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
       			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
+      			MPI_Send(h_ConFricForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		
     			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(h_Generation , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+    			MPI_Send(h_Fibre_index , No_of_C180s, MPI_INT, 0, rank, cart_comm);
       		}	
     	
     	}
@@ -3258,7 +3395,7 @@ int main(int argc, char *argv[])
 									d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, 
                              						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                              			  			d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex,
-                             			  			d_Apo_rate, d_squeeze_rate,
+                             			  			d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 									d_cell_Apo_inds, d_cell_Apo);
 				
 				CudaErrorCheck();
@@ -3358,7 +3495,7 @@ int main(int argc, char *argv[])
                                									d_CMx, d_CMy, d_CMz,
                                									d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                                									d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-                               									d_Apo_rate, d_squeeze_rate,
+                               									d_Apo_rate, d_squeeze_rate,  d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
                                									d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
                                									d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -3366,7 +3503,8 @@ int main(int argc, char *argv[])
                                									d_DivisionVolume_mc_buffer,
                                									d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
                                									d_CellINdex_mc_buffer, 
-                               									d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+                               									d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+                               									d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         		
@@ -3385,9 +3523,10 @@ int main(int argc, char *argv[])
         		 				0, No_of_C180s , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 					d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     							d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         		
@@ -3400,9 +3539,10 @@ int main(int argc, char *argv[])
         		 				d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 					d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     							d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         			
@@ -3454,7 +3594,7 @@ int main(int argc, char *argv[])
                        	        								d_CMx, d_CMy, d_CMz,
                        	        								d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                        	        								d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-                       	        								d_Apo_rate, d_squeeze_rate,
+                       	        								d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
                        	        								d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
                        	        								d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -3462,7 +3602,8 @@ int main(int argc, char *argv[])
                        	        								d_DivisionVolume_mc_buffer,
                        	        								d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
                        	        								d_CellINdex_mc_buffer, 
-                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+                       	        								d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         			
@@ -3478,9 +3619,10 @@ int main(int argc, char *argv[])
         			 			0, No_of_C180s,  d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 					d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     							d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         			MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
         				1, MPI_INT, neighbours_ranks[NORTH], 28, cart_comm, MPI_STATUS_IGNORE);
@@ -3491,9 +3633,10 @@ int main(int argc, char *argv[])
         			 			d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 					d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     							d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         			
@@ -3542,7 +3685,7 @@ int main(int argc, char *argv[])
                        	        								d_CMx, d_CMy, d_CMz,
                        	        								d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                        	        								d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-                       	        								d_Apo_rate, d_squeeze_rate,
+                       	        								d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
                        	        								d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
                        	        								d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -3550,7 +3693,8 @@ int main(int argc, char *argv[])
                        	        								d_DivisionVolume_mc_buffer,
                        	        								d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
                        	        								d_CellINdex_mc_buffer, 
-                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+                       	        								d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+                       	        								d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         		
@@ -3567,9 +3711,10 @@ int main(int argc, char *argv[])
         			 			0, No_of_C180s, d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 					d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     							d_Generation, d_Fibre_index, colloidal_dynamics);
         			       		
         		
         			MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
@@ -3581,9 +3726,10 @@ int main(int argc, char *argv[])
         			 			d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 					d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 					d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 					d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 					d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     							d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     							d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         			
         			No_of_C180s += No_of_migrated_cells[UP] + No_of_migrated_cells[DOWN];
@@ -3853,7 +3999,7 @@ int main(int argc, char *argv[])
         			                       						d_CMx, d_CMy, d_CMz,
         			                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         			                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        			                       						d_Apo_rate, d_squeeze_rate,
+        			                       						d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         			                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         			                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -3861,7 +4007,8 @@ int main(int argc, char *argv[])
         			                       						d_DivisionVolume_mc_buffer,
         			                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         			                       						d_CellINdex_mc_buffer, 
-        			                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        			                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        			                       						d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         			
@@ -3875,7 +4022,7 @@ int main(int argc, char *argv[])
         			                       						d_CMx, d_CMy, d_CMz,
         			                       						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         			                       						d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        			                       						d_Apo_rate, d_squeeze_rate,
+        			                       						d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         			                       						d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         			                       						d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -3883,7 +4030,8 @@ int main(int argc, char *argv[])
         			                       						d_DivisionVolume_mc_buffer,
         			                       						d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         			                       						d_CellINdex_mc_buffer, 
-        			                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        			                       						d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        			                       						d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         				CudaErrorCheck();
         			
@@ -3903,9 +4051,10 @@ int main(int argc, char *argv[])
         					0, No_of_C180s , d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 				d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 				d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     						d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         		
@@ -3918,9 +4067,10 @@ int main(int argc, char *argv[])
     						d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 				d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 				d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     						d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         		
@@ -3968,7 +4118,7 @@ int main(int argc, char *argv[])
         			               	        				d_CMx, d_CMy, d_CMz,
         			               	        				d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         			               	        				d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        			               	        				d_Apo_rate, d_squeeze_rate,
+        			               	        				d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 												d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         			               	       				d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         			               	        				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -3976,7 +4126,8 @@ int main(int argc, char *argv[])
         			               	        				d_DivisionVolume_mc_buffer,
         			               	        				d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         			               	       				d_CellINdex_mc_buffer, 
-        			               	        				d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        			               	        				d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        			               	        				d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         			CudaErrorCheck();
    	        	
@@ -3992,9 +4143,10 @@ int main(int argc, char *argv[])
    				     		0, No_of_C180s, d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 				d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 				d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     						d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
       	        	MPI_Sendrecv(&No_of_migrated_cells_buffer[SOUTH], 1, MPI_INT, neighbours_ranks[SOUTH], 28, &No_of_migrated_cells[NORTH],
@@ -4006,9 +4158,10 @@ int main(int argc, char *argv[])
    				     		d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 				d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 				d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     						d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		        		
    	        	
@@ -4059,7 +4212,7 @@ int main(int argc, char *argv[])
         	        			       	        				d_CMx, d_CMy, d_CMz,
         	        			       	        				d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
         	        			       	        				d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex, 
-        	        			       	        				d_Apo_rate, d_squeeze_rate,
+        	        			       	        				d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
 													d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer,
         	        			       	        				d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	        			       	        				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer,
@@ -4067,7 +4220,8 @@ int main(int argc, char *argv[])
         	        			       	        				d_DivisionVolume_mc_buffer,
         	        			       	        				d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, 
         	        			       	        				d_CellINdex_mc_buffer, 
-        	        			       	        				d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, colloidal_dynamics);
+        	        			       	        				d_Apo_rate_mc_buffer, d_squeeze_rate_mc_buffer, d_Generation_mc_buffer,
+        	        			       	        				d_Fibre_index_mc_buffer, colloidal_dynamics);
         
         			CudaErrorCheck();
         		
@@ -4083,9 +4237,10 @@ int main(int argc, char *argv[])
        				 	0, No_of_C180s, d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 				d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 				d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     						d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         		MPI_Sendrecv(&No_of_migrated_cells_buffer[DOWN], 1, MPI_INT, neighbours_ranks[DOWN], 38, &No_of_migrated_cells[UP],
@@ -4097,9 +4252,10 @@ int main(int argc, char *argv[])
         					d_X_mc_buffer, d_Y_mc_buffer, d_Z_mc_buffer, d_velListX_mc_buffer, d_velListY_mc_buffer, d_velListZ_mc_buffer,
         	 				d_CMx_mc_buffer, d_CMy_mc_buffer, d_CMz_mc_buffer, d_ScaleFactor_mc_buffer, d_Youngs_mod_mc_buffer, d_Growth_rate_mc_buffer,
         	 				d_DivisionVolume_mc_buffer, d_gamma_env_mc_buffer, d_viscotic_damp_mc_buffer, d_pressList_mc_buffer, d_Apo_rate_mc_buffer, 
-        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, 
+        	 				d_squeeze_rate_mc_buffer, d_CellINdex_mc_buffer, d_Generation_mc_buffer, d_Fibre_index_mc_buffer,
         	 				d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, d_CMx, d_CMy, d_CMz, d_ScaleFactor, d_Youngs_mod, d_Growth_rate,
-     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, colloidal_dynamics);
+     						d_DivisionVolume, d_gamma_env, d_viscotic_damp, d_pressList, d_Apo_rate, d_squeeze_rate, d_CellINdex, 
+     						d_Generation, d_Fibre_index, colloidal_dynamics);
         		
         		
         		
@@ -4597,7 +4753,14 @@ int main(int argc, char *argv[])
                                		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                		                      	impurity,f_range,
                                		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
-                               		                      	MaxNeighList); 
+                               		                      	MaxNeighList,
+                               		                      	ECM,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, d_ECM_x, d_ECM_y, d_ECM_z,
+                           						attraction_strength_ecm, attraction_range_ecm,
+                           						repulsion_strength_ecm, repulsion_range_ecm,
+                           						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           						MaxNeighList_ecm,
+                           						d_Polarity_Vec, Polarity); 
                                                      	
        CudaErrorCheck();
                                                      	
@@ -4612,8 +4775,16 @@ int main(int argc, char *argv[])
                        	                                 	Xdiv, Ydiv, Zdiv, Subdivision_min,
                        	                                 	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                        	                                 	d_velListX, d_velListY, d_velListZ,
-                       	                                 	d_fDisList,impurity,f_range, 
-                       	                                 	MaxNeighList);
+                       	                                 	d_fDisList, d_ConFricForces,
+                       	                                 	impurity,f_range, 
+                       	                                 	MaxNeighList,
+                       	                                 	ECM,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
+                                   					d_ECM_x, d_ECM_y, d_ECM_z,
+                                   					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+				    					attraction_range_ecm, vis_ecm_cell,
+                           	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           	    					MaxNeighList_ecm);
                        	                                 
                                                         
         CudaErrorCheck();                                                  
@@ -4651,8 +4822,16 @@ int main(int argc, char *argv[])
                	                                         	Xdiv, Ydiv, Zdiv, Subdivision_min,
                	                                         	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                	                                         	d_velListX, d_velListY, d_velListZ,
-               	                                         	d_fDisList, impurity,f_range,
-               	                                         	MaxNeighList);
+               	                                         	d_fDisList, d_ConFricForces, 
+               	                                         	impurity,f_range,
+               	                                         	MaxNeighList,
+               	                                         	ECM,
+                                   					d_Dis_ECM_force_x, d_Dis_ECM_force_y, d_Dis_ECM_force_z,
+                                   					d_ECM_x, d_ECM_y, d_ECM_z,
+                                   					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
+				    					attraction_range_ecm, vis_ecm_cell,
+                           	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
+                           	    					MaxNeighList_ecm);
                                                         
        	CudaErrorCheck();                                                  
   		
@@ -4701,7 +4880,7 @@ int main(int argc, char *argv[])
 	 	if ( num_cell_div > 0 ) {
 	 
           	
-          		cell_division<<<num_cell_div,192>>>(
+          		cell_division<<<num_cell_div,192>>>( Random_Div_Rule, Fibre,
                		                    	d_X, d_Y, d_Z, 
                		                    	d_CMx, d_CMy, d_CMz,
                		                    	d_velListX, d_velListY, d_velListZ,
@@ -4712,7 +4891,8 @@ int main(int argc, char *argv[])
                		                    	d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                		                    	d_squeeze_rate, d_Apo_rate,
                		                    	d_gamma_env, d_viscotic_damp, d_CellINdex,
-               		                    	d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, minPressure);       
+               		                    	d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, d_Generation, d_Fibre_index,
+               		                    	minPressure);       
                                    
           		CudaErrorCheck();                                                                                
           
@@ -5167,10 +5347,17 @@ int main(int argc, char *argv[])
               		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		CudaErrorCheck();
+              		
+              		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
               
               		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+              		cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+              		cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
               		CudaErrorCheck();
                     
               		writeForces(forceFile, step + Laststep, No_of_C180s);
@@ -5255,22 +5442,36 @@ int main(int argc, char *argv[])
       			cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			CudaErrorCheck();
+			
+			cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
 
 			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       			cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      			cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);	
+      			cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+      			cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);		
       			CudaErrorCheck();
       		
       			MPI_Send(h_contactForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_contactForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
       			MPI_Send(h_ExtForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
       			MPI_Send(h_ExtForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			
+      			MPI_Send(h_ConFricForces.x , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.y , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
+      			MPI_Send(h_ConFricForces.z , No_of_C180s*192, MPI_FLOAT, 0, rank, cart_comm);
     		
     			MPI_Send(pressList , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(volume , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(area , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+    			MPI_Send(h_Generation , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+      			MPI_Send(h_Fibre_index , No_of_C180s, MPI_INT, 0, rank, cart_comm);
       			
     	
     		}
@@ -5520,6 +5721,8 @@ if (rank ==0) {
   free(cell_div_inds);
   free(cell_Apo_inds);
   free(pressList);
+  free(h_Generation);
+  free(h_Fibre_index);
 
   free(velListX); 
   free(velListY); 
@@ -5736,6 +5939,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   	float AllCMsX[Orig_Cells];
   	float AllCMsY[Orig_Cells];
   	float AllCMsZ[Orig_Cells];
+  	int AllCells_Fibre[Orig_Cells];
   	
   	int impNum;
   	if(usePBCs)  	
@@ -6273,14 +6477,9 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 			AllCMsX[i] = allCMs[i].x;		
 			AllCMsY[i] = allCMs[i].y;
 			AllCMsZ[i] = allCMs[i].z;
+			AllCells_Fibre[i] = i;
 			
 		}
-
-
-	   	if(impurity){
-
-
-   		}
 
 	}
 
@@ -6289,6 +6488,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 		MPI_Bcast(AllCMsX, Orig_Cells, MPI_FLOAT, 0, cart_comm);
 		MPI_Bcast(AllCMsY, Orig_Cells, MPI_FLOAT, 0, cart_comm);
 		MPI_Bcast(AllCMsZ, Orig_Cells, MPI_FLOAT, 0, cart_comm);
+		MPI_Bcast(AllCells_Fibre, Orig_Cells, MPI_INT, 0, cart_comm);
+		
 	
 		if ( Imp_Cells > 0){
 	
@@ -6384,6 +6585,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
   	     
   	     						}
   	     						
+  	     						
   	     						c++;  	     					
   	     					}
   	     				}
@@ -6413,6 +6615,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
                		   			Z[c*192 + nodeInd] = initz[nodeInd] + allCMs[cellInd].z;
                		   
        					}
+       					
+       					h_Fibre_index[c] = AllCells_Fibre[cellInd];
        					
        					c++;
        				
@@ -6501,10 +6705,11 @@ void RotationMatrix(float* RMat,float* axis,float* theta){
 inline void initialize_Plane(int MaxNoofC180s){
 
 
-
-   float v[3], w[3];
+   if(Random_Div_Rule){	
+   	
+   	float v[3], w[3];
      
-   if (useDivPlaneBasis){
+   	if (useDivPlaneBasis){
           
               
               if (divPlaneBasis[1] != 0){
@@ -6516,7 +6721,9 @@ inline void initialize_Plane(int MaxNoofC180s){
         		w[0] = divPlaneBasis[1];
         		w[1] = -1*divPlaneBasis[0];
         		w[2] = 0;
-    		}else{ // this branch is very unlikely, placed for correctness
+    		
+    		} else { // this branch is very unlikely, placed for correctness
+        
         		v[0] = 0;
         		v[1] = 1;
         		v[2] = 0;
@@ -6524,6 +6731,7 @@ inline void initialize_Plane(int MaxNoofC180s){
         		w[0] = divPlaneBasis[2];
         		w[1] = 0;
        		w[2] = -1*divPlaneBasis[0];
+    		
     		}
 
     		// Orthogonalize
@@ -6546,55 +6754,81 @@ inline void initialize_Plane(int MaxNoofC180s){
     		w[1] = w[1]/f;
     		w[2] = w[2]/f;
     
-    }
+    	}
     
     
-    for (int i = 0; i < MaxNoofC180s; i++) {
+    
+    	for (int i = 0; i < MaxNoofC180s; i++) {
      
           
-          float norm[3];
+       	float norm[3];
           
-          if (useDivPlaneBasis)
+          	if (useDivPlaneBasis)
               	
-              	GetRandomVectorBasis(norm,v,w);
+          	    GetRandomVectorBasis(norm,v,w);
           
-          else
+          	else
           
-              GetRandomVector(norm);
+          	    GetRandomVector(norm);
+	
 
-#ifdef TURNOFF_RAN
-
-          norm[0] = 0; 
-          norm[1] = 1; 
-          norm[2] = 0;
-          
-#endif
-          
           DivPlane.x[i] = norm[0];
           DivPlane.y[i] = norm[1];
           DivPlane.z[i] = norm[2]; 
 
-   }
+   	}
+    
+    
+    
+    } else {
+    
+	
+	float norm[3];
+	float arg_radian = (Rotation_angle*3.14159)/180;
+	float Rot_rate_rad = (Rotation_rate*3.14159)/180;
+	
+	
+	norm[0] = divPlaneBasis[0];
+	norm[1] = divPlaneBasis[1];
+	norm[2] = divPlaneBasis[2];
+	
+	DivPlane.x[0] = norm[0]; 
+	DivPlane.y[0] = norm[1];
+	DivPlane.z[0] = norm[2];
+	
+    	for (int i = 1; i < MaxNoofC180s; i++){
+          
+          DivPlane.x[i] = norm[0]*cos(arg_radian) - norm[1]*sin(arg_radian);
+          DivPlane.y[i] = norm[0]*sin(arg_radian) + norm[1]*cos(arg_radian);
+          DivPlane.z[i] = norm[2];          
 
-          cudaMemcpy( d_DivPlane.x, DivPlane.x, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-          cudaMemcpy( d_DivPlane.y, DivPlane.y, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-          cudaMemcpy( d_DivPlane.z, DivPlane.z, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-          CudaErrorCheck();
+          norm[0] = DivPlane.x[i];
+          norm[1] = DivPlane.y[i];
+          norm[2] = DivPlane.z[i];
+          
+          arg_radian += Rot_rate_rad;	  
+	   	
+   	}
+    
+    
+    }
+    
+    	
+   cudaMemcpy( d_DivPlane.x, DivPlane.x, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+   cudaMemcpy( d_DivPlane.y, DivPlane.y, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+   cudaMemcpy( d_DivPlane.z, DivPlane.z, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+   CudaErrorCheck();
 
-   if (asymDivision){	
-   
+   if (asymDivision)	
 	ranmar(asym, MaxNoofC180s); 
-	 
-   } else {
+   else 
    	for (int i = 0; i < MaxNoofC180s; i++) asym[i] = 0.5;
-   }
+   
    
    cudaMemcpy( d_asym, asym, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
    CudaErrorCheck();	
 
 }
-
-
 
 
 int initialize_Vel(int Orig_No_of_C180s)
@@ -7331,10 +7565,15 @@ int read_json_params(const char* inpFile){
         printf("ERROR: Cannot load division parameters\n");
         return -1;
     } else{
+        
+        Random_Div_Rule = divParams["Random_Div_Rule"].asBool();
+        Fibre = divParams["Fibre"].asBool();
         useDivPlaneBasis = divParams["useDivPlaneBasis"].asInt();
         divPlaneBasis[0] = divParams["divPlaneBasisX"].asFloat();
         divPlaneBasis[1] = divParams["divPlaneBasisY"].asFloat();
         divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
+        Rotation_angle = divParams["Rotation_angle"].asFloat();
+        Rotation_rate = divParams["Rotation_rate"].asFloat();        
 	asymDivision = divParams["asymDivision"].asBool();
     }
 
@@ -7911,9 +8150,15 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
     		h_ExtForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		h_ExtForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		
+    		h_ConFricForces_OtherGPU.x = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_ConFricForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		h_ConFricForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
+    		
     		pressList_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     		volume_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     		area_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
+    		h_Generation_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    		h_Fibre_index_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
     		
     		MPI_Recv(h_contactForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(h_contactForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
@@ -7923,10 +8168,15 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
     		MPI_Recv(h_ExtForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(h_ExtForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
+    		MPI_Recv(h_ConFricForces_OtherGPU.x, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_ConFricForces_OtherGPU.y, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_ConFricForces_OtherGPU.z, Num_Cell_OtherGPU, MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     		MPI_Recv(pressList_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(volume_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		MPI_Recv(area_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_Generation_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    		MPI_Recv(h_Fibre_index_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     		
     		
     
@@ -7938,7 +8188,7 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
         
         		for (int n = 0; n < 180; ++n){
             
-        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%d,%d\n",
         	            		t_step, No_of_All_Cells, k, n,
         	            		h_contactForces.x[c*192 + n],
         	            		h_contactForces.y[c*192 + n],
@@ -7952,9 +8202,17 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
         	            		mag(make_float3(h_ExtForces.x[c*192 + n],
         	            				 h_ExtForces.y[c*192 + n],
         	                            		 h_ExtForces.z[c*192 + n])),
+        	                       h_ConFricForces.x[c*192 + n],
+        	            		h_ConFricForces.y[c*192 + n],
+        	            		h_ConFricForces.z[c*192 + n],
+        	            		mag(make_float3(h_ConFricForces.x[c*192 + n],
+        	            				 h_ConFricForces.y[c*192 + n],
+        	                            		 h_ConFricForces.z[c*192 + n])), 
         	            		pressList[c],
         	            		volume[c],
-        	            		area[c]
+        	            		area[c],
+        	            		h_Generation[c],
+        	            		h_Fibre_index[c]
                 	    		);
                         
         		}
@@ -7965,7 +8223,7 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
 
    		        for (int n = 0; n < 180; ++n){
             
-        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        	    		fprintf(forceFile, "%d,%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%d,%d\n",
         	            		t_step, No_of_All_Cells, k, n,
         	            		h_contactForces_OtherGPU.x[c*192 + n],
         	            		h_contactForces_OtherGPU.y[c*192 + n],
@@ -7979,9 +8237,17 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
         	            		mag(make_float3(h_ExtForces_OtherGPU.x[c*192 + n],
         	            				 h_ExtForces_OtherGPU.y[c*192 + n],
         	                            		 h_ExtForces_OtherGPU.z[c*192 + n])),
+        	            		h_ConFricForces_OtherGPU.x[c*192 + n],
+        	            		h_ConFricForces_OtherGPU.y[c*192 + n],
+        	            		h_ConFricForces_OtherGPU.z[c*192 + n],
+        	            		mag(make_float3(h_ConFricForces_OtherGPU.x[c*192 + n],
+        	            				 h_ConFricForces_OtherGPU.y[c*192 + n],
+        	                            		 h_ConFricForces_OtherGPU.z[c*192 + n])),
         	            		pressList_OtherGPU[c],
         	            		volume_OtherGPU[c],
-        	            		area_OtherGPU[c]
+        	            		area_OtherGPU[c],
+        	            		h_Generation_OtherGPU[c],
+        	            		h_Fibre_index_OtherGPU[c]
                 	    		);
                         
         		}
@@ -8351,7 +8617,7 @@ void WriteCMBinary(int t_step, FILE* cmFile,int frameCount){
     		numberofCells_InGPUs[0] = No_of_C180s;
        }
     
-       int Num_Cell_OtherGPU;
+       //int Num_Cell_OtherGPU;
        float Cx, Cy, Cz;
        int Ind;	
 
@@ -8426,7 +8692,7 @@ void WriteVCMBinary(int t_step, FILE* VcmFile,int frameCount){
     		numberofCells_InGPUs[0] = No_of_C180s;
        }
     
-       int Num_Cell_OtherGPU;
+       //int Num_Cell_OtherGPU;
        float vCx, vCy, vCz;	
 	int Ind;
 	
@@ -8502,7 +8768,7 @@ void WriteFCMBinary(int t_step, FILE* FcmFile,int frameCount){
     		numberofCells_InGPUs[0] = No_of_C180s;
        }
     
-       int Num_Cell_OtherGPU;
+       //int Num_Cell_OtherGPU;
        float fCx, fCy, fCz;
        int Ind;	
 
@@ -8729,7 +8995,7 @@ void WriteCMFile(){
        CudaErrorCheck();
        
        int No_of_C180s_All;
-       int Num_Cell_OtherGPU;
+       //int Num_Cell_OtherGPU;
        
           
 	if (nprocs > 1){ 
@@ -8815,6 +9081,7 @@ void WriteCMFile(){
 
 int writeRestartFile(int t_step, int frameCount){
 
+         
          cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
          cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
          cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -8832,6 +9099,8 @@ int writeRestartFile(int t_step, int frameCount){
          
          cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
          cudaMemcpy(youngsModArray, d_Youngs_mod ,No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         cudaMemcpy(h_Generation, d_Generation ,No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+         cudaMemcpy(h_Fibre_index, d_Fibre_index ,No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
          cudaMemcpy(Growth_rate, d_Growth_rate, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);			
          cudaMemcpy(ScaleFactor, d_ScaleFactor, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
          cudaMemcpy(DivisionVolume, d_DivisionVolume, sizeof(float)*No_of_C180s, cudaMemcpyDeviceToHost);
@@ -8901,7 +9170,8 @@ int writeRestartFile(int t_step, int frameCount){
 		fwrite(&frameCount, sizeof(int), 1, Restartfile); 
 		fwrite(&No_of_C180s_All, sizeof(int), 1, Restartfile); 
 		fwrite(&NumApoCell_All, sizeof(int), 1, Restartfile);
-		fwrite(&NumRemoveCell_All, sizeof(int), 1, Restartfile);  
+		fwrite(&NumRemoveCell_All, sizeof(int), 1, Restartfile);
+		fwrite(&Pshift, sizeof(float), 1, Restartfile);  
 
 	
 		float *CmX_OtherGPU, *CmY_OtherGPU, *CmZ_OtherGPU;
@@ -9069,6 +9339,8 @@ int writeRestartFile(int t_step, int frameCount){
 		float ge = 0;
 		float vd = 0;
 		int I = 0;
+		int Gen = 0;
+		int Fib = 0;
 	 	
 	 	for (int i = 0; i < nprocs; i++){
     	
@@ -9085,6 +9357,8 @@ int writeRestartFile(int t_step, int frameCount){
     				gamma_env_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     				viscotic_damp_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     				CellINdex_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+				h_Generation_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
+    				h_Fibre_index_OtherGPU = (int*)malloc(sizeof(int)*numberofCells_InGPUs[i]);
 
     				
     				MPI_Recv(pressList_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
@@ -9097,6 +9371,8 @@ int writeRestartFile(int t_step, int frameCount){
     				MPI_Recv(gamma_env_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(viscotic_damp_OtherGPU, numberofCells_InGPUs[i], MPI_FLOAT, i, i, cart_comm, MPI_STATUS_IGNORE);
     				MPI_Recv(CellINdex_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(h_Generation_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
+    				MPI_Recv(h_Fibre_index_OtherGPU, numberofCells_InGPUs[i], MPI_INT, i, i, cart_comm, MPI_STATUS_IGNORE);
     			}	
 			
 			
@@ -9116,6 +9392,8 @@ int writeRestartFile(int t_step, int frameCount){
         				ge = gamma_env[c];
         				vd =  viscotic_damp[c];
         				I = CellINdex[c];
+        				Gen = h_Generation[c];
+        				Fib = h_Fibre_index[c];
         		
 					fwrite(&p, sizeof(float), 1, Restartfile);
         	    			fwrite(&y, sizeof(float), 1, Restartfile);
@@ -9127,6 +9405,8 @@ int writeRestartFile(int t_step, int frameCount){
         	    			fwrite(&ge, sizeof(float), 1, Restartfile);
         	    			fwrite(&vd, sizeof(float), 1, Restartfile);
         	    			fwrite(&I, sizeof(int), 1, Restartfile);
+        	    			fwrite(&Gen, sizeof(int), 1, Restartfile);
+        	    			fwrite(&Fib, sizeof(int), 1, Restartfile);
         	
         			} else if (nprocs > 1) {
         		
@@ -9140,6 +9420,8 @@ int writeRestartFile(int t_step, int frameCount){
         				ge = gamma_env_OtherGPU[c];
         				vd = viscotic_damp_OtherGPU[c];
         				I = CellINdex_OtherGPU[c];
+        				Gen = h_Generation_OtherGPU[c];
+        				Fib = h_Fibre_index_OtherGPU[c];
         		
 					fwrite(&p, sizeof(float), 1, Restartfile);
         	    			fwrite(&y, sizeof(float), 1, Restartfile);
@@ -9151,6 +9433,8 @@ int writeRestartFile(int t_step, int frameCount){
         	    			fwrite(&ge, sizeof(float), 1, Restartfile);
         	    			fwrite(&vd, sizeof(float), 1, Restartfile);
         	    			fwrite(&I, sizeof(int), 1, Restartfile);
+        	    			fwrite(&Gen, sizeof(int), 1, Restartfile);
+        	    			fwrite(&Fib, sizeof(int), 1, Restartfile);
         			
         			}
 			
@@ -9171,6 +9455,8 @@ int writeRestartFile(int t_step, int frameCount){
    		MPI_Send(gamma_env , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
    		MPI_Send(viscotic_damp , No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
    		MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+   		MPI_Send(h_Generation , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+   		MPI_Send(h_Fibre_index , No_of_C180s, MPI_INT, 0, rank, cart_comm);
    	
    	}
    	
@@ -9201,7 +9487,7 @@ int ReadRestartFile(){
   float *Res_Buffer_pressList, *Res_Buffer_youngsModArray, *Res_Buffer_Growth_rate;
   float *Res_Buffer_ScaleFactor, *Res_Buffer_DivisionVolume, *Res_Buffer_Apo_rate;
   float *Res_Buffer_squeeze_rate, *Res_Buffer_gamma_env, *Res_Buffer_viscotic_damp;
-  int *Res_Buffer_CellINdex;
+  int *Res_Buffer_CellINdex, *Res_Buffer_Generation, *Res_Buffer_Fibre_index;
   int *Owning;
   			
   FILE *infil;
@@ -9211,9 +9497,10 @@ int ReadRestartFile(){
   	int s;
   	int f;
   	int nCell;  
-  	int shift;
+  	//int shift;
   	int NCA;
   	int NCR;
+  	int Ps;
   	 	
     	
   	printf("Reading Restart.xyz ...\n");
@@ -9250,6 +9537,11 @@ int ReadRestartFile(){
 		printf("Data missing from trajectory. \n");
 		return(-1);
 	}
+	
+	if ( fread(&Ps, sizeof(float),1,infil) != 1 ) { 
+		printf("Data missing from trajectory. \n");
+		return(-1);
+	}
 
 
   	Laststep = s-1;
@@ -9258,12 +9550,13 @@ int ReadRestartFile(){
  	No_of_C180s = nCell;
   	Orig_No_of_C180s = nCell;
   	NumApoCell = NCA;
-  	NumRemoveCell = NCR;  
+  	NumRemoveCell = NCR;
+  	Pshift = Ps;  
 
   	printf("Number of the initial Cells is: %d \n",Orig_No_of_C180s);
   	
   	Orig_Cells = Orig_No_of_C180s;
-  	Pshift = shear_rate*Laststep*boxMax.x*delta_t;
+  	//Pshift = shear_rate*Laststep*boxMax.x*delta_t;
   	
   }	
   
@@ -9493,6 +9786,8 @@ int ReadRestartFile(){
   	Res_Buffer_gamma_env = (float*)malloc(sizeof(float)*Orig_Cells);
   	Res_Buffer_viscotic_damp = (float*)malloc(sizeof(float)*Orig_Cells);
   	Res_Buffer_CellINdex = (int*)malloc(sizeof(int)*Orig_Cells);
+  	Res_Buffer_Generation = (int*)malloc(sizeof(int)*Orig_Cells);
+  	Res_Buffer_Fibre_index = (int*)malloc(sizeof(int)*Orig_Cells);
   	
   	
   	if (rank == 0 ){
@@ -9509,6 +9804,8 @@ int ReadRestartFile(){
     			if ( fread(&Res_Buffer_gamma_env[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
     			if ( fread(&Res_Buffer_viscotic_damp[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
     			if ( fread(&Res_Buffer_CellINdex[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_Generation[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    			if ( fread(&Res_Buffer_Fibre_index[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
 	
 		}
   
@@ -9524,6 +9821,8 @@ int ReadRestartFile(){
   	MPI_Bcast(Res_Buffer_gamma_env, Orig_Cells, MPI_FLOAT, 0, cart_comm);
   	MPI_Bcast(Res_Buffer_viscotic_damp, Orig_Cells, MPI_FLOAT, 0, cart_comm);
   	MPI_Bcast(Res_Buffer_CellINdex, Orig_Cells, MPI_INT, 0, cart_comm);	
+  	MPI_Bcast(Res_Buffer_Generation, Orig_Cells, MPI_INT, 0, cart_comm);
+  	MPI_Bcast(Res_Buffer_Fibre_index, Orig_Cells, MPI_INT, 0, cart_comm);
 
 	
 	int k=0;
@@ -9541,6 +9840,8 @@ int ReadRestartFile(){
         		gamma_env[k] = Res_Buffer_gamma_env[c];
         		viscotic_damp[k] = Res_Buffer_viscotic_damp[c];
         		CellINdex[k] = Res_Buffer_CellINdex[c];
+        		h_Generation[k] = Res_Buffer_Generation[k];
+        		h_Fibre_index[k] = Res_Buffer_Fibre_index[k];
        		
 			k++;
 		}
@@ -9551,7 +9852,8 @@ int ReadRestartFile(){
   free(Res_Buffer_pressList); free(Res_Buffer_youngsModArray); free(Res_Buffer_Growth_rate);
   free(Res_Buffer_ScaleFactor); free(Res_Buffer_DivisionVolume); free(Res_Buffer_Apo_rate);
   free(Res_Buffer_squeeze_rate); free(Res_Buffer_gamma_env); free(Res_Buffer_viscotic_damp);
-  free(Res_Buffer_CellINdex); 
+  free(Res_Buffer_CellINdex); free(Res_Buffer_Generation); free(Res_Buffer_Fibre_index);
+ 
   
   } else {
   
@@ -9567,7 +9869,8 @@ int ReadRestartFile(){
     		if ( fread(&gamma_env[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
     		if ( fread(&viscotic_damp[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
     		if ( fread(&CellINdex[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-	
+    		if ( fread(&h_Generation[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
+    		if ( fread(&h_Fibre_index[c], sizeof(int),1,infil) != 1 ) printf("Data missing from trajectory. \n");
 	}
 
   
@@ -9582,19 +9885,20 @@ int ReadRestartFile(){
 
 
 
-void SetDeviceBeforeInit()
-{
+//void SetDeviceBeforeInit()
+//{
 
-    int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
+    //int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
     
     //int local_rank = atoi(getenv("PMIX_RANK"));
-    idev = local_rank; 
-    printf("local rank=%d: and idev %d\n", local_rank, idev);
+    //idev = local_rank; 
+    //printf("local rank=%d: and idev %d\n", local_rank, idev);
 
-    cudaSetDevice(idev);
+    //cudaSetDevice(idev);
     //cudaDeviceProp deviceProp = getDevice(idev);    
-    if (  getDevice(idev) != 0 ) return(-1);
-    CudaErrorCheck();
-}
+    //if (  getDevice(idev) != 0 ) return(-1);
+    //CudaErrorCheck();
+
+//}
 
 

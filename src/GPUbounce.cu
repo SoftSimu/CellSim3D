@@ -10633,8 +10633,6 @@ inline void initialize_Plane(int MaxNoofC180s){
 }
 
 
-
-
 int initialize_Vel(int Orig_No_of_C180s)
 {
 
@@ -12469,7 +12467,6 @@ void writeForces(FILE* forceFile, int t_step, int num_cells){
     		h_ConFricForces_OtherGPU.y = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     		h_ConFricForces_OtherGPU.z = (float*)malloc(sizeof(float)*Num_Cell_OtherGPU);
     			
-    		
     		pressList_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     		volume_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
     		area_OtherGPU = (float*)malloc(sizeof(float)*numberofCells_InGPUs[i]);
