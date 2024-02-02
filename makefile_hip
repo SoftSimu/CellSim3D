@@ -1,0 +1,113 @@
+compiler = $(shell which hipcc) 
+debug = 
+arch = 
+oflags = -O3 -std=c++14 -I/usr/lib/x86_64-linux-gnu/openmpi/include/ -Iinc 
+objDir = bin/
+sources = $(wildcard src/*.cu)
+#objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
+
+objects1 = GPUbounce.o centermass.o postscriptinit.o PressureKernels.o\
+	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
+
+objects2 = GPUbounce-CudaAwareMPI.o centermass.o postscriptinit.o PressureKernels.o\
+	propagatebound.o propagate.o volume.o BondKernels.o jsoncpp.o
+
+
+linkObjects1 = $(patsubst %, $(objDir)%, $(objects1))
+linkObjects2 = $(patsubst %, $(objDir)%, $(objects2))
+
+eflags1 = $(arch) -o $(objDir)/"CellDiv" $(linkObjects1) -O3 -L/usr/lib/x86_64-linux-gnu/openmpi/lib -lm -lmpi -lmpi_cxx -lopen-pal -lhiprand
+eflags2 = $(arch) -o $(objDir)/"CellDiv_CudaAwareMPI" $(linkObjects2) -O3 -L/usr/lib/x86_64-linux-gnu/openmpi/lib -lm -lmpi -lmpi_cxx -lopen-pal -lhiprand
+opt = 
+
+debug: opt= 
+debug: oflags += $(debug)
+debug: eflags1 += $(debug)
+debug: eflags2 += $(debug)
+debug: CellDiv
+debug: CellDiv_CudaAwareMPI
+
+oflags += $(opt)
+eflags1 += $(opt)
+eflags2 += $(opt)
+
+# $(objects): bin/%.o : src/%.cu
+# 	@mkdir -p $(@D)
+# 	$(compiler) $(oflags) -c $< -o $@
+
+
+$(objDir)postscript.hpp:src/postscript.h
+	hipify-perl src/postscript.h -o=$(objDir)postscript.hpp
+
+$(objDir)marsaglia.hpp:src/marsaglia.h
+	hipify-perl src/marsaglia.h -o=$(objDir)marsaglia.hpp
+
+$(objDir)RandomVector.hpp:src/RandomVector.h
+	hipify-perl src/RandomVector.h -o=$(objDir)RandomVector.hpp
+	sed -i 's/"marsaglia.h"/"marsaglia.hpp"/g' $(objDir)RandomVector.hpp
+
+$(objDir)communication.hpp:src/communication.h
+	hipify-perl  src/communication.h -o=$(objDir)communication.hpp
+
+$(objDir)centermass.o: src/centermass.cu $(objDir)postscript.hpp
+	hipify-perl  src/centermass.cu -o=$(objDir)centermass.cpp
+	sed -i 's/"postscript.h"/"postscript.hpp"/g' $(objDir)centermass.cpp
+	$(compiler) $(oflags) -c $(objDir)centermass.cpp -o $(objDir)centermass.o
+
+$(objDir)postscriptinit.o: src/postscriptinit.cu
+	hipify-perl  src/postscriptinit.cu -o=$(objDir)/postscriptinit.cpp
+	$(compiler) $(oflags) -c $(objDir)/postscriptinit.cpp -o $(objDir)postscriptinit.o
+
+$(objDir)PressureKernels.o: src/PressureKernels.cu $(objDir)postscript.hpp
+	hipify-perl  src/PressureKernels.cu -o=$(objDir)PressureKernels.cpp
+	sed -i 's/"postscript.h"/"postscript.hpp"/g' $(objDir)PressureKernels.cpp
+	$(compiler) $(oflags) -c $(objDir)PressureKernels.cpp -o $(objDir)PressureKernels.o
+
+$(objDir)propagatebound.o: src/propagatebound.cu $(objDir)postscript.hpp
+	hipify-perl  src/propagatebound.cu -o=$(objDir)propagatebound.cpp
+	sed -i 's/"postscript.h"/"postscript.hpp"/g' $(objDir)propagatebound.cpp
+	$(compiler) $(oflags) -c $(objDir)propagatebound.cpp -o $(objDir)propagatebound.o
+
+$(objDir)propagate.o: src/propagate.cu
+	hipify-perl src/propagate.cu -o=src/propagate.cpp
+	sed -i 's/"trap;"/"s_trap 0x02;"/g' src/propagate.cpp
+	$(compiler) $(oflags) -c src/propagate.cpp -o $(objDir)propagate.o
+
+$(objDir)volume.o : src/volume.cu
+	hipify-perl  src/volume.cu -o=src/volume.cpp
+	sed -i 's/"trap;"/"s_trap 0x02;"/g' src/volume.cpp
+	$(compiler) $(oflags) -c src/volume.cpp -o $(objDir)volume.o
+
+$(objDir)BondKernels.o : src/BondKernels.cu
+	hipify-perl  src/BondKernels.cu -o=src/BondKernels.cpp
+	$(compiler) $(oflags) -c src/BondKernels.cpp -o $(objDir)BondKernels.o
+
+$(objDir)GPUbounce.o : src/GPUbounce.cu $(objDir)postscript.hpp $(objDir)marsaglia.hpp $(objDir)RandomVector.hpp $(objDir)communication.hpp
+	hipify-perl  src/GPUbounce.cu -o=$(objDir)GPUbounce.cpp
+	sed -i 's/"postscript.h"/"postscript.hpp"/g' $(objDir)GPUbounce.cpp
+	sed -i 's/"marsaglia.h"/"marsaglia.hpp"/g' $(objDir)GPUbounce.cpp
+	sed -i 's/"RandomVector.h"/"RandomVector.hpp"/g' $(objDir)GPUbounce.cpp
+	sed -i 's/"communication.h"/"communication.hpp"/g' $(objDir)GPUbounce.cpp
+	$(compiler) $(oflags) -c $(objDir)GPUbounce.cpp -o $(objDir)GPUbounce.o
+
+$(objDir)GPUbounce-CudaAwareMPI.o : src/GPUbounce-CudaAwareMPI.cu $(objDir)postscript.hpp $(objDir)marsaglia.hpp $(objDir)RandomVector.hpp $(objDir)communication.hpp
+	hipify-perl src/GPUbounce-CudaAwareMPI.cu -o=$(objDir)GPUbounce-CudaAwareMPI.cpp
+	$(compiler) $(oflags) -c $(objDir)GPUbounce-CudaAwareMPI.cpp -o $(objDir)GPUbounce-CudaAwareMPI.o
+
+
+CellDiv: $(linkObjects1) 
+	hipify-perl  src/IntegrationKernels.h -o=$(objDir)IntegrationKernels.hpp
+	$(compiler) $(eflags1)
+
+CellDiv_CudaAwareMPI: $(linkObjects2)
+	hipify-perl  src/IntegrationKernels.h -o=$(objDir)IntegrationKernels.hpp
+	$(compiler) $(eflags2)
+
+# Third party libraries
+$(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
+	$(compiler) $(oflags) -c src/utils/jsoncpp.cpp -o $(objDir)/jsoncpp.o
+
+.PHONY: clean
+clean:
+#	rm -f $(objDir)/CellDiv $(linkObjects1)
+	rm -f $(objDir)*
