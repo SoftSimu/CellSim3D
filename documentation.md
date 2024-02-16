@@ -1,7 +1,7 @@
 # CellSim3D Documentation
 
 Welcome to the documentation of CellSim3D. 
-Implemented features include:
+The implemented features include:
 
 + Symmetric and asymmetric cell division
 + Cellular apoptosis
@@ -23,38 +23,38 @@ Let's start with a description of the variables in the input file.
 
 + "MaxNoofC180s"
 
-   Maximum number of cells we might have in the simulation (To construct arrays).
+   Maximum number of cells the user can have in the simulation (To construct arrays).
 + "div_time_steps"
 
-   simulation time in which we have division
+   simulation time with cell division
 + "non_div_time_steps"
 
-   After "div_time_steps" number of steps, simulation continues with no division for "non_div_time_steps"
+   After "div_time_steps" number of steps, the simulation will continue for "non_div_time_steps" without cell division
 + "trajWriteInt"
 
-   Growth count interval, the interval in which details of the simulation are recorded
+   The interval in which the outputs are written in the file.
   
 + "binaryOutput":: Boolean
 
    Write binary trajectory file 
 + "time_interval"
 
-  time step of simulation (eg. $t=0.0001$)
+  time step of simulation (eg. $dt=0.0001$)
 + "trajFileName"
 
-   Name of the coordinates file (eg. "inp.xyz")
+   Name of the trajectory file (eg. "inp.xyz")
 + "forces_file"
   
    Force file name (eg."inp.csv")
 + "write_vel_file"::Boolean
 
-   Write velocity file 
+   Write the velocity output file or not
 + "write_for_file"::Boolean
 
-   Write force file 
+   Write the force output file or not
 + "write_traj_file"::Boolean
 
-   Write trajectory file 
+   Write the trajectory output file or not
 + "write_cm_file"::Boolean
 
    Write the position of the center of mass of the cells to file 
@@ -72,16 +72,8 @@ Let's start with a description of the variables in the input file.
    Set the velocity of the center of mass of the system to zero 
 + "Restart"::Boolean
 
-   Allows changing of boundary conditions. After repositioning the walls and reading cell data from the previous system, the new simulation will continue where the previous one was left.
-+ "doAdaptive_dt":
-
-   Changes the time steps used in the integration
-  + "dt_max":
-
-     Maximum time step used
-  + "dt_tol": #check?
-
-     Minimum time step used
+   Restarting the simulation from the last step of the previous simulation. It's flexible with changing the boundary conditions.
+  
 + "phase_count":
 
    Updates Youngs Modules after "phase_count" steps #check <---
@@ -98,7 +90,7 @@ Let's start with a description of the variables in the input file.
    Specify the name of the file (e.g. "inp.dat")
 + "count_only_internal_cells?"::Boolean
   
-   Count cells within a certain interval
+   Count cells within a certain region
 + "radius_cutoff":
 
   Cutoff radius of internal cells
@@ -116,14 +108,14 @@ Let's start with a description of the variables in the input file.
 
 ## Geometry
 
-The geometry used to describe the cells is that of a C180 fullerene, a structure that gives our cells a spherical shape while keeping the simulation time reasonable. The input variables used to describe each cell include: 
+Each cell in the simulation is made of 180 nodes, and each node and its neighbors are connected with springs. The input variables used to describe each cell include: 
 
 + "particle_mass"
 
-   mass of each node constructing a cell
+   mass of each node 
 + "checkSphericity"::Boolean
 
-   Check whether or not cells are spherical to determine if they are suitable for division, 
+   Add the sphericity condition for cells to be able to divide
   
 
 ## Force field
@@ -135,24 +127,24 @@ We model the visco-elasticity of cell membranes with damped harmonic oscillators
 ```math
 F_i^B=\sum^{3}_{j=1} k^{B} \hat{b}_{ij}(R_{ij} - R_0) - \gamma_{int} v_{ij}
 ```
-where $R_0$ is the equilibrium bond length, $v_{ij}$ is the relative velocity between nodes i and j, and $\hat{b}_{ij}$ is a vector from node i to j. The parameter $\gamma _{int}$ is the coefficient of friction that dampens the oscillations of the bonds, and the bonding spring constant is  $k^{B}$. This force accounts for the bonded interactions between each node and its three neighboring nodes.
+where $R_0$ is the equilibrium bond length, $v_{ij}$ is the relative velocity between nodes i and j on a cell, and $\hat{b}_{ij}$ is a vector from node i to j on a cell. The parameter $\gamma _{int}$ is the coefficient of friction that dampens the oscillations of the bonds, and the bonding spring constant is  $k^{B}$. This force accounts for the bonded interactions between each node and its three nearest neighboring nodes.
 
 The input variables used to describe this force are:
 
-+ "stiffFactor1" and "Youngs_mod" whose product is the intercellular bond stiffness $k^{B}$.
++ "stiffFactor1" and "Youngs_mod" = 1000 whose product is the intercellular bond stiffness $k^{B}$.
 + "internal_damping"
 
   Bond damping coefficient $\gamma_{int}$.
 
 
 #### Cell Curvature
-The angle force, $F_{angle}$, is a harmonic force exerted on three neighboring nodes which opposes the deformation of the angle between these three nodes and maintains cell curvature. It is defined as
+The angle force, $F_{angle}$, is a harmonic force exerted on three neighboring nodes which opposes the deformation of the angle among them and maintains cell curvature. It is defined as
 ```math
 F_i^{\theta}=-\frac{1}{2}  \sum_j \sum_{k\neq i}  k_{\theta} \nabla (\theta_{i j k} - \theta_0)^2
 ```
 + "constrainAngles"::Boolean
 
-  Calculates the equilibrium angle for the specific input structure
+  Determines whether we have angle force or not 
 
 
 
@@ -164,19 +156,19 @@ F^P= P S \hat{n}
 Where P is the internal pressure of the cell, and S is the unit element of the surface area.
 + "growth_rate"
 
-  Product of S and P, Pressure growth rate.
+  The rate at which the cell pressure increases
 + "minPressure"
 
-  Initial pressure force
+  minimum pressure a cell can have
 + "maxPressure"
 
-  Final pressure force
+  maximum pressure a cell can have
 
 
 ### Intercellular forces
 
 #### Adhesion
-When two cell membranes come into contact, the adhesive component holds them together. $F_A$, the attractive force between nodes in different cells is defined as
+When two cell membranes come into contact, the adhesive component holds them together. $F_A$, the attractive force between nodes on different cells is defined as
 
 
 ```math
@@ -185,7 +177,7 @@ When two cell membranes come into contact, the adhesive component holds them tog
 
 + "attraction_range"
 
-  Attraction range between two neighboring cells
+  It is the cutoff distance between two nodes that determines whether we have an adhesion force or not, we have the force where the distance between two nodes is smaller than the attraction range.
 + We have "attraction_strength" and "Youngs_mod" such that the product of these two is the attraction stiffness.
 
 
@@ -198,12 +190,13 @@ When two cell membranes come into contact, the repulsive force keeps them apart.
 
 + "repulsion_range"
 
-  Repulsion range between two neighboring cells
+  It is the cutoff distance between two nodes that determines whether we have repulsive force or not, we have the force where the distance between two nodes is smaller than the attraction range.
+  
 + We have "repulsion_strength" and "Youngs_mod" such that the product of these two is the repulsion stiffness.
 
 
 #### Friction between cells
-$F^F$ is the friction term separated into viscous drag due to cell-extracellular matrix interactions and intermembrane friction, which is proportional to the relative velocity tangential to the cell surface.
+$F^F$ is the friction term separated into viscous drag due to intermembrane friction, which is proportional to the relative velocity tangential to the cell surface.
 
 ```math
 F^{F,e}_{ij}= -\gamma_{ext} v_{ij}^{\tau}
@@ -230,7 +223,7 @@ We assume that cells divide symmetrically through their centers of mass and asym
 
 + "division_Vol"
 
-   Volume threshold for division
+   Volume threshold for cell division
 + "useDivPlaneBasis"::Boolean
 
    use the specified division plane 
