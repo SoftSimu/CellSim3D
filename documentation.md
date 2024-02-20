@@ -177,7 +177,7 @@ When two cell membranes come into contact, the adhesive component holds them tog
 
 + "attraction_range"
 
-  It is the cutoff distance between two nodes that determines whether we have an adhesion force or not, we have the force where the distance between two nodes is smaller than the attraction range.
+  It is the cutoff distance between two nodes that determines whether we have an adhesion force or not, we have the force where the distance between two nodes is smaller than the cutoff.
 + We have "attraction_strength" and "Youngs_mod" such that the product of these two is the attraction stiffness.
 
 
@@ -190,7 +190,7 @@ When two cell membranes come into contact, the repulsive force keeps them apart.
 
 + "repulsion_range"
 
-  It is the cutoff distance between two nodes that determines whether we have repulsive force or not, we have the force where the distance between two nodes is smaller than the attraction range.
+  It is the cutoff distance between two nodes that determines whether we have repulsive force or not, we have the force where the distance between two nodes is smaller than the cutoff.
   
 + We have "repulsion_strength" and "Youngs_mod" such that the product of these two is the repulsion stiffness.
 
@@ -226,16 +226,16 @@ We assume that cells divide symmetrically through their centers of mass and asym
    Volume threshold for cell division
 + "useDivPlaneBasis"::Boolean
 
-   use the specified division plane 
+   Fixing one vector to be in the division plane. Users can use this feature for epithelial tissue growth simulation 
 + "divPlaneBasisX"
 
-  set the division plane normal to the X direction if "useDivPlaneBasis" is set to one
+  X value of the fixed vector
 + "divPlaneBasisY"
 
-  set the division plane normal to the Y direction if "useDivPlaneBasis" is set to one
+  Y value of the fixed vector
 + "divPlaneBasisZ"
 
-  set the division plane normal to the Z direction if "useDivPlaneBasis" is set to one
+  Z value of the fixed vector
 + "asymDivision"::Boolean
 
   Do asymmetric division 
@@ -245,7 +245,7 @@ We assume that cells divide symmetrically through their centers of mass and asym
 
 + "useDifferentCell"::Boolean
   
-  Have two different types of cells in the simulation, sets different characteristics for new cells 
+  Having a different type of cell with different features for multicellular tissue simulation.
 + "SizeFactor"::Boolean
 
   Ratio of the size of the new type of cell compared to the old one
@@ -254,10 +254,10 @@ We assume that cells divide symmetrically through their centers of mass and asym
    Ratio of the stiffness of the bonds of the new type of cell compared to the old one
 + "GrowthRate"
 
-  The growth rate of the new cell
+  The rate at which the pressure force increases
 + "division"
 
-  division volume of the new cell
+  division threshold of the new cell
 + "gammaV" #check
 
   Medium Friction for the new cell
@@ -266,62 +266,43 @@ We assume that cells divide symmetrically through their centers of mass and asym
   Intermembrane friction
 + "Apo_rate2"
 
-  Probability of apoptosis for each new cell
+  Apoptosis rate of the new cell
 + "squeeze_rate2"
 
-  rate of shrinkage of the new cell in apoptosis (replaces growth rate)
-+ "numberOfCells": numberofCells=roundf(fractionofCells*No_of_C180s), whats the point of having it in the code?
+  rate of shrinkage of the new cell in the apoptosis process (replaces growth rate)
++ "numberOfCells":
 
-  The number of this second type of cells in the system.
+  The ratio of the initial new cells to the main cell. The number of initial cells divides into type I and type II based on this rate. 
+
 + "fractionOfCells"
 
   fraction of new cells that will have these properties
 + "closenessToCenter"
 
+  Turns any cell close to the center of the box inside a specific radius to type II
+
 + "numberofCells"
 
   cells will be turned into the second type in this specific radius.
+  
 + "Yseparation"
 
-   Apply changes for cells in range y $\in$ Yseperation*boxMax.y
+   Apply changes for cells with y's less than "Yseparation" x size 
+  
 + "chooseRandomCellindices"::Boolean  #check
 
   Choose random cells to be of the new type
+  
 + "daughtSame":: Boolean
   
+  The daughter cell will be the same as the mother cell
+
 + "duringGrowth"::Boolean
   
   Does not change the property of cells if the system has growth 
-+ "recalc_r0":: Boolean #Ask
++ "recalc_r0":: Boolean
 
   If true, does not divide the cell into a fullerene
-
-
-### Population regulation
-#Ask 
-
-+ "doPopModel"::Boolean
-
-  
-+ "totalFood"
-
-  Total food available to the system
-
-+ "regular_consumption"
-  
-  Consumption of food by cells in the system 
-+ "division_consumption"
-
-  Each cell consumes this much food when going through division
-+ "death_release_food"
-
-  Death of cell releases "death_release_food" units of food back into the system
-+ "haylimit": 10?
-  
-+ "cellLifeTime"
-
-  The lifetime of each cell is "cellLifeTime" time steps
-
 
 
 ## ECM
