@@ -251,13 +251,13 @@ We assume that cells divide symmetrically through their centers of mass and asym
   Ratio of the size of the new type of cell compared to the old one
 + "StiffFactor"
 
-   Ratio of the stiffness of the bonds of the new type of cell compared to the old one
+   The stiffness of type II cells.
 + "GrowthRate"
 
   The rate at which the pressure force increases
 + "division"
 
-  division threshold of the new cell
+  The division threshold of the new cell
 + "gammaV" #check
 
   Medium Friction for the new cell
@@ -266,10 +266,10 @@ We assume that cells divide symmetrically through their centers of mass and asym
   Intermembrane friction
 + "Apo_rate2"
 
-  Apoptosis rate of the new cell
+  The apoptosis rate of the new cell
 + "squeeze_rate2"
 
-  rate of shrinkage of the new cell in the apoptosis process (replaces growth rate)
+  The rate of shrinkage of the new cell in the apoptosis process (replaces growth rate)
 + "numberOfCells":
 
   The ratio of the initial new cells to the main cell. The number of initial cells divides into type I and type II based on this rate. 
@@ -454,13 +454,13 @@ system.
   Use Lees Edwards boundary condition (LEbc)
 + "useRigidBoxZ"
 
-  have Rigid walls in Z direction
+  have Rigid walls in the Z direction
 + "useRigidBoxY"::Boolean
 
-  have Rigid walls in Y direction 
+  have Rigid walls in the Y direction 
 + "useRigidBoxX"
 
-  have Rigid walls in X direction 
+  have Rigid walls in the X direction 
 
  allCMsPin[i].x < 1.5 #?
 
