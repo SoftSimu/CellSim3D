@@ -500,13 +500,18 @@ system.
   Positions all cells on a plane with fixed Z 
 
 ## Random number Generator
-+ "add_rands": 1,
-+ "rand_seed": -1, // use time if < 0
-+ "rand_dist": 0, # 0 - uniform (default) / Others to be implemented
-+ "rand_scale_factor": 0.1
++ "add_rands": Boolean
+  Having random force
+  
++ "rand_seed": -1
 
-## To add
-- [ ] Can include an animation & description for each feature (can change the color of cells you would like to point out later, eg. those going through apoptosis or polar ones, can have different colors for colloids that have more than one component.)
+  use time if < 0
++ "rand_dist": 0
+
+  if 0: uniform (default)
++ "rand_scale_factor":
+
+  The scale factor for the random force
 
 
 
