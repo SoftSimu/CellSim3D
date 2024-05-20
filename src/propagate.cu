@@ -1,5 +1,5 @@
 #include<cuda.h>
-#include<vector_functions.h>
+//#include<vector_functions.h>
 #include<stdio.h>
 #include<curand_kernel.h>
 #include "VectorFunctions.hpp"
