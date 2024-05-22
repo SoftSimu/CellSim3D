@@ -13,9 +13,23 @@ target_sources(celldiv_lib PRIVATE
   volume.cu
   BondKernels.cu)
 
+set_source_files_properties(
+  centermass.cu
+  postscriptinit.cu
+  PressureKernels.cu
+  propagatebound.cu
+  propagate.cu
+  volume.cu
+  BondKernels.cu PROPERTIES LANGUAGE HIP)
 add_subdirectory(utils)
 
 add_executable(cellDiv GPUbounce.cu)
-set_property(TARGET cellDiv PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-#set_property(TARGET celldiv_lib cellDiv PROPERTY CUDA_ARCHITECTURES native)
-target_link_libraries(cellDiv PRIVATE celldiv_lib utils_lib ${CUDA_curand_LIBRARY} ${CUDA_LIBRARIES} m)
+set_source_files_properties( GPUbounce.cu PROPERTIES LANGUAGE HIP)
+target_link_libraries(cellDiv PRIVATE celldiv_lib utils_lib hip::hiprand m ${MPI_C_LIBRARIES})
+
+
+
+
+add_executable(cellDiv_gpuawarempi GPUbounce-CudaAwareMPI.cu)
+set_source_files_properties( GPUbounce-CudaAwareMPI.cu PROPERTIES LANGUAGE HIP)
+target_link_libraries(cellDiv_gpuawarempi PRIVATE celldiv_lib utils_lib hip::hiprand m ${MPI_C_LIBRARIES})
