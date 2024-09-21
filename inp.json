@@ -40,9 +40,11 @@
 	"write_vcm_file": 1,
         "write_fcm_file": 1,
 	"correct_com" : 0,
-        "correct_Vcom" : 1,
-        "Polarity": 0
+    "correct_Vcom" : 1,
+    "Polarity": 0,
+    "angleConst": 100
     },
+    
     "counting": {
 
         "countcells": 0,
@@ -70,9 +72,17 @@
 	 "popToStartApo": 100,
          "Apo_ratio": 0.000003,
          "squeeze_rate": 0.005,
-         "apoptosis_Vol": 0.7
+         "apoptosis_Vol": 0.7,
+         "Create_wound": 1 ,
+         "Ephitelial_wound_layered": 1,
+         "epi_wound_Zratio": 0.33,
+         "wound_radius": 0.5 ,
+         "Wound_creation_time": 600000,
+         "Wound_Induced_Division_V": 2.5,
+         "WI_growth_rate": 0.002,
+         "WI_viscotic_damping": 1,
+         "WI_gamma_visc": 1
     },
-
 
     "ECMparams":{
 
@@ -116,7 +126,7 @@
         "StiffFactor": 0.7,
         "GrowthRate": 0.005,
         "divisionV": 2.0,
-        "gammaV": 0.01,
+        "gamma": 0.01,
         "VisDamping" : 0.01,
         "Apo_rate2": 0.001,
         "squeeze_rate2": 0.005,
@@ -176,7 +186,10 @@
 	"impurity": 0,
 	"impurityNum": 0,
 	"line": 0,
-	"plane": 0
+	"plane": 0,
+    "wall_adhesion":1,
+    "LJ9_3_epsilon": 10,
+    "LJ9_3_sigma": 1
     },
 
     "rand_params":{

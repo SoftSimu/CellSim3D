@@ -1,7 +1,7 @@
 compiler = $(shell which nvcc)
 debug = -g -G -lineinfo
-arch = -arch=sm_80
-oflags = $(arch) -Xptxas="-v" -I inc -dc -lmpi
+arch = -arch=sm_89
+oflags = $(arch) -Xptxas="-v" -I inc -I /usr/lib/x86_64-linux-gnu/openmpi/include/ -dc -lmpi
 objDir = bin/
 sources = $(wildcard src/*.cu)
 #objects = $(patsubst src%, $(objDir)%, $(patsubst %.cu, %.o, $(sources)))
