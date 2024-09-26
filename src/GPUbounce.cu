@@ -198,6 +198,9 @@ int impurityNum;
 bool line;
 bool plane;
 float L  = 2.5f;  
+bool wall_adhesion;
+float LJ_epsilon; 
+float LJ_sigma;
 
 int No_of_threads; // ie number of staring cells
 int Side_length;
@@ -333,6 +336,16 @@ int* d_Num_shrink_Cell;
 int NumRemoveCell;
 curandState *d_rngStatesApo;
 unsigned int *d_seeds_Apo;
+bool Create_wound;
+float wound_radius;
+bool Epi_wound;
+float Epi_wound_Zratio;
+int Wound_creation_time;
+float divisionV_after_wound;
+float growth_rate_after_wound;
+float gamma_env_after_wound;
+float viscotic_damp_after_wound;
+float radMax;
 
 
 bool colloidal_dynamics;
@@ -4521,7 +4534,7 @@ int main(int argc, char *argv[])
                            						attraction_strength_ecm, attraction_range_ecm,
                            						repulsion_strength_ecm, repulsion_range_ecm,
                            						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           						MaxNeighList_ecm,
+                           						MaxNeighList_ecm, wall_adhesion, LJ_epsilon, LJ_sigma,
                            						d_Polarity_Vec, Polarity); 
                                                      	
         CudaErrorCheck();
@@ -5168,26 +5181,63 @@ int main(int argc, char *argv[])
 		// ----------------------------------------- Begin Cell Death ------------	
 		if (apoptosis && !WithoutApo) {	
 
-            		
+			if (Create_wound && step > Wound_creation_time) {
+			printf(" create Wound.\n");
+
+			if (wound_radius > 0.f && wound_radius < 1.f) {
+
+			printf("Killing cells within %f radius\n", wound_radius);
+			Create_wound_center(No_of_C180s);
+			rMax = growth_rate_after_wound;
+			divVol = divisionV_after_wound;
+			gamma_visc = gamma_env_after_wound;
+			viscotic_damping = viscotic_damp_after_wound;
+
+			Wound_Induced_Param_Change<<<MaxNoofC180s, 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
+										d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
+										gamma_env_after_wound, viscotic_damp_after_wound);
+
+			Create_wound = false;
+			apoptosis = false;
+			}
+			}
+
+
+			else if (!Create_wound) {
+
             		CellApoptosis<<<No_of_C180s/512 + 1, 512>>>(No_of_C180s, d_rngStatesApo, d_Apo_rate,
  					d_Growth_rate, d_squeeze_rate, d_Num_shrink_Cell);
             		
-			
 			cudaMemcpy(&num_cell_Apo,d_num_cell_Apo,sizeof(int),cudaMemcpyDeviceToHost);
+			}
+			
 			
 			if (num_cell_Apo> 0){
-			
-			
+
+				//printf("Num cell Apoptosis: %d\n", num_cell_Apo);
+
+				cudaMemcpy(d_cell_Apo_inds,cell_Apo_inds, MaxNoofC180s*sizeof(int) ,cudaMemcpyHostToDevice);
+				cudaMemcpy(d_cell_Apo,cell_Apo, MaxNoofC180s*sizeof(char) ,cudaMemcpyHostToDevice);
+
+
 			 	cudaMemset(d_counter, 0, sizeof(int));
 			 	
 			 	Cell_removing <<<num_cell_Apo,192>>>( No_of_C180s, num_cell_Apo, d_counter,
 									d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, 
                              						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                              			  			d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex,
-                             			  			d_Apo_rate, d_squeeze_rate, d_Generation, d_Fibre_index,
+                             			  			d_Apo_rate, d_squeeze_rate,
 									d_cell_Apo_inds, d_cell_Apo);
 				
 				CudaErrorCheck();
+
+				Wound_Induced_Param_Change<<<MaxNoofC180s , 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
+										d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
+										gamma_env_after_wound, viscotic_damp_after_wound);
+
+				CudaErrorCheck();
+
+				//printf("Wound created\n");
 				
 				cudaMemset(d_cell_Apo, 0, MaxNoofC180s*sizeof(char));
 				
@@ -5196,7 +5246,7 @@ int main(int argc, char *argv[])
 				
 				
 				CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s, d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz); 
-      				CudaErrorCheck();
+      			CudaErrorCheck();
 				
 		
       			}       	
@@ -8280,7 +8330,7 @@ int main(int argc, char *argv[])
                            						attraction_strength_ecm, attraction_range_ecm,
                            						repulsion_strength_ecm, repulsion_range_ecm,
                            						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           						MaxNeighList_ecm,
+                           						MaxNeighList_ecm,  wall_adhesion, LJ_epsilon, LJ_sigma,
                            						d_Polarity_Vec, Polarity); 
                                                      	
        CudaErrorCheck();
@@ -10663,6 +10713,104 @@ int initialize_Vel(int Orig_No_of_C180s)
   
 }
 
+
+
+
+int Create_wound_center(int Orig_No_of_C180s){
+
+			if (wound_radius > 0.f && wound_radius < 1.f){
+          	
+          	if( No_of_C180s> 0 ){
+          	         	
+              	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                       	       	           d_X, d_Y, d_Z,
+                       	               	   d_CMx, d_CMy, d_CMz);
+				CudaErrorCheck();
+         		cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         	 	cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         	 	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		
+			}
+
+         	 float3 sysCM = make_float3(0.f, 0.f, 0.f);
+
+         	 for(int i =0; i < No_of_C180s; ++i){
+         	     	
+         	     	sysCM = sysCM + make_float3(CMx[i], CMy[i], CMz[i]);
+         	 
+         	 }
+
+           	
+           	 float sysCMxAll, sysCMyAll, sysCMzAll;
+        	 int cells_All;
+        		
+        	 MPI_Allreduce(&sysCM.x, &sysCMxAll, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	 MPI_Allreduce(&sysCM.y, &sysCMyAll, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	 MPI_Allreduce(&sysCM.z, &sysCMzAll, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+     
+        	 MPI_Allreduce(&No_of_C180s, &cells_All, 1, MPI_INT, MPI_SUM, cart_comm);
+        
+        	 sysCM.x = sysCMxAll / cells_All;
+        	 sysCM.y = sysCMyAll / cells_All;
+        	 sysCM.z = sysCMzAll / cells_All;
+         	 	 
+          
+         	 if(rank == 0) printf("COM = (%f, %f, %f)\n", sysCM.x, sysCM.y, sysCM.z);
+
+          	 float radMax = 0;
+         	 float mags[No_of_C180s];
+          
+         	 for (int i =0; i < No_of_C180s; ++i){
+         	     
+         	     	float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
+         	     	mags[i] = mag(pos);
+         	     	radMax = max(radMax, mags[i]);
+         	 }
+			printf("radius of cell cluster: %f \n", radMax);
+
+        	int c = 0; 
+			if (Epi_wound) { // only kill cells in the upper region of the z-axis - ephitelial wound
+			printf("killing cells in the upper region of the z-axis, %f\n" , Epi_wound_Zratio*boxMax.z);
+
+			for (int i = 0; i < No_of_C180s; ++i){
+            if (mags[i] <= radMax* wound_radius && CMz[i] > Epi_wound_Zratio*boxMax.z){
+				int index = num_cell_Apo++;
+				cell_Apo_inds[index] = i;
+				cell_Apo[i] = 1;
+				c++;
+			}
+			}
+
+			}
+			else { // kill cells in the center within the wound radius - 3D
+			for (int i = 0; i < No_of_C180s; ++i){
+            if (mags[i] <= radMax* wound_radius){
+				int index = num_cell_Apo++;
+				cell_Apo_inds[index] = i;
+				cell_Apo[i] = 1;
+				c++;
+			}
+			}
+			}
+
+			  	for (int i =  0; i < MaxNoofC180s; ++i){
+				if (colloidal_dynamics){
+					Growth_rate[i] = 0;
+				}else{
+					DivisionVolume[i] = divisionV_after_wound;
+					Growth_rate[i] = growth_rate_after_wound;
+					gamma_env[i] = gamma_env_after_wound;
+					viscotic_damp[i] = viscotic_damp_after_wound;
+				}
+				}
+
+          	printf("marked %d cells for death \n", c);
+	  }
+	return 0;
+}
+
+
+
 int SecondCell(int Orig_No_of_C180s){
 
 
@@ -10717,20 +10865,20 @@ int SecondCell(int Orig_No_of_C180s){
           
          	 if(rank == 0) printf("COM = (%f, %f, %f)\n", sysCM.x, sysCM.y, sysCM.z);
 
-          	 float rMax = 0;
+          	 float radMax = 0;
          	 float mags[No_of_C180s];
           
          	 for (int i =0; i < No_of_C180s; ++i){
          	     
          	     	float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
          	     	mags[i] = mag(pos);
-         	     	rMax = max(rMax, mags[i]);
+         	     	radMax = max(radMax, mags[i]);
          	 }
         		
         	 int c = 0; 
           	 for (int i = 0; i < No_of_C180s; ++i){
               		
-              		if (mags[i] <= rMax*closenessToCenter){
+              		if (mags[i] <= radMax*closenessToCenter){
               		
               			ScaleFactor[i] = SizeFactor;
                   		youngsModArray[i] = Stiffness2;
@@ -11831,12 +11979,21 @@ int read_json_params(const char* inpFile){
     }
     else{
 	
-	apoptosis = apoParams["apoptosis"].asBool();
+		apoptosis = apoParams["apoptosis"].asBool();
     	popToStartApo = apoParams["popToStartApo"].asFloat();
     	Apo_rate1 = apoParams["Apo_ratio"].asFloat();
     	squeeze_rate1 = -1 * apoParams["squeeze_rate"].asFloat();
     	ApoVol = apoParams["apoptosis_Vol"].asFloat();
-    	
+		Create_wound = apoParams["Create_wound"].asBool();
+		wound_radius = apoParams["wound_radius"].asFloat();
+		Epi_wound = apoParams["Ephitelial_wound_layered"].asBool();
+		Epi_wound_Zratio = apoParams["epi_wound_Zratio"].asFloat();
+		Wound_creation_time = apoParams["Wound_creation_time"].asInt();  
+		divisionV_after_wound = apoParams["Wound_Induced_Division_V"].asFloat(); 	
+		growth_rate_after_wound = apoParams["WI_growth_rate"].asFloat();
+		gamma_env_after_wound = apoParams["WI_gamma_visc"].asFloat();
+		viscotic_damp_after_wound = apoParams["WI_viscotic_damping"].asFloat();
+
     }	
 
     Json::Value divParams = inpRoot.get("divParams", Json::nullValue);
@@ -11963,10 +12120,13 @@ int read_json_params(const char* inpFile){
         flatbox = boxParams["flatbox"].asBool();
         LineCenter = boxParams["LineCenter"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
-	impurity = boxParams["impurity"].asBool();
-	impurityNum = boxParams["impurityNum"].asInt();
-	line = boxParams["line"].asBool();
-	plane = boxParams["plane"].asBool();
+		impurity = boxParams["impurity"].asBool();
+		impurityNum = boxParams["impurityNum"].asInt();
+		line = boxParams["line"].asBool();
+		plane = boxParams["plane"].asBool();
+		wall_adhesion = boxParams["wall_adhesion"].asBool();
+		LJ_epsilon = boxParams["LJ9_3_epsilon"].asFloat();
+		LJ_sigma = boxParams["LJ9_3_sigma"].asFloat();
 	
     }
 
@@ -12017,10 +12177,15 @@ int read_json_params(const char* inpFile){
     	printf("      squeeze_rate         = %f\n", squeeze_rate1);
     	printf("      checkSphericity     = %d\n", checkSphericity);
     	printf("      gamma_visc          = %f\n", gamma_visc);
+		printf("	  Division:            \n\n");
     	printf("      useDivPlanebasis    = %d\n", useDivPlaneBasis);
     	printf("      divPlaneBasisX      = %f\n", divPlaneBasis[0]);
     	printf("      divPlaneBasisY      = %f\n", divPlaneBasis[1]);
     	printf("      divPlaneBasisZ      = %f\n", divPlaneBasis[2]);
+		printf("	  wall adhesion       = %d\n", wall_adhesion);
+		printf("	  LJ_epsilon          = %f\n", LJ_epsilon);
+		printf("	  LJ_sigma            = %f\n", LJ_sigma);
+		printf("      second cell:         \n\n");
     	printf("      useDifferentCell = %d\n", useDifferentCell);
     	printf("      SizeFactor  	=%f\n", SizeFactor);
     	printf("      Stiffness2  	=%f\n", Stiffness2);
@@ -12035,6 +12200,7 @@ int read_json_params(const char* inpFile){
     	printf("      chooseRandomCellIndices = %d\n", chooseRandomCellIndices);
     	printf("      daughtSame = 	%d\n", daughtSame);
     	printf("      recalc_r0           = %d\n", recalc_r0);
+		printf("      Box parameters:         \n\n");
     	printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
     	printf("      usePBCs             = %d\n", usePBCs);
     	printf("      box_len_x           = %f\n", boxMax.x);
@@ -12045,7 +12211,7 @@ int read_json_params(const char* inpFile){
     	printf("      BoxMin_z            = %f\n", BoxMin.z);
     	printf("      flatbox             = %d\n", flatbox); 
     	printf("      doAdaptive_dt       = %d\n", doAdaptive_dt); 
-   	printf("      dt_max              = %f\n", dt_max); 
+   		printf("      dt_max              = %f\n", dt_max); 
     	printf("      dt_tol              = %f\n", dt_tol);
     	printf("      add_rands           = %d\n", add_rands);
     	printf("      rand_seed           = %d\n", rand_seed);
@@ -12057,6 +12223,16 @@ int read_json_params(const char* inpFile){
     	printf("      Apoptosis ratio     = %f\n",Apo_rate1);
     	printf("      apoptosis volume    = %f\n",ApoVol);
     	printf("      squeeze rate        = %f\n",squeeze_rate1);
+		printf("      Apoptosis radius    = %f\n", wound_radius);
+		printf("      Create_wound        = %d\n", Create_wound);
+		printf("      Epithelial wound           = %d\n", Epi_wound);
+		printf("      Epithelial wound Z ratio   = %f\n", Epi_wound_Zratio);
+		printf("      wound creation time = %d\n",Wound_creation_time);
+		printf("      Wound-induced division volume = %f\n", divisionV_after_wound);
+		printf("      Wound-induced growth rate = %f\n", growth_rate_after_wound);
+		printf("      Wound-induced gamma_visc = %f\n", gamma_env_after_wound);
+		printf("      Wound-induced viscotic damping = %f\n", viscotic_damp_after_wound);
+ 
     }
     
     

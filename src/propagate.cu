@@ -385,7 +385,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           int MaxNeighList_ecm,
+                           int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
                            R3Nptrs d_Polarity_Vec, bool Polarity)
 {
 
@@ -880,8 +880,27 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
         	       }
 		
-		}
+	}
         
+
+		if (wall_adhesion){ //add 9:3 LJ potential
+			float gap1, gap2; 
+
+			gap1 = Z - BoxMin.z + 1.0e-3f;
+			gap2 = boxMax.z - Z + 1.0e-3f;
+
+			//if (gap1 < LJ_sigma+1){  //gap1 or gap1-threshDist ??
+					FZ -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 4.0f / gap1 * powf(LJ_sigma / gap1, 3));
+					FZ_ext -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 4.0f / gap1 * powf(LJ_sigma / gap1, 3));
+			//}
+
+			//if (gap2 < LJ_sigma+1){
+					FZ += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 4.0f / gap2 * powf(LJ_sigma / gap2, 3));
+					FZ_ext += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 4.0f / gap2 * powf(LJ_sigma / gap2, 3));
+			//}
+
+		}
+
 
         	d_forceList.x[atomInd] = FX;
         	d_forceList.y[atomInd] = FY;

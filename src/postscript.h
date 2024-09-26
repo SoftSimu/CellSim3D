@@ -150,7 +150,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           int MaxNeighList_ecm,
+                           int MaxNeighList_ecm,,bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
                            R3Nptrs d_Polarity_Vec, bool Polarity);
 
 
@@ -268,6 +268,7 @@ void ShapeScaler (float* initx,float* inity,float* initz);
 void RotationMatrix(float* RMat,float* axis,float* theta);
 inline void calc_sys_CM();
 inline void calc_sys_VCM();
+int Create_wound_center(int Orig_No_of_C180s);
 
 
 inline float getRmax2();
@@ -468,6 +469,12 @@ __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter
 __global__ void CellApoptosis(int No_of_C180s, curandState *d_rngStatesApo, float* d_Apo_rate,
  				float* d_Growth_rate, float* d_squeeze_rate, int* d_Num_shrink_Cell);
  				
+
+
+__global__ void Wound_Induced_Param_Change(int No_of_C180s,float* d_Growth_rate, float* d_DivisionVolume, float* d_gamma_env,
+										float* d_viscotic_damp, float growth_rate_after_wound, float divisionV_after_wound, 
+										float gamma_env_after_wound, float viscotic_damp_after_wound);
+
 
 __global__ void ghost_cells_finder_Auxiliary(int No_of_C180s, int All_Cells, float *d_CM , 
 						float Sub_max, float Sub_min, float R_ghost_buffer,

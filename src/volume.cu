@@ -373,6 +373,27 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
     
 }
    
+
+
+__global__ void Wound_Induced_Param_Change(int No_of_C180s,float* d_Growth_rate, float* d_DivisionVolume, float* d_gamma_env,
+										float* d_viscotic_damp, float growth_rate_after_wound, float divisionV_after_wound, 
+										float gamma_env_after_wound, float viscotic_damp_after_wound){
+
+		//size_t cell = blockIdx.x*blockDim.x + threadIdx.x;
+		size_t cell = blockIdx.x * blockDim.x + threadIdx.x;
+
+    	if ( cell < No_of_C180s){
+        	        	d_Growth_rate[cell] =  growth_rate_after_wound;
+						d_DivisionVolume[cell] = divisionV_after_wound;
+						d_gamma_env[cell] = gamma_env_after_wound;
+						d_viscotic_damp[cell] = viscotic_damp_after_wound;
+
+						//printf("Cell %d: Growth rate: %.4f, Division Volume: %.4f, gamma_env: %.4f, viscotic_damp: %.4f\n",cell,d_Growth_rate[cell],d_DivisionVolume[cell],d_gamma_env[cell],d_viscotic_damp[cell]);
+	}
+	__syncthreads();
+    }
+
+
    
 __global__ void Cell_removing (int No_of_C180s, int num_cell_Apo, int* d_counter,
 				float *d_X,  float *d_Y,  float *d_Z,

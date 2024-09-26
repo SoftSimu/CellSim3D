@@ -33,6 +33,67 @@ make -j12 CellDiv to compile the simulator.
 
 The simulator can be found in the bin directory
 
+## Simulations
+
+After compiling `CellSim3D`, transfer the following files to the `bin` directory:
+
+- `inp.json`
+- `C180C`
+- `C180N`
+- `C180NN`
+- `C180_original`
+- `C180_pentahexa`
+- `C180_scaled`
+- `C180_small`
+
+Next, update the variables in the `inp.json` file to represent your desired system. 
+
+More details on the features and input variables can be found in the `description.md` file.
+
+### Main Branch
+
+Navigate to the `bin` directory.
+If you are using the **main branch**, run the following command:
+   ~~~
+   ./CellDiv <# initial cells> inp.json <device number>
+   ~~~
+
+### multigpu branch
+
+To use the multigpu branch, make sure you have mpi installed on your system. Move to the bin directory.
+
+Run
+~~~
+mpirun -np <# processors> ./CellDiv <# initial cells> inp.json <# sections in x> <# setions in y> <# sections in z>
+~~~
+
+Note: The product of the number of sections in the x, y, and z dimensions must equal the number of processors.
+
+## Visualization in Blender
+
+To visualize the results of the simulations using Blender, follow these steps:
+
+  From the `bin` directory, copy the following files to the `scripts` folder.
+   - `inp.xyz`   
+   - `C180_pentahexa.csv`
+   - `CellDiv.blend`
+
+  Open the `CellDiv.blend` file in Blender and adjust the camera settings as needed to capture the entire system.
+  
+In the `render.py` file located in the `scripts` folder, update the module search path to match your system's configuration. Locate the following line:
+
+```python
+sys.path.append("/path/to/scripts")
+```
+Replace `"/path/to/scripts"` with the actual path to your `scripts` folder.
+
+Open a terminal and navigate to the `scripts` directory.
+
+Execute the following command to run Blender in the background and render the results:
+```bash
+blender --background CellDiv.blend --python render.py -- inp.xyz
+```
+
 
 ## Simulator Source Code Description (note: subject to change):
 
