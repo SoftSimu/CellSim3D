@@ -5222,12 +5222,17 @@ int main(int argc, char *argv[])
 
 			 	cudaMemset(d_counter, 0, sizeof(int));
 			 	
-			 	Cell_removing <<<num_cell_Apo,192>>>( No_of_C180s, num_cell_Apo, d_counter,
-									d_X, d_Y, d_Z, d_velListX, d_velListY, d_velListZ, 
-                             						d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
-                             			  			d_gamma_env, d_viscotic_damp, d_pressList, d_CellINdex,
-                             			  			d_Apo_rate, d_squeeze_rate,
-									d_cell_Apo_inds, d_cell_Apo);
+			 	Cell_removing<<<num_cell_Apo, 192>>>(No_of_C180s, num_cell_Apo, d_counter,
+                                       d_X, d_Y, d_Z, d_velListX, 
+                                       d_velListY, d_velListZ, 
+                                       d_ScaleFactor, d_Youngs_mod, 
+                                       d_Growth_rate, d_DivisionVolume,
+                                       d_gamma_env, d_viscotic_damp, 
+                                       d_pressList, d_CellINdex, 
+                                       Apo_rate, squeeze_rate, 
+                                       d_Generation, d_Fibre_index, 
+                                       d_cell_Apo_inds, cell_Apo);
+
 				
 				CudaErrorCheck();
 

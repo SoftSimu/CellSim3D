@@ -150,7 +150,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           int MaxNeighList_ecm,,bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
+                           int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
                            R3Nptrs d_Polarity_Vec, bool Polarity);
 
 
