@@ -384,118 +384,119 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float* d_ECM_x, float* d_ECM_y, float* d_ECM_z,
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
-                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
+                           int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm, int* d_CellINdex,
                            int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
+						   bool LateralForce, float Fluid_Density, float Constant_Pressure , bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
                            R3Nptrs d_Polarity_Vec, bool Polarity)
 {
 
 
-#ifdef FORCE_DEBUG
-        __shared__ float FX_sum;
-        __shared__ float FY_sum;
-        __shared__ float FZ_sum;
-        
-        if (threadIdx.x == 0){
-        
-            FX_sum = 0;
-            FY_sum = 0;
-            FZ_sum = 0;
+	#ifdef FORCE_DEBUG
+	__shared__ float FX_sum;
+	__shared__ float FY_sum;
+	__shared__ float FZ_sum;
+	
+	if (threadIdx.x == 0){
+	
+		FX_sum = 0;
+		FY_sum = 0;
+		FZ_sum = 0;
 
-        
-        }
+	
+	}
 
-        __syncthreads();
+	__syncthreads();
 
-#endif
+	#endif
 
 
-    	int rank = blockIdx.x;
-    	int atom = threadIdx.x;
-    	int atomInd = rank*192+atom;    	
+	int rank = blockIdx.x;
+	int atom = threadIdx.x;
+	int atomInd = rank*192+atom;    	
+	
     	
-    	
-    	if ( rank < No_of_C180s && atom < 180 )
-    	{
+	if ( rank < No_of_C180s && atom < 180 )
+	{
 
-    		float deltaX, deltaY, deltaZ;
-    		float R;
-    		int N1;
-    		int nn_rank;
-    		float R0=0;
-    		float range;
-    		float Pressure = d_pressList[rank];
-    		float stiffness = d_stiffness[rank];
-    		float Scale = d_ScaleFactor[rank];
-    			
-    	
-        	if (isnan(d_X[atomInd]) ||
-        	    isnan(d_Y[atomInd]) || 
-        	    isnan(d_Z[atomInd])){
-        	    printf("OH SHIT: we have a nan\n");
-        	    printf("Particle index: %d, Cell: %d\n", atom, rank);
-        	    printf("Crash now :(\n"); 
-        	    asm("trap;"); 
-        	}
-
-
-        	float X = d_X[atomInd];
-        	float Y = d_Y[atomInd];
-        	float Z = d_Z[atomInd];
-
-        	float FX = 0.f;
-        	float FY = 0.f;
-        	float FZ = 0.f;
-        	float FX_ext = 0.f;
-        	float FY_ext = 0.f;
-        	float FZ_ext = 0.f;
-
-        	int nnAtomInd;
+		float deltaX, deltaY, deltaZ;
+		float R;
+		int N1;
+		int nn_rank;
+		float R0=0;
+		float range;
+		float Pressure = d_pressList[rank];
+		float stiffness = d_stiffness[rank];
+		float Scale = d_ScaleFactor[rank];
+			
+	
+		if (isnan(d_X[atomInd]) ||
+			isnan(d_Y[atomInd]) || 
+			isnan(d_Z[atomInd])){
+			printf("OH SHIT: we have a nan\n");
+			printf("Particle index: %d, Cell: %d\n", atom, rank);
+			printf("Crash now :(\n"); 
+			asm("trap;"); 
+		}
 
 
-        	for ( int i = 0; i < 3 ; ++i ) // Better to open this loop
-        	{
-            		N1 = d_C180_nn[i*192+atom];
+		float X = d_X[atomInd];
+		float Y = d_Y[atomInd];
+		float Z = d_Z[atomInd];
 
-            		deltaX = d_X[rank*192+N1]-X;
-            		deltaY = d_Y[rank*192+N1]-Y;
-            		deltaZ = d_Z[rank*192+N1]-Z;
+		float FX = 0.f;
+		float FY = 0.f;
+		float FZ = 0.f;
+		float FX_ext = 0.f;
+		float FY_ext = 0.f;
+		float FZ_ext = 0.f;
 
-            		R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
+		int nnAtomInd;
 
-            		R0 = Scale*d_R0[i*192 + atom];
 
-            		//spring forces
-            		FX += +stiffness*(R-R0)/R0*deltaX/R;
-            		FY += +stiffness*(R-R0)/R0*deltaY/R;
-            		FZ += +stiffness*(R-R0)/R0*deltaZ/R;
-        	}
+		for ( int i = 0; i < 3 ; ++i ) // Better to open this loop
+		{
+				N1 = d_C180_nn[i*192+atom];
 
-        	// new growth force
-        	float3 r_CM = make_float3(X - d_CMx[rank], 
-               	                  Y - d_CMy[rank], 
-               	                  Z - d_CMz[rank]);
-        	r_CM = calcUnitVec(r_CM);
-        	
-        	float3 gForce  = make_float3(0.f, 0.f, 0.f);
+				deltaX = d_X[rank*192+N1]-X;
+				deltaY = d_Y[rank*192+N1]-Y;
+				deltaZ = d_Z[rank*192+N1]-Z;
 
-        	gForce = 3*Pressure*r_CM;
+				R  = sqrt(deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ);
 
-        
-        	FX += gForce.x; 
-        	FY += gForce.y; 
-        	FZ += gForce.z; 
+				R0 = Scale*d_R0[i*192 + atom];
 
-        	if (constrainAngles){
-            		
-            		float3 t = CalculateAngleForce(atom, d_C180_nn,
-                       	                    	d_X, d_Y, d_Z,
-                       	                    	d_theta0, angleConstant /*Youngs_mod*/, rank);
-            		FX += t.x; FY += t.y; FZ += t.z;
-        	}
-        
+				//spring forces
+				FX += +stiffness*(R-R0)/R0*deltaX/R;
+				FY += +stiffness*(R-R0)/R0*deltaY/R;
+				FZ += +stiffness*(R-R0)/R0*deltaZ/R;
+		}
+
+		// new growth force
+		float3 r_CM = make_float3(X - d_CMx[rank], 
+								Y - d_CMy[rank], 
+								Z - d_CMz[rank]);
+		r_CM = calcUnitVec(r_CM);
+		
+		float3 gForce  = make_float3(0.f, 0.f, 0.f);
+
+		gForce = 3*Pressure*r_CM;
+
+	
+		FX += gForce.x; 
+		FY += gForce.y; 
+		FZ += gForce.z; 
+
+		if (constrainAngles){
+				
+				float3 t = CalculateAngleForce(atom, d_C180_nn,
+											d_X, d_Y, d_Z,
+											d_theta0, angleConstant /*Youngs_mod*/, rank);
+				FX += t.x; FY += t.y; FZ += t.z;
+		}
         
         
-#ifdef FORCE_DEBUG
+        
+		#ifdef FORCE_DEBUG
 
         	atomicAdd(&FX_sum, FX);
         	__syncthreads();
@@ -508,182 +509,217 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
             		printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
         	}
 
-#endif
+		#endif
 
-        	// interfullerene attraction and repulsion
-        	
-        	float attraction_stiff = attraction_strength;
-        	float attraction_stiff_ecm = attraction_strength_ecm;
-        	
-        	float Polarity_Stiffness = 0.f;
-        	
-        	if(Polarity){
-        	
-        		float3 Pol_vec = make_float3(d_Polarity_Vec.x[rank], 
-               		                     d_Polarity_Vec.y[rank], 
-               		                     d_Polarity_Vec.z[rank]);
-        	
-        		Polarity_Stiffness = 0.1*dot(r_CM, Pol_vec);
-        		
-        		attraction_stiff_ecm = attraction_strength_ecm + attraction_strength_ecm*Polarity_Stiffness;
-        	
-        	}
-        	
+		// interfullerene attraction and repulsion
+		
+		float attraction_stiff = attraction_strength;
+		float attraction_stiff_ecm = attraction_strength_ecm;
+		float Polarity_Stiffness = 0.f;
+		
+		if(Polarity){
+		
+			float3 Pol_vec = make_float3(d_Polarity_Vec.x[rank], 
+										d_Polarity_Vec.y[rank], 
+										d_Polarity_Vec.z[rank]);
+		
+			Polarity_Stiffness = 0.1*dot(r_CM, Pol_vec);
+			
+			attraction_stiff_ecm = attraction_strength_ecm + attraction_strength_ecm*Polarity_Stiffness;
+		
+		}
+		
 
-        	int posX = (int)((X - Subdivision_min.x)/DL);
-        	if ( posX < 0 ) posX = 0;
-        	if ( posX > Xdiv-1 ) posX = Xdiv-1;
+		int posX = (int)((X - Subdivision_min.x)/DL);
+		if ( posX < 0 ) posX = 0;
+		if ( posX > Xdiv-1 ) posX = Xdiv-1;
 
 
 		int posY = (int)((Y - Subdivision_min.y)/DL);
-        	if ( posY < 0 ) posY = 0;
-        	if ( posY > Ydiv-1 ) posY = Ydiv-1;
-         
-         
-        	int posZ = (int)((Z - Subdivision_min.z)/DL);
-        	if ( posZ < 0 ) posZ = 0;
-        	if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
-        
-
-        	int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
-
+		if ( posY < 0 ) posY = 0;
+		if ( posY > Ydiv-1 ) posY = Ydiv-1;
 		
-	        float3 contactForce = make_float3(0.f, 0.f, 0.f);
-        
-	        for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist[index]; ++nn_rank1 )
-	        {
-	            
-	            	nn_rank = d_NNlist[MaxNeighList*index + nn_rank1];
-	            
-	            	if ( nn_rank == rank )
-	                	continue;
-                	
-                	float3 CM_neigh = make_float3(d_CMx[nn_rank], 
-               		                      d_CMy[nn_rank], 
-               		                      d_CMz[nn_rank]);
-                	
-	            	deltaX  = X - CM_neigh.x;
-	            	deltaY  = Y - CM_neigh.y;                
-	            	deltaZ  = Z - CM_neigh.z;
-	            
-		    	//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
-		    	range = f_range + attraction_range;	
-                    
-	            	if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ >  range*range)
-	            	    continue;
-		    
-		    	
-		    	nnAtomInd = nn_rank*192;
-		    	for (int nn_atom = 0; nn_atom < 180; ++nn_atom )
-            	    	{
-               		 
-               		 //nnAtomInd += nn_atom;
-               		 
-               		 float3 Pos_neigh = make_float3(d_X[nnAtomInd+nn_atom], 
-               		 	                        d_Y[nnAtomInd+nn_atom], 
-               		 	                        d_Z[nnAtomInd+nn_atom]);
-
-               		 deltaX = X - Pos_neigh.x;
-               		 deltaY = Y - Pos_neigh.y;
-               		 deltaZ = Z - Pos_neigh.z;
-        
-            
-               		 R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
-
-               		 R = sqrt(R);
-               		 
-               		 if ( R >= attraction_range )
-               		     continue;
-				
-				
-				 if(Polarity){
-				 	
-				 	
-				 	float3 Pol_vec_neigh = make_float3(d_Polarity_Vec.x[nn_rank], 
-               		 		                     	   d_Polarity_Vec.y[nn_rank], 
-               		 		                     	   d_Polarity_Vec.z[nn_rank]);
-				 	
-				 	float3 r_CM_neigh = calcUnitVec(Pos_neigh - CM_neigh);
-				 	
-				 	float Polarity_Stiffness_neigh = 0.1*dot(r_CM_neigh, Pol_vec_neigh);
-				 	
-				 
-				 	attraction_stiff += attraction_strength*(Polarity_Stiffness_neigh + Polarity_Stiffness)/2;
-				 
-				 }
-				 
-               		 contactForce.x += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaX;
-               		 contactForce.y += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaY;
-               		 contactForce.z += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaZ;
-
-
-               		 if ( R <= repulsion_range )
-               		 {
-               		     //if (R < (repulsion_range-0.01)) R = repulsion_range-0.01; 
-               		     contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-               		     contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-               		     contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
-               		 }
-            	    
-            	    	}
-	        
-	        
-	        }      	
-        	
-        	if (impurity){
-        	
-        		
-        		for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlistPin[index] ; ++nn_rank1 )
-	        	{
-	        
-	            		nn_rank = d_NNlistPin[32*index+nn_rank1];
-                
-	            		deltaX  = X - d_CMxPin[nn_rank];
-	            		deltaY  = Y - d_CMyPin[nn_rank];                
-	            		deltaZ  = Z - d_CMzPin[nn_rank];
-
-				range = f_range + attraction_range;
-               
-	            		if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range*range )
-	                		continue;
-
-
-        	    		nnAtomInd = nn_rank*192;
-            			for (int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
-            			{
-               			
-               			//nnAtomInd += nn_atom;
+		
+		int posZ = (int)((Z - Subdivision_min.z)/DL);
+		if ( posZ < 0 ) posZ = 0;
+		if ( posZ > Zdiv-1 ) posZ = Zdiv-1;
 	
-               			deltaX = X - d_XPin[nnAtomInd+nn_atom];
-               			deltaY = Y - d_YPin[nnAtomInd+nn_atom];
-               			deltaZ = Z - d_ZPin[nnAtomInd+nn_atom];
+
+		int index = posZ*Xdiv*Ydiv + posY*Xdiv + posX;
+
+	
+		float3 contactForce = make_float3(0.f, 0.f, 0.f);
+
+
+
+
+		if (LateralForce){
+			
+			// Lateral force
+			d_CellINdex[rank] = abs(d_CellINdex[rank]);
+			//if (atom == 0){
+			//printf("No of cells: %d , No of NN neighbors: %d\n ",No_of_C180s,  d_NoofNNlist[index]);
+			//}
+			if (d_NoofNNlist[index] < 9){
+				float gap1, gap2; 
+				float center_x, center_y;
+				gap1 = d_CMz[rank] - BoxMin.z + 1.0e-3f;
+				gap2 = boxMax.z - d_CMz[rank] + 1.0e-3f;
+				center_x = BoxMin.x + 0.5*(boxMax.x - BoxMin.x);
+				center_y = BoxMin.y + 0.5*(boxMax.y - BoxMin.y);
+				d_CellINdex[rank] = - d_CellINdex[rank];
+
+
+				float rad_center = sqrt((X - center_x)*(X - center_x) + (Y - center_y)*(Y - center_y));
+				if (gap1 < 2 || gap2 < 2){
+					//printf("No neighbors for cell index %d , rank %d, atom %d , No NN %d \n", index, rank, atom, d_NoofNNlist[index]);
+					
+					FX += LatforceSideMag*(X - center_x)/rad_center;
+					FY += LatforceSideMag*(Y - center_y)/rad_center;
+					FX_ext += LatforceSideMag*(X - center_x)/rad_center;
+					FY_ext += LatforceSideMag*(Y - center_y)/rad_center;
+				}
+				
+				FX -= Constant_Pressure *(X - center_x)/rad_center;
+				FY -= Constant_Pressure *(Y - center_y)/rad_center;
+				FX_ext -= Constant_Pressure *(X - center_x)/rad_center;
+				FY_ext -= Constant_Pressure *(Y - center_y)/rad_center;
+			
+				
+			}
+		}
+
+
+
         
-            
-               		 	R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+		for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist[index]; ++nn_rank1 ){
 
-               		 	if ( R >= attraction_range*attraction_range )
-               		     		continue;
+			nn_rank = d_NNlist[MaxNeighList*index + nn_rank1];
+		
+			if ( nn_rank == rank )
+				continue;
+			
+			float3 CM_neigh = make_float3(d_CMx[nn_rank], 
+									d_CMy[nn_rank], 
+									d_CMz[nn_rank]);
+			
+			deltaX  = X - CM_neigh.x;
+			deltaY  = Y - CM_neigh.y;                
+			deltaZ  = Z - CM_neigh.z;
+		
+			//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
+			range = f_range + attraction_range;	
+				
+				if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ >  range*range)
+					continue;
+			
 
-               		 	R = sqrt(R);
+			nnAtomInd = nn_rank*192;
+			for (int nn_atom = 0; nn_atom < 180; ++nn_atom ){
+				
+				//nnAtomInd += nn_atom;
+				
+				float3 Pos_neigh = make_float3(d_X[nnAtomInd+nn_atom], 
+										d_Y[nnAtomInd+nn_atom], 
+										d_Z[nnAtomInd+nn_atom]);
+
+				deltaX = X - Pos_neigh.x;
+				deltaY = Y - Pos_neigh.y;
+				deltaZ = Z - Pos_neigh.z;
+
+	
+				R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+				R = sqrt(R);
+				
+				if ( R >= attraction_range )
+					continue;
+			
+			
+				if(Polarity){
+					
+					float3 Pol_vec_neigh = make_float3(d_Polarity_Vec.x[nn_rank], 
+														d_Polarity_Vec.y[nn_rank], 
+														d_Polarity_Vec.z[nn_rank]);
+					float3 r_CM_neigh = calcUnitVec(Pos_neigh - CM_neigh);
+					float Polarity_Stiffness_neigh = 0.1*dot(r_CM_neigh, Pol_vec_neigh);
+
+					attraction_stiff += attraction_strength*(Polarity_Stiffness_neigh + Polarity_Stiffness)/2;
+				
+				}
+				
+				contactForce.x += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaX;
+				contactForce.y += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaY;
+				contactForce.z += -attraction_stiff*Youngs_mod*(attraction_range-R)/R*deltaZ;
 
 
-               		     	contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
-               		     	contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
-               		     	contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+				if ( R <= repulsion_range )
+				{
+					//if (R < (repulsion_range-0.01)) R = repulsion_range-0.01; 
+					contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+					contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+					contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+				}
+					
+			}
+		
+		
+		}      	
 
-               		 	if ( R <= repulsion_range )
-               		 	{
-               		     	 
-               		     		contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-               		     		contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-               		     		contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
-               		 	}
+		if (impurity){
+		
+			
+			for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlistPin[index] ; ++nn_rank1 )
+			{
+		
+					nn_rank = d_NNlistPin[32*index+nn_rank1];
+			
+					deltaX  = X - d_CMxPin[nn_rank];
+					deltaY  = Y - d_CMyPin[nn_rank];                
+					deltaZ  = Z - d_CMzPin[nn_rank];
 
-           		 	}
+					range = f_range + attraction_range;
+			
+					if ( deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ > range*range )
+						continue;
 
-        		}
-        	
-        	}
+
+					nnAtomInd = nn_rank*192;
+					for (int nn_atom = 0; nn_atom < 180 ; ++nn_atom )
+					{
+					
+					//nnAtomInd += nn_atom;
+
+					deltaX = X - d_XPin[nnAtomInd+nn_atom];
+					deltaY = Y - d_YPin[nnAtomInd+nn_atom];
+					deltaZ = Z - d_ZPin[nnAtomInd+nn_atom];
+	
+		
+					R = deltaX*deltaX+deltaY*deltaY+deltaZ*deltaZ;
+
+					if ( R >= attraction_range*attraction_range )
+							continue;
+
+					R = sqrt(R);
+
+
+						contactForce.x += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaX;
+						contactForce.y += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaY;
+						contactForce.z += -attraction_strength*Youngs_mod*(attraction_range-R)/R*deltaZ;
+
+					if ( R <= repulsion_range )
+					{
+							
+							contactForce.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+							contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+							contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+					}
+
+				}
+
+			}
+		
+		}
         	
 		if (ECM) {
 			
@@ -746,141 +782,139 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
 		FX += contactForce.x;
-        	FY += contactForce.y;
-        	FZ += contactForce.z; 
+		FY += contactForce.y;
+		FZ += contactForce.z; 
+		
+		FX_ext += contactForce.x;
+		FY_ext += contactForce.y;
+		FZ_ext += contactForce.z; 
+
+		#ifdef FORCE_DEBUG
+
+		if (threadIdx.x == 0){
+				FX_sum = 0;
+				FY_sum = 0;
+				FZ_sum = 0;
+		}
+		__syncthreads();
+
+		atomicAdd(&FX_sum, FX);
+		__syncthreads();
+		atomicAdd(&FY_sum, FY);
+		__syncthreads();
+		atomicAdd(&FZ_sum, FZ);
+		__syncthreads();
+		if (threadIdx.x == 0){
+				printf("neighbours\n");
+				printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
+		}
+
+		#endif
+        // add forces from simulation box if needed:
+        // if useRigidSimulationBox is true, all walls are rigid
+		// else one can choose which walls are rigid
+        if (useRigidSimulationBox){
         	
-        	FX_ext += contactForce.x;
-        	FY_ext += contactForce.y;
-        	FZ_ext += contactForce.z; 
+			float gap1, gap2; 
 
-#ifdef FORCE_DEBUG
+			gap1 = X - BoxMin.x;
+			gap2 = boxMax.x - X; 
 
-        	if (threadIdx.x == 0){
-            		FX_sum = 0;
-            		FY_sum = 0;
-            		FZ_sum = 0;
-        	}
-        	__syncthreads();
+			if (gap1 < threshDist){
+					FX += -100*Youngs_mod*(gap1 - threshDist);
+					FX_ext += -100*Youngs_mod*(gap1 - threshDist);
+			}
 
-        	atomicAdd(&FX_sum, FX);
-        	__syncthreads();
-        	atomicAdd(&FY_sum, FY);
-        	__syncthreads();
-        	atomicAdd(&FZ_sum, FZ);
-        	__syncthreads();
-        	if (threadIdx.x == 0){
-            		printf("neighbours\n");
-            		printf("Fx = %f, Fy = %f, Fz = %f\n", FX_sum, FY_sum, FZ_sum);
-        	}
+			if (gap2 < threshDist){
+					FX += 100*Youngs_mod*(gap2 - threshDist);
+					FX_ext += 100*Youngs_mod*(gap2 - threshDist);
+			}
+		
+			gap1 = Y - BoxMin.y;
+			gap2 = boxMax.y - Y;
 
-#endif
-        	// add forces from simulation box if needed:
-        	
-        	if (useRigidSimulationBox){
-        	
-        		float gap1, gap2; 
+			if (gap1 < threshDist){
+					FY += -100*Youngs_mod*(gap1 - threshDist);
+					FY_ext += -100*Youngs_mod*(gap1 - threshDist);
+			}
 
-        		gap1 = X - BoxMin.x;
-       		gap2 = boxMax.x - X; 
+			if (gap2 < threshDist){
+					FY += 100*Youngs_mod*(gap2 - threshDist);
+					FY_ext += 100*Youngs_mod*(gap2 - threshDist);
+			}
 
-        		if (gap1 < threshDist){
-            			FX += -100*Youngs_mod*(gap1 - threshDist);
-            			FX_ext += -100*Youngs_mod*(gap1 - threshDist);
-        		}
+			gap1 = Z - BoxMin.z;
+			gap2 = boxMax.z - Z;
 
-        		if (gap2 < threshDist){
-            			FX += 100*Youngs_mod*(gap2 - threshDist);
-            			FX_ext += 100*Youngs_mod*(gap2 - threshDist);
-        		}
-            
-        		gap1 = Y - BoxMin.y;
-        		gap2 = boxMax.y - Y;
+			if (gap1 < threshDist){
+					FZ += -100*Youngs_mod*(gap1 - threshDist);
+					FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
+			}
 
-        		if (gap1 < threshDist){
-            			FY += -100*Youngs_mod*(gap1 - threshDist);
-            			FY_ext += -100*Youngs_mod*(gap1 - threshDist);
-        		}
+			if (gap2 < threshDist){
+					FZ += 100*Youngs_mod*(gap2 - threshDist);
+					FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
+			}
 
-        		if (gap2 < threshDist){
-            			FY += 100*Youngs_mod*(gap2 - threshDist);
-            			FY_ext += 100*Youngs_mod*(gap2 - threshDist);
-        		}
-
-        		gap1 = Z - BoxMin.z;
-        		gap2 = boxMax.z - Z;
-	
-        		if (gap1 < threshDist){
-            			FZ += -100*Youngs_mod*(gap1 - threshDist);
-            			FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
-        		}
-	
-        		if (gap2 < threshDist){
-            			FZ += 100*Youngs_mod*(gap2 - threshDist);
-            			FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
-        		}
-	
 		} else {
 		
-		        if (useRigidBoxZ){
-            
-            			float gap1, gap2; 
-
-            			gap1 = Z;
-            			gap2 = boxMax.z - Z;
-
-            			if (gap1 < threshDist){
-               			FZ += -100*Youngs_mod*(gap1 - threshDist);
-                			FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
-            			}
-
-            			if (gap2 < threshDist){
-                			FZ += 100*Youngs_mod*(gap2 - threshDist);
-                			FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
-            			}
-
-        		}
-        
-        		if (useRigidBoxY){
-        
-            			float gap1, gap2; 
-
-            			gap1 = Y;
-            			gap2 = boxMax.y - Y;
-
-            			if (gap1 < threshDist){
-                			FY += -100*Youngs_mod*(gap1 - threshDist);
-               			FY_ext += -100*Youngs_mod*(gap1 - threshDist);
-                
-            			}
-
-            			if (gap2 < threshDist){
-                			FY += 100*Youngs_mod*(gap2 - threshDist);
-                			FY_ext += 100*Youngs_mod*(gap2 - threshDist);
-            			}
-
-        		}
-        
-        		if (useRigidBoxX){
-        
-            			float gap1, gap2; 
-
-            			gap1 = X;
-            			gap2 = boxMax.x - X;
-
-            			if (gap1 < threshDist){
-                			FX += -100*Youngs_mod*(gap1 - threshDist);
-                			FX_ext += -100*Youngs_mod*(gap1 - threshDist);
-                
-            			}
-
-            			if (gap2 < threshDist){
-                			FX += 100*Youngs_mod*(gap2 - threshDist);
-                			FX_ext += 100*Youngs_mod*(gap2 - threshDist);
-            			}
-
-        	       }
+			if (useRigidBoxZ){
 		
-	}
+					float gap1, gap2; 
+					gap1 = Z;
+					gap2 = boxMax.z - Z;
+
+					if (gap1 < threshDist){
+					FZ += -100*Youngs_mod*(gap1 - threshDist);
+						FZ_ext += -100*Youngs_mod*(gap1 - threshDist);
+					}
+
+					if (gap2 < threshDist){
+						FZ += 100*Youngs_mod*(gap2 - threshDist);
+						FZ_ext += 100*Youngs_mod*(gap2 - threshDist);
+					}
+
+			}
+        
+			if (useRigidBoxY){
+	
+					float gap1, gap2; 
+					gap1 = Y;
+					gap2 = boxMax.y - Y;
+
+					if (gap1 < threshDist){
+						FY += -100*Youngs_mod*(gap1 - threshDist);
+					FY_ext += -100*Youngs_mod*(gap1 - threshDist);
+			
+					}
+
+					if (gap2 < threshDist){
+						FY += 100*Youngs_mod*(gap2 - threshDist);
+						FY_ext += 100*Youngs_mod*(gap2 - threshDist);
+					}
+
+			}
+        
+			if (useRigidBoxX){
+	
+					float gap1, gap2; 
+					gap1 = X;
+					gap2 = boxMax.x - X;
+
+					if (gap1 < threshDist){
+						FX += -100*Youngs_mod*(gap1 - threshDist);
+						FX_ext += -100*Youngs_mod*(gap1 - threshDist);
+			
+					}
+
+					if (gap2 < threshDist){
+						FX += 100*Youngs_mod*(gap2 - threshDist);
+						FX_ext += 100*Youngs_mod*(gap2 - threshDist);
+					}
+
+			}
+		
+		}
         
 
 		if (wall_adhesion){ //add 9:3 LJ potential
@@ -890,28 +924,72 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 			gap2 = boxMax.z - Z + 1.0e-3f;
 
 			//if (gap1 < LJ_sigma+1){  //gap1 or gap1-threshDist ??
-					FZ -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 4.0f / gap1 * powf(LJ_sigma / gap1, 3));
-					FZ_ext -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 4.0f / gap1 * powf(LJ_sigma / gap1, 3));
+			FZ -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 3.0f / gap1 * powf(LJ_sigma / gap1, 1));
+			FZ_ext -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 3.0f / gap1 * powf(LJ_sigma / gap1, 1));
 			//}
 
 			//if (gap2 < LJ_sigma+1){
-					FZ += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 4.0f / gap2 * powf(LJ_sigma / gap2, 3));
-					FZ_ext += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 4.0f / gap2 * powf(LJ_sigma / gap2, 3));
+			FZ += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 3.0f / gap2 * powf(LJ_sigma / gap2, 1));
+			FZ_ext += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 3.0f / gap2 * powf(LJ_sigma / gap2, 1));
 			//}
 
 		}
 
+		//if (LateralForce){
+		//	float BoxSize_z, BoxHalf_y, BoxHalf_x;
+		//	float h_z; 
 
-        	d_forceList.x[atomInd] = FX;
-        	d_forceList.y[atomInd] = FY;
-        	d_forceList.z[atomInd] = FZ;
+		//	BoxSize_z = boxMax.z - BoxMin.z;
+		//	h_z = BoxSize_z - Z;
+
+		//	if (direction_z){
+				//pass
+		//	}
+
+		//	if (direction_y){
+		//		BoxHalf_y = (boxMax.y + BoxMin.y)/2;
+		//		if (BoxHalf_y - 5 < Y && Y < BoxHalf_y + 5){
+					//pass
+		//		} 
+		//		else if (Y < BoxHalf_y){
+		//			FY += (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//			FY_ext += (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//		}
+		//		else if (Y > BoxHalf_y){
+		//			FY -= (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//			FY_ext -= (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//		}
+		//	}
+
+		//	if (direction_x){
+		//		BoxHalf_x = (boxMax.x + BoxMin.x)/2;
+		//		if (BoxHalf_x - 5 < X && X < BoxHalf_x + 5){
+		//			//pass
+		//		}
+		//		else if (X < BoxHalf_x){
+		//			FX += (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//			FX_ext += (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//		}
+		//		else if (X > BoxHalf_x){
+		//			FX -= (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//			FX_ext -= (Fluid_Density * 9.81f * h_z + Constant_Pressure);
+		//		}
+		//	}
+
+
+		//}
+
+
+		d_forceList.x[atomInd] = FX;
+		d_forceList.y[atomInd] = FY;
+		d_forceList.z[atomInd] = FZ;
        	
        	d_ExtForces.x[atomInd] = contactForce.x;
-        	d_ExtForces.y[atomInd] = contactForce.y;
+        d_ExtForces.y[atomInd] = contactForce.y;
        	d_ExtForces.z[atomInd] = contactForce.z;
    	
        	//d_ExtForces.x[atomInd] = FX_ext;
-        	//d_ExtForces.y[atomInd] = FY_ext;
+        //d_ExtForces.y[atomInd] = FY_ext;
        	//d_ExtForces.z[atomInd] = FZ_ext;
 
    	

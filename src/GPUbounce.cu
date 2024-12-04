@@ -597,6 +597,15 @@ float *d_SysCx_ecm, *d_SysCy_ecm, *d_SysCz_ecm;
 R3Nptrs d_sysVCM_ecm;
 R3Nptrs h_sysVCM_ecm, h_sysCM_All_ecm;
 
+bool LateralForce;
+float Fluid_Density;
+bool direction_x;
+bool direction_y;
+bool direction_z;
+float Constant_Pressure;
+float LatforceSideMag;
+
+
 int main(int argc, char *argv[])
 {
 
@@ -2252,13 +2261,12 @@ int main(int argc, char *argv[])
    int Sending_cell_Num_total = 0;
    int Received_New_cell = 0;
    ind_comm = true;
-   	
+
    if (useRigidSimulationBox){
    
 	
 	if (nprocs > 1) {
-	
-		
+
 		
 		// EAST-WEST Migration
 			
@@ -3321,7 +3329,7 @@ int main(int argc, char *argv[])
         	
         	}
 
-        	
+
         
         } else {
         
@@ -3353,8 +3361,10 @@ int main(int argc, char *argv[])
                }
         
         }	
-   
+
+
     } else {
+
 		
 		// EAST-WEST Migration
 			
@@ -3393,7 +3403,7 @@ int main(int argc, char *argv[])
         			
         		cudaMemset(d_counter, 0, sizeof(int));
         		
-        		if(usePBCs) {			
+        		if(usePBCs) {	
         		
         			migrated_Cells_Remove_Pack_PBC_X<<<Sending_cell_Num_total,192>>>(No_of_C180s, Sending_cell_Num_total, d_counter,
 												d_migrated_cells_ind_EAST_WEST, d_cell_mig, boxMax,
@@ -4507,16 +4517,16 @@ int main(int argc, char *argv[])
 		CudaErrorCheck();                                                  	
   	
   }
-  
+
   if (No_of_C180s > 0 ){
   	
   		
   	
   	CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-        		                                             	d_X,  d_Y,  d_Z,
-        		                                             	d_CMx, d_CMy, d_CMz,
-        		                                             	d_XPin,  d_YPin,  d_ZPin,
-        		                                             	d_CMxPin, d_CMyPin, d_CMzPin,
+															d_X,  d_Y,  d_Z,
+															d_CMx, d_CMy, d_CMz,
+															d_XPin,  d_YPin,  d_ZPin,
+															d_CMxPin, d_CMyPin, d_CMzPin,
                                                      		d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
                                                      		attraction_strength, attraction_range,
                                                      		repulsion_strength, repulsion_range,
@@ -4524,18 +4534,19 @@ int main(int argc, char *argv[])
                                                      		Xdiv, Ydiv, Zdiv, boxMax,
                                                      		d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                                      		threshDist,
-									BoxMin, Subdivision_min, Youngs_mod, angleConstant,
+															BoxMin, Subdivision_min, Youngs_mod, angleConstant,
                                                      		constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                                      		impurity,f_range,
                                                      		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
                                                      		MaxNeighList,
                                                      		ECM,
                                                      		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, d_ECM_x, d_ECM_y, d_ECM_z,
-                           						attraction_strength_ecm, attraction_range_ecm,
-                           						repulsion_strength_ecm, repulsion_range_ecm,
-                           						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           						MaxNeighList_ecm, wall_adhesion, LJ_epsilon, LJ_sigma,
-                           						d_Polarity_Vec, Polarity); 
+															attraction_strength_ecm, attraction_range_ecm,
+															repulsion_strength_ecm, repulsion_range_ecm,
+															d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm, d_CellINdex ,
+															MaxNeighList_ecm, wall_adhesion, LJ_epsilon, LJ_sigma,
+															LateralForce, Fluid_Density, Constant_Pressure,  direction_x, direction_y, direction_z, LatforceSideMag,
+															d_Polarity_Vec, Polarity); 
                                                      	
         CudaErrorCheck();
         
@@ -4588,22 +4599,22 @@ int main(int argc, char *argv[])
     	lentrajfile = ftell(trajfile);
     	
     	fseek(forceFile, 0, SEEK_END);
-  	lenforceFile = ftell(forceFile);
-  	
-  	fseek(velFile, 0, SEEK_END);
-  	lenvelFile = ftell(velFile);
-  	
-  	fseek(cmFile, 0, SEEK_END);
-  	lencmFile = ftell(cmFile);
-  	
-  	fseek(VcmFile, 0, SEEK_END);
-  	lenvcmFile = ftell(VcmFile);
-  	
-  	fseek(FcmFile, 0, SEEK_END);
-  	lenfcmFile = ftell(FcmFile);
-  	
-  	fseek(forFile, 0, SEEK_END);
-  	lenforFile = ftell(forFile);
+		lenforceFile = ftell(forceFile);
+		
+		fseek(velFile, 0, SEEK_END);
+		lenvelFile = ftell(velFile);
+		
+		fseek(cmFile, 0, SEEK_END);
+		lencmFile = ftell(cmFile);
+		
+		fseek(VcmFile, 0, SEEK_END);
+		lenvcmFile = ftell(VcmFile);
+		
+		fseek(FcmFile, 0, SEEK_END);
+		lenfcmFile = ftell(FcmFile);
+		
+		fseek(forFile, 0, SEEK_END);
+		lenforFile = ftell(forFile);
     	
     	fseek(trajfile_Ecm, 0, SEEK_END);
     	lentrajEcmFile = ftell(trajfile_Ecm);
@@ -4957,15 +4968,15 @@ int main(int argc, char *argv[])
       		
       		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		CudaErrorCheck();
-		
-		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		CudaErrorCheck();
-		
-		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
+			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
       		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
       		cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
@@ -5033,11 +5044,11 @@ int main(int argc, char *argv[])
     	if(write_cm_file){
     	
     		cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	CudaErrorCheck();
-       	
-       	if( lencmFile == 0 ) {
+			cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			if( lencmFile == 0 ) {
        		
        		MPI_Send(CMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
     			MPI_Send(CMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
@@ -5050,17 +5061,17 @@ int main(int argc, char *argv[])
     	if(write_vcm_file){
     	
     		cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	CudaErrorCheck();
-       	
-       	if( lenvcmFile == 0 ) {
-       		
-       		MPI_Send(VCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(VCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(VCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
-    		}
+			cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			if( lenvcmFile == 0 ) {
+				
+				MPI_Send(VCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+					MPI_Send(VCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+					MPI_Send(VCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+					MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+				}
     	
     	} 
     	
@@ -5176,6 +5187,7 @@ int main(int argc, char *argv[])
 		cudaMemcpy(&num_cell_dang, d_num_cell_dang , sizeof(int), cudaMemcpyDeviceToHost );
 		cudaMemcpy(&num_cell_invalidator, d_num_cell_invalidator , sizeof(int), cudaMemcpyDeviceToHost );
 		
+		CudaErrorCheck();
 
 
 		// ----------------------------------------- Begin Cell Death ------------	
@@ -5184,22 +5196,22 @@ int main(int argc, char *argv[])
 			if (Create_wound && step > Wound_creation_time) {
 			printf(" create Wound.\n");
 
-			if (wound_radius > 0.f && wound_radius < 1.f) {
+				if (wound_radius > 0.f && wound_radius < 1.f) {
 
-			printf("Killing cells within %f radius\n", wound_radius);
-			Create_wound_center(No_of_C180s);
-			rMax = growth_rate_after_wound;
-			divVol = divisionV_after_wound;
-			gamma_visc = gamma_env_after_wound;
-			viscotic_damping = viscotic_damp_after_wound;
+					printf("Killing cells within %f radius\n", wound_radius);
+					Create_wound_center(No_of_C180s);
+					rMax = growth_rate_after_wound;
+					divVol = divisionV_after_wound;
+					gamma_visc = gamma_env_after_wound;
+					viscotic_damping = viscotic_damp_after_wound;
 
-			Wound_Induced_Param_Change<<<MaxNoofC180s, 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
-										d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
-										gamma_env_after_wound, viscotic_damp_after_wound);
+					Wound_Induced_Param_Change<<<MaxNoofC180s, 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
+												d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
+												gamma_env_after_wound, viscotic_damp_after_wound);
 
-			Create_wound = false;
-			apoptosis = false;
-			}
+					Create_wound = false;
+					apoptosis = false;
+				}
 			}
 
 
@@ -5218,8 +5230,6 @@ int main(int argc, char *argv[])
 
 				cudaMemcpy(d_cell_Apo_inds,cell_Apo_inds, MaxNoofC180s*sizeof(int) ,cudaMemcpyHostToDevice);
 				cudaMemcpy(d_cell_Apo,cell_Apo, MaxNoofC180s*sizeof(char) ,cudaMemcpyHostToDevice);
-
-
 			 	cudaMemset(d_counter, 0, sizeof(int));
 			 	
 			 	Cell_removing<<<num_cell_Apo, 192>>>(No_of_C180s, num_cell_Apo, d_counter,
@@ -5229,9 +5239,9 @@ int main(int argc, char *argv[])
                                        d_Growth_rate, d_DivisionVolume,
                                        d_gamma_env, d_viscotic_damp, 
                                        d_pressList, d_CellINdex, 
-                                       Apo_rate, squeeze_rate, 
+                                       d_Apo_rate, d_squeeze_rate, 
                                        d_Generation, d_Fibre_index, 
-                                       d_cell_Apo_inds, cell_Apo);
+                                       d_cell_Apo_inds, d_cell_Apo);
 
 				
 				CudaErrorCheck();
@@ -5289,8 +5299,8 @@ int main(int argc, char *argv[])
 ////////////////////////////////////////////////////////////////////////////
 
       	
-      	if ( NNlistUpdaterAll > 0 || (step - StepShifter)%StepLEbc == 0 || step%StepCompression == 0 ) {
-	//if(1 == 1){
+    if ( NNlistUpdaterAll > 0 || (step - StepShifter)%StepLEbc == 0 || step%StepCompression == 0 ) {
+		//if(1 == 1){
 		
 		
 		StepShifter = step;			
@@ -6169,11 +6179,11 @@ int main(int argc, char *argv[])
         				ind_comm = true;
         				
         				cudaMemset(d_counter_ecm_e, 0, sizeof(int));
-					cudaMemset(d_counter_ecm_w, 0, sizeof(int));
-					cudaMemset(d_counter_ecm_n, 0, sizeof(int));
-					cudaMemset(d_counter_ecm_s, 0, sizeof(int));
-					//cudaMemset(d_counter_ecm_u, 0, sizeof(int));
-					//cudaMemset(d_counter_ecm_d, 0, sizeof(int));
+						cudaMemset(d_counter_ecm_w, 0, sizeof(int));
+						cudaMemset(d_counter_ecm_n, 0, sizeof(int));
+						cudaMemset(d_counter_ecm_s, 0, sizeof(int));
+						//cudaMemset(d_counter_ecm_u, 0, sizeof(int));
+						//cudaMemset(d_counter_ecm_d, 0, sizeof(int));
         	
         		
         				makeNNlistECMMultiGpu<<<Num_ECM/512+1,512>>>(Num_ECM, R_ghost_buffer_ECM, d_ECM_x, d_ECM_y, d_ECM_z,
@@ -6194,7 +6204,7 @@ int main(int argc, char *argv[])
         	
         				cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST, d_Ghost_ECM_ind_EAST, No_of_Ghost_ECM_buffer[EAST]*sizeof(int), cudaMemcpyDeviceToDevice);
         				cudaMemcpy(d_Ghost_ECM_ind_EAST_WEST + No_of_Ghost_ECM_buffer[EAST], d_Ghost_ECM_ind_WEST, No_of_Ghost_ECM_buffer[WEST]*sizeof(int), cudaMemcpyDeviceToDevice);
-					CudaErrorCheck();
+						CudaErrorCheck();
         	
         				Sending_Ghost_ECM_Num_total_EW = No_of_Ghost_ECM_buffer[EAST]  + No_of_Ghost_ECM_buffer[WEST];
         		
@@ -8280,7 +8290,7 @@ int main(int argc, char *argv[])
 #ifdef FORCE_DEBUG
       printf("time %d  pressure = %f\n", step, Pressure);
 #endif	
-
+CudaErrorCheck();
 
  if(ECM && Num_ECM > 0) {
        	
@@ -8313,8 +8323,8 @@ int main(int argc, char *argv[])
  
 
   	CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
-        		                                             	d_X,  d_Y,  d_Z,
-        	         	                                    	d_CMx, d_CMy, d_CMz,
+															d_X,  d_Y,  d_Z,
+															d_CMx, d_CMy, d_CMz,
                                		                      	d_XPin,  d_YPin,  d_ZPin,
                                		                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
                                		                      	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
@@ -8324,7 +8334,7 @@ int main(int argc, char *argv[])
                                		                      	Xdiv, Ydiv, Zdiv, boxMax,
                                		                      	d_NoofNNlist, d_NNlist, d_NoofNNlistPin, d_NNlistPin, DL, d_gamma_env,
                                		                      	threshDist,
-									BoxMin, Subdivision_min, Youngs_mod, angleConstant,
+															BoxMin, Subdivision_min, Youngs_mod, angleConstant,
                                		                      	constrainAngles, d_theta0, d_fConList, d_ExtForces,
                                		                      	impurity,f_range,
                                		                      	useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
@@ -8332,14 +8342,14 @@ int main(int argc, char *argv[])
                                		                      	ECM,
                                                      		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z,
                                                      		d_ECM_x, d_ECM_y, d_ECM_z,
-                           						attraction_strength_ecm, attraction_range_ecm,
-                           						repulsion_strength_ecm, repulsion_range_ecm,
-                           						d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           						MaxNeighList_ecm,  wall_adhesion, LJ_epsilon, LJ_sigma,
-                           						d_Polarity_Vec, Polarity); 
+															attraction_strength_ecm, attraction_range_ecm,
+															repulsion_strength_ecm, repulsion_range_ecm,
+															d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm, d_CellINdex,
+															MaxNeighList_ecm,  wall_adhesion, LJ_epsilon, LJ_sigma,
+															LateralForce, Fluid_Density, Constant_Pressure,  direction_x, direction_y, direction_z, LatforceSideMag,
+															d_Polarity_Vec, Polarity); 
                                                      	
        CudaErrorCheck();
-
                                                      	
        CalculateDisForce<<<No_of_C180s, threadsperblock>>>(No_of_C180s, d_C180_nn, d_C180_sign, 
                	                                         	d_X, d_Y, d_Z,
@@ -8481,11 +8491,10 @@ int main(int argc, char *argv[])
    
 // ------------------------------ Begin Cell Division ------------------------------------------------
    
-   
    if (step <= Time_steps && !colloidal_dynamics) {
    
   	if (No_of_C180s > 0 ){
-        		
+
          	
          	if(!Polarity){
          	
@@ -8496,8 +8505,8 @@ int main(int argc, char *argv[])
 
 
 	 		cudaMemset(d_num_cell_div, 0, 32*sizeof(int));
-	 		cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));
-	
+	 		cudaMemset(d_num_cell_Apo, 0, 32*sizeof(int));	
+
 	
         		volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
                		                      d_X, d_Y, d_Z,
@@ -8507,14 +8516,14 @@ int main(int argc, char *argv[])
                		                      stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
                		                      recalc_r0, ApoVol, d_ScaleFactor,
                		                      d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
-        		CudaErrorCheck();
+			CudaErrorCheck();
 
 
 			cudaMemcpy(&num_cell_div,d_num_cell_div,sizeof(int),cudaMemcpyDeviceToHost);
 		
-		 
+
 		 }
-		
+
 		if (No_of_C180s + num_cell_div > MaxNoofC180s){                                    
               		printf("ERROR: Population is %d, only allocated enough memory for %d\n",     
                      	No_of_C180s, MaxNoofC180s);                                           
@@ -8660,11 +8669,11 @@ int main(int argc, char *argv[])
       }
 #endif
 
-    
+   
   }
         // --------------------------------------- End Cell Division -----------
 
-   
+
    if (!growthDone && step > Time_steps+1){
           
           printf("Cell growth halted.\nProceeding with MD simulation without growth...\n");
@@ -8892,7 +8901,7 @@ int main(int argc, char *argv[])
         }  else {
         
         
-        	cudaMemset(d_sysVCM.x, 0, sizeof(float));
+        cudaMemset(d_sysVCM.x, 0, sizeof(float));
   		cudaMemset(d_sysVCM.y, 0, sizeof(float));
   		cudaMemset(d_sysVCM.z, 0, sizeof(float));
   
@@ -12155,8 +12164,25 @@ int read_json_params(const char* inpFile){
         rand_scale_factor = randParams["rand_scale_factor"].asFloat();
     }
 
-    if(rank == 0){	
+	Json::Value FluidParams = inpRoot.get("Fluid", Json::nullValue);
+    if (popParams == Json::nullValue){
+        printf("ERROR: Cannot load Fluid parameters\nExiting");
+        return -1;
+    }
+    else{
+        LateralForce = FluidParams["LateralForce"].asBool();
+		Fluid_Density = FluidParams["Fluid_Density"].asFloat();
+		Constant_Pressure = FluidParams["Constant_pressure"].asBool();
+		direction_x = FluidParams["direction_x"].asBool();
+		direction_y = FluidParams["direction_y"].asBool();
+		direction_z = FluidParams["direction_z"].asBool();
+		LatforceSideMag = FluidParams["LatforceSideMag"].asFloat();
 
+    }
+
+
+    if(rank == 0){	
+		printf("      Core:           		\n\n");
     	printf("      mass                = %f\n",mass);
     	printf("      repulsion range     = %f\n",repulsion_range);
     	printf("      attraction range    = %f\n",attraction_range);
@@ -12181,21 +12207,27 @@ int read_json_params(const char* inpFile){
     	printf("      growth_rate         = %f\n", rMax);
     	printf("      squeeze_rate         = %f\n", squeeze_rate1);
     	printf("      checkSphericity     = %d\n", checkSphericity);
-    	printf("      gamma_visc          = %f\n", gamma_visc);
+    	printf("      gamma_visc          = %f\n\n", gamma_visc);
 		printf("	  Division:            \n\n");
     	printf("      useDivPlanebasis    = %d\n", useDivPlaneBasis);
     	printf("      divPlaneBasisX      = %f\n", divPlaneBasis[0]);
     	printf("      divPlaneBasisY      = %f\n", divPlaneBasis[1]);
     	printf("      divPlaneBasisZ      = %f\n", divPlaneBasis[2]);
+		printf("      Rotation_angle      = %f\n", Rotation_angle);
+		printf("      Rotation_rate       = %f\n", Rotation_rate);
+		printf("      Random_Div_Rule     = %d\n", Random_Div_Rule);
+		printf("      Fibre               = %d\n", Fibre);
+		printf("      asymDivision        = %d\n\n", asymDivision);
+		printf("	  Cell-wall interactions:\n\n");
 		printf("	  wall adhesion       = %d\n", wall_adhesion);
 		printf("	  LJ_epsilon          = %f\n", LJ_epsilon);
-		printf("	  LJ_sigma            = %f\n", LJ_sigma);
+		printf("	  LJ_sigma            = %f\n\n", LJ_sigma);
 		printf("      second cell:         \n\n");
     	printf("      useDifferentCell = %d\n", useDifferentCell);
     	printf("      SizeFactor  	=%f\n", SizeFactor);
     	printf("      Stiffness2  	=%f\n", Stiffness2);
     	printf("      GrowthRate2  	=%f\n", gRate);
-    	printf("      division volume2  	=%f\n", divisionV);
+    	printf("      division volume2  =%f\n", divisionV);
     	printf("      gamma_visc2  	=%f\n", gEnv); 
     	printf("      viscotic damping2  	=%f\n", gVis);            
     	printf("      numberOfCells       = %d\n", numberOfCells);
@@ -12203,8 +12235,8 @@ int read_json_params(const char* inpFile){
     	printf("      closenesstoCenter   = %f\n", closenessToCenter);
     	printf("      fractionOfCells     = %f\n", fractionOfCells);
     	printf("      chooseRandomCellIndices = %d\n", chooseRandomCellIndices);
-    	printf("      daughtSame = 	%d\n", daughtSame);
-    	printf("      recalc_r0           = %d\n", recalc_r0);
+    	printf("      daughtSame 		= 	%d\n", daughtSame);
+    	printf("      recalc_r0           = %d\n\n", recalc_r0);
 		printf("      Box parameters:         \n\n");
     	printf("      useRigidSimulationBox = %d\n", useRigidSimulationBox);
     	printf("      usePBCs             = %d\n", usePBCs);
@@ -12223,12 +12255,14 @@ int read_json_params(const char* inpFile){
     	printf("      rand_scale_factor   = %f\n", rand_scale_factor);
     	printf("      correct_com         = %d\n", correct_com);
     	printf("      correct_Vcom         = %d\n", correct_Vcom);    
-    	printf("      impurityNum         = %d\n", impurityNum);
+    	printf("      impurityNum         = %d\n\n", impurityNum);
+		printf("      Apoptosis:         \n\n");
     	printf("      apoptosis           = %d\n",apoptosis);
     	printf("      Apoptosis ratio     = %f\n",Apo_rate1);
     	printf("      apoptosis volume    = %f\n",ApoVol);
     	printf("      squeeze rate        = %f\n",squeeze_rate1);
 		printf("      Apoptosis radius    = %f\n", wound_radius);
+		printf("      apoptosis - wound           \n\n");
 		printf("      Create_wound        = %d\n", Create_wound);
 		printf("      Epithelial wound           = %d\n", Epi_wound);
 		printf("      Epithelial wound Z ratio   = %f\n", Epi_wound_Zratio);
@@ -12237,7 +12271,14 @@ int read_json_params(const char* inpFile){
 		printf("      Wound-induced growth rate = %f\n", growth_rate_after_wound);
 		printf("      Wound-induced gamma_visc = %f\n", gamma_env_after_wound);
 		printf("      Wound-induced viscotic damping = %f\n", viscotic_damp_after_wound);
- 
+		printf("      Fluid:         \n\n");
+		printf("      LateralForce        = %d\n", LateralForce);
+		printf("      Fluid Density       = %f\n", Fluid_Density);
+		printf("      Constant_Pressure   = %f\n\n", Constant_Pressure);
+		printf("      direction_x         = %d\n", direction_x);
+		printf("      direction_y         = %d\n", direction_y);
+		printf("      direction_z         = %d\n", direction_z);
+		printf("      LatforceSideMag     = %f\n\n", LatforceSideMag);
     }
     
     
@@ -14494,8 +14535,8 @@ int ReadRestartFile(){
 		
 		if(Owning[c] == 1){
                	
-             		pressList[k] = Res_Buffer_pressList[c];
-			youngsModArray[k] = Res_Buffer_youngsModArray[c];
+             	pressList[k] = Res_Buffer_pressList[c];
+				youngsModArray[k] = Res_Buffer_youngsModArray[c];
         		Growth_rate[k] = Res_Buffer_Growth_rate[c];
         		ScaleFactor[k] = Res_Buffer_ScaleFactor[c];
         		DivisionVolume[k] = Res_Buffer_DivisionVolume[c];
