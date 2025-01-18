@@ -32,7 +32,7 @@ __device__ float3 GetAngleForce(const float3 iPos, const float3 kPos,
     float ri_2    = mag2(iPos);
     float rk_2    = mag2(kPos);
     //if (ri_2*rk_2 - i_dot_k*i_dot_k < 0) asm("trap;");
-    float c1 = -1.0f/( sqrtf( ri_2*rk_2 - i_dot_k*i_dot_k + 1.0e-3f));
+    float c1 = -1.0f / (sqrtf(fabsf(ri_2 * rk_2 - i_dot_k * i_dot_k) + 1.0e-3f));
 
     float c2 = i_dot_k/ri_2;
 
@@ -386,7 +386,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm, int* d_CellINdex,
                            int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
-						   bool LateralForce, float Fluid_Density, float Constant_Pressure , bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
+						   bool LateralForce, float Fluid_Density, float Constant_Pressure , int NN_cell_criteria, bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
                            R3Nptrs d_Polarity_Vec, bool Polarity)
 {
 
@@ -560,7 +560,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 			//if (atom == 0){
 			//printf("No of cells: %d , No of NN neighbors: %d\n ",No_of_C180s,  d_NoofNNlist[index]);
 			//}
-			if (d_NoofNNlist[index] < 9){
+			if (d_NoofNNlist[index] < NN_cell_criteria){
 				float gap1, gap2; 
 				float center_x, center_y;
 				gap1 = d_CMz[rank] - BoxMin.z + 1.0e-3f;
@@ -571,7 +571,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
 				float rad_center = sqrt((X - center_x)*(X - center_x) + (Y - center_y)*(Y - center_y));
-				if (gap1 < 2 || gap2 < 2){
+				if (gap1 < 2.5 || gap2 < 2.5){
 					//printf("No neighbors for cell index %d , rank %d, atom %d , No NN %d \n", index, rank, atom, d_NoofNNlist[index]);
 					
 					FX += LatforceSideMag*(X - center_x)/rad_center;
@@ -920,17 +920,17 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		if (wall_adhesion){ //add 9:3 LJ potential
 			float gap1, gap2; 
 
-			gap1 = Z - BoxMin.z + 1.0e-3f;
-			gap2 = boxMax.z - Z + 1.0e-3f;
+			gap1 = fabsf(Z - BoxMin.z) + 1.0e-1f;
+			gap2 = fabsf(boxMax.z - Z) + 1.0e-1f;
 
 			//if (gap1 < LJ_sigma+1){  //gap1 or gap1-threshDist ??
-			FZ -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 3.0f / gap1 * powf(LJ_sigma / gap1, 1));
-			FZ_ext -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap1 * powf(LJ_sigma / gap1, 9) + 3.0f / gap1 * powf(LJ_sigma / gap1, 1));
+			FZ += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f / gap1 * powf(LJ_sigma / gap1, 9) - 3.0f / gap1 * powf(LJ_sigma / gap1, 1));
+			FZ_ext += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f / gap1 * powf(LJ_sigma / gap1, 9) - 3.0f / gap1 * powf(LJ_sigma / gap1, 1));
 			//}
 
 			//if (gap2 < LJ_sigma+1){
-			FZ += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 3.0f / gap2 * powf(LJ_sigma / gap2, 1));
-			FZ_ext += 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (-9.0f / gap2 * powf(LJ_sigma / gap2, 9) + 3.0f / gap2 * powf(LJ_sigma / gap2, 1));
+			FZ -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f / gap2 * powf(LJ_sigma / gap2, 9) - 3.0f / gap2 * powf(LJ_sigma / gap2, 1));
+			FZ_ext -= 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f / gap2 * powf(LJ_sigma / gap2, 9) - 3.0f / gap2 * powf(LJ_sigma / gap2, 1));
 			//}
 
 		}

@@ -151,7 +151,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm, int* d_CellINdex,
                            int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
-						   bool LateralForce, float Fluid_Density, float Constant_Pressure , bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
+						   bool LateralForce, float Fluid_Density, float Constant_Pressure , int NN_cell_criteria, bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
                            R3Nptrs d_Polarity_Vec, bool Polarity);
 
 

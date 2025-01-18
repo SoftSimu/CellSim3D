@@ -598,6 +598,7 @@ R3Nptrs d_sysVCM_ecm;
 R3Nptrs h_sysVCM_ecm, h_sysCM_All_ecm;
 
 bool LateralForce;
+int NN_cell_criteria;
 float Fluid_Density;
 bool direction_x;
 bool direction_y;
@@ -1744,8 +1745,8 @@ int main(int argc, char *argv[])
   CudaErrorCheck();
 
 
-
-  if (Restart == 0){	
+//Let's assign the new values regardless of restart - Make sure this would cause no problems
+//  if (Restart == 0){	
 
 
   	for (int cell = 0; cell < MaxNoofC180s; cell++){
@@ -1799,7 +1800,8 @@ int main(int argc, char *argv[])
 	if(!colloidal_dynamics && useDifferentCell) SecondCell(Orig_No_of_C180s);
 	if(colloidal_dynamics && Two_Components) SecondColloid(Orig_No_of_C180s);
   
- } 
+// } 
+
 
   cudaMemcpy(d_cell_div, cell_div, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
   cudaMemcpy(d_cell_Apo, cell_Apo, MaxNoofC180s*sizeof(char), cudaMemcpyHostToDevice);
@@ -4545,7 +4547,7 @@ int main(int argc, char *argv[])
 															repulsion_strength_ecm, repulsion_range_ecm,
 															d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm, d_CellINdex ,
 															MaxNeighList_ecm, wall_adhesion, LJ_epsilon, LJ_sigma,
-															LateralForce, Fluid_Density, Constant_Pressure,  direction_x, direction_y, direction_z, LatforceSideMag,
+															LateralForce, Fluid_Density, Constant_Pressure, NN_cell_criteria, direction_x, direction_y, direction_z, LatforceSideMag,
 															d_Polarity_Vec, Polarity); 
                                                      	
         CudaErrorCheck();
@@ -4657,267 +4659,267 @@ int main(int argc, char *argv[])
         
     	int t = nprocs*MaxNoofC180s;	
         
-        if(write_traj_file){
-        	
-        	
-            	cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    		cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    		cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-    		CudaErrorCheck();
-    		
-    		if (binaryOutput){
-	
-        		if( lentrajfile == 0 ) {
-      			
-      			
-      				fwrite(&t, sizeof(int), 1, trajfile);
-      	
-      				t = (int)useDifferentCell;
-      				fwrite(&t, sizeof(int), 1, trajfile);
-      	
-      				t = (Time_steps+equiStepCount+1)/trajWriteInt;
-      				fwrite(&t, sizeof(int), 1, trajfile);      
-    
-     				if (Restart ==0) 
-     					WriteBinaryTraj(0, trajfile, 1, rank);
-     				else 
-     					WriteBinaryTraj(Laststep, trajfile, Lastframe, rank); 
-  		
-  	
-  			}
-  			
-  
-     		} else {
-     	
-	
-        		if( lentrajfile == 0 ) {
-  	
-      				fprintf(trajfile, "Header Start:\n");
-      				fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
-	
-      				fprintf(trajfile, "Using variable stiffness:\n");
-      				if (useDifferentCell) 
-        		 		fprintf(trajfile, "True\n");
-      				else
-        		  		fprintf(trajfile, "False\n");
-
-      				fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
-     	 			fprintf(trajfile, "Header End\n");
-      		
-  		
-  	     			if (Restart ==0) 
-     					write_traj(0, trajfile);
-     				else 
-     					write_traj(Laststep, trajfile);
-  	
-  	
-  			}
-  
-  		}
-  	
-  	}
-  	
-  	if(write_traj_Ecm_file){
-        
-        	
-            	cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
-    		cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
-    		cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
-    		CudaErrorCheck();
-	
-        	if( lentrajEcmFile == 0 ) {
-      			
-      				t = Num_All_ECM;	
-      				fwrite(&t, sizeof(int), 1, trajfile_Ecm);
-      	
-      				t = 0;
-      				fwrite(&t, sizeof(int), 1, trajfile_Ecm);
-      	
-      				t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      				fwrite(&t, sizeof(int), 1, trajfile_Ecm);      
-    
-     				if (Restart ==0) 
-     					WriteBinaryTrajECM(0, trajfile_Ecm, 1);
-     				else 
-     					WriteBinaryTrajECM(Laststep, trajfile_Ecm, Lastframe); 
-  		
-  		}
-  		
-  	}
-  		
-  	if (write_cont_force){
-  
-      		
-      		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		CudaErrorCheck();
-      		
-      		cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		CudaErrorCheck();
+		if(write_traj_file){
+				
+				
+					cudaMemcpy(X, d_X, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(Y, d_Y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(Z, d_Z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+				
+				if (binaryOutput){
 		
-		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-		CudaErrorCheck();
+					if( lentrajfile == 0 ) {
+					
+					
+						fwrite(&t, sizeof(int), 1, trajfile);
+			
+						t = (int)useDifferentCell;
+						fwrite(&t, sizeof(int), 1, trajfile);
+			
+						t = (Time_steps+equiStepCount+1)/trajWriteInt;
+						fwrite(&t, sizeof(int), 1, trajfile);      
+		
+						if (Restart ==0) 
+							WriteBinaryTraj(0, trajfile, 1, rank);
+						else 
+							WriteBinaryTraj(Laststep, trajfile, Lastframe, rank); 
+			
+		
+				}
+				
+	
+				} else {
+			
+		
+					if( lentrajfile == 0 ) {
+		
+						fprintf(trajfile, "Header Start:\n");
+						fprintf(trajfile, "Maximum number of cells:\n%d\n", MaxNoofC180s);
+		
+						fprintf(trajfile, "Using variable stiffness:\n");
+						if (useDifferentCell) 
+							fprintf(trajfile, "True\n");
+						else
+							fprintf(trajfile, "False\n");
+
+						fprintf(trajfile, "Maximum number of frames:\n%d\n", (Time_steps+equiStepCount+1) / trajWriteInt);
+						fprintf(trajfile, "Header End\n");
+				
+			
+						if (Restart ==0) 
+							write_traj(0, trajfile);
+						else 
+							write_traj(Laststep, trajfile);
 		
 		
-		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
-      		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);	
-      		cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
-      		CudaErrorCheck();
-      		
+				}
+	
+			}
+		
+		}
+		
+		if(write_traj_Ecm_file){
+			
+				
+					cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+		
+				if( lentrajEcmFile == 0 ) {
+					
+						t = Num_All_ECM;	
+						fwrite(&t, sizeof(int), 1, trajfile_Ecm);
+			
+						t = 0;
+						fwrite(&t, sizeof(int), 1, trajfile_Ecm);
+			
+						t = (Time_steps+equiStepCount+1) / trajWriteInt;
+						fwrite(&t, sizeof(int), 1, trajfile_Ecm);      
+		
+						if (Restart ==0) 
+							WriteBinaryTrajECM(0, trajfile_Ecm, 1);
+						else 
+							WriteBinaryTrajECM(Laststep, trajfile_Ecm, Lastframe); 
+			
+			}
+			
+		}
+			
+		if (write_cont_force){
+	
+				
+				cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+				
+				cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			
+			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
+				cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);	
+				cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+				
 
-        	if( lenforceFile == 0 ) {
-      		
-      			fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,FX_fric,FY_fric,FZ_fric,F_fric,P,Vol,Area,Generation,Fibre\n");
-      
-      			if (Restart ==0) 
-     				writeForces(forceFile, 0, No_of_C180s);
-     			else 
-     				writeForces(forceFile, Laststep, No_of_C180s);
-  		}
-  	
-  	}
-  	
-  	if(write_vel_file){
-  	          
-               cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-               cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-               cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-               CudaErrorCheck();
-               
+				if( lenforceFile == 0 ) {
+				
+					fprintf(forceFile, "step,num_cells,cell_ind,node_ind,FX,FY,FZ,F,FX_ext,FY_ext,FZ_ext,F_ext,FX_fric,FY_fric,FZ_fric,F_fric,P,Vol,Area,Generation,Fibre\n");
+		
+					if (Restart ==0) 
+						writeForces(forceFile, 0, No_of_C180s);
+					else 
+						writeForces(forceFile, Laststep, No_of_C180s);
+			}
+		
+		}
+		
+		if(write_vel_file){
+				
+				cudaMemcpy(velListX, d_velListX, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListY, d_velListY, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(velListZ, d_velListZ, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+				
 
-        	if( lenvelFile == 0 ) {       
-               
-               	t = nprocs*MaxNoofC180s;
-               	fwrite(&t, sizeof(int), 1, velFile);
-      
-      			t = (int)useDifferentCell;
-      			fwrite(&t, sizeof(int), 1, velFile);
-      
-      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      			fwrite(&t, sizeof(int), 1, velFile);
-               
-               	if (Restart ==0) 
-     				write_vel(0, velFile,1);
-     			else 
-     				write_vel(Laststep, velFile, Lastframe);
-    
-       	}
-       }
-  	
-  	if(write_for_file){
-  	          
-      		cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-      		CudaErrorCheck();
+				if( lenvelFile == 0 ) {       
+				
+					t = nprocs*MaxNoofC180s;
+					fwrite(&t, sizeof(int), 1, velFile);
+		
+					t = (int)useDifferentCell;
+					fwrite(&t, sizeof(int), 1, velFile);
+		
+					t = (Time_steps+equiStepCount+1) / trajWriteInt;
+					fwrite(&t, sizeof(int), 1, velFile);
+				
+					if (Restart ==0) 
+						write_vel(0, velFile,1);
+					else 
+						write_vel(Laststep, velFile, Lastframe);
+		
+			}
+		}
+		
+		if(write_for_file){
+				
+				cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
 
-        	if( lenforFile == 0 ) {       
-               
-               	t = nprocs*MaxNoofC180s;
-               	fwrite(&t, sizeof(int), 1, forFile);
-      
-      			t = (int)useDifferentCell;
-      			fwrite(&t, sizeof(int), 1, forFile);
-      
-      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      			fwrite(&t, sizeof(int), 1, forFile);
-               
-               	if (Restart ==0) 
-     				write_force(0, forFile,1);
-     			else 
-     				write_force(Laststep, forFile, Lastframe);
-    
-       	}
-       
-       }
-  	  	
-       if(write_cm_file){
-       
-       
-       	cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	CudaErrorCheck();
-       	
-        	if( lencmFile == 0 ){
-       	
-       		t = MaxNoofC180s;
-               	fwrite(&t, sizeof(int), 1, cmFile);
-      
-      			t = (int)useDifferentCell;
-      			fwrite(&t, sizeof(int), 1, cmFile);
-      
-      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      			fwrite(&t, sizeof(int), 1, cmFile);
-       		
-       		if (Restart ==0)
-       			WriteCMBinary(0, cmFile, 1);
-       		else
-       			WriteCMBinary(Laststep, cmFile, Lastframe);
-       
-       	}
-    	
-    	}
-    	
-    	if(write_vcm_file){
-       
-       
-       	cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	CudaErrorCheck();
-       	
-        	if( lenvcmFile == 0 ) {
-       	
-       		t = MaxNoofC180s;
-               	fwrite(&t, sizeof(int), 1, VcmFile);
-      
-      			t = (int)useDifferentCell;
-      			fwrite(&t, sizeof(int), 1, VcmFile);
-      
-      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      			fwrite(&t, sizeof(int), 1, VcmFile);
-       		
-       		if (Restart ==0)
-       			WriteVCMBinary(0, VcmFile, 1);
-       		else
-       			WriteVCMBinary(Laststep, VcmFile, Lastframe);
-       
-       	}
-    	}
-    	
-    	if(write_fcm_file){
-       
-       	cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	CudaErrorCheck();
-       	
-        	if( lenfcmFile == 0 ) {
-       	
-       		t = MaxNoofC180s;
-               	fwrite(&t, sizeof(int), 1, FcmFile);
-      
-      			t = (int)useDifferentCell;
-      			fwrite(&t, sizeof(int), 1, FcmFile);
-      
-      			t = (Time_steps+equiStepCount+1) / trajWriteInt;
-      			fwrite(&t, sizeof(int), 1, FcmFile);
-       		
-       		if (Restart ==0)
-       			WriteFCMBinary(0, FcmFile, 1);
-       		else
-       			WriteFCMBinary(Laststep, FcmFile, Lastframe);
-       
-       	}
-    	}
+				if( lenforFile == 0 ) {       
+				
+					t = nprocs*MaxNoofC180s;
+					fwrite(&t, sizeof(int), 1, forFile);
+		
+					t = (int)useDifferentCell;
+					fwrite(&t, sizeof(int), 1, forFile);
+		
+					t = (Time_steps+equiStepCount+1) / trajWriteInt;
+					fwrite(&t, sizeof(int), 1, forFile);
+				
+					if (Restart ==0) 
+						write_force(0, forFile,1);
+					else 
+						write_force(Laststep, forFile, Lastframe);
+		
+			}
+		
+		}
+			
+		if(write_cm_file){
+		
+		
+			cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+				if( lencmFile == 0 ){
+			
+				t = MaxNoofC180s;
+					fwrite(&t, sizeof(int), 1, cmFile);
+		
+					t = (int)useDifferentCell;
+					fwrite(&t, sizeof(int), 1, cmFile);
+		
+					t = (Time_steps+equiStepCount+1) / trajWriteInt;
+					fwrite(&t, sizeof(int), 1, cmFile);
+				
+				if (Restart ==0)
+					WriteCMBinary(0, cmFile, 1);
+				else
+					WriteCMBinary(Laststep, cmFile, Lastframe);
+		
+			}
+			
+		}
+			
+		if(write_vcm_file){
+		
+		
+			cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+				if( lenvcmFile == 0 ) {
+			
+				t = MaxNoofC180s;
+					fwrite(&t, sizeof(int), 1, VcmFile);
+		
+					t = (int)useDifferentCell;
+					fwrite(&t, sizeof(int), 1, VcmFile);
+		
+					t = (Time_steps+equiStepCount+1) / trajWriteInt;
+					fwrite(&t, sizeof(int), 1, VcmFile);
+				
+				if (Restart ==0)
+					WriteVCMBinary(0, VcmFile, 1);
+				else
+					WriteVCMBinary(Laststep, VcmFile, Lastframe);
+		
+			}
+		}
+			
+		if(write_fcm_file){
+		
+			cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+				if( lenfcmFile == 0 ) {
+			
+				t = MaxNoofC180s;
+					fwrite(&t, sizeof(int), 1, FcmFile);
+		
+					t = (int)useDifferentCell;
+					fwrite(&t, sizeof(int), 1, FcmFile);
+		
+					t = (Time_steps+equiStepCount+1) / trajWriteInt;
+					fwrite(&t, sizeof(int), 1, FcmFile);
+				
+				if (Restart ==0)
+					WriteFCMBinary(0, FcmFile, 1);
+				else
+					WriteFCMBinary(Laststep, FcmFile, Lastframe);
+		
+			}
+		}
     
     } else if (nprocs > 1){   	
     	
@@ -8346,7 +8348,7 @@ CudaErrorCheck();
 															repulsion_strength_ecm, repulsion_range_ecm,
 															d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm, d_CellINdex,
 															MaxNeighList_ecm,  wall_adhesion, LJ_epsilon, LJ_sigma,
-															LateralForce, Fluid_Density, Constant_Pressure,  direction_x, direction_y, direction_z, LatforceSideMag,
+															LateralForce, Fluid_Density, Constant_Pressure, NN_cell_criteria, direction_x, direction_y, direction_z, LatforceSideMag,
 															d_Polarity_Vec, Polarity); 
                                                      	
        CudaErrorCheck();
@@ -12171,8 +12173,9 @@ int read_json_params(const char* inpFile){
     }
     else{
         LateralForce = FluidParams["LateralForce"].asBool();
+		NN_cell_criteria = FluidParams["NN_cell_criteria"].asInt();
 		Fluid_Density = FluidParams["Fluid_Density"].asFloat();
-		Constant_Pressure = FluidParams["Constant_pressure"].asBool();
+		Constant_Pressure = FluidParams["Constant_pressure"].asFloat();
 		direction_x = FluidParams["direction_x"].asBool();
 		direction_y = FluidParams["direction_y"].asBool();
 		direction_z = FluidParams["direction_z"].asBool();
@@ -12275,6 +12278,7 @@ int read_json_params(const char* inpFile){
 		printf("      LateralForce        = %d\n", LateralForce);
 		printf("      Fluid Density       = %f\n", Fluid_Density);
 		printf("      Constant_Pressure   = %f\n\n", Constant_Pressure);
+		printf("      NN_cell_criteria	  = %d\n", NN_cell_criteria);
 		printf("      direction_x         = %d\n", direction_x);
 		printf("      direction_y         = %d\n", direction_y);
 		printf("      direction_z         = %d\n", direction_z);
