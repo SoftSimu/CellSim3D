@@ -200,5 +200,16 @@
                           Others to be impimented
                         */
         "rand_scale_factor": 0.1
+    },
+
+    "Fluid":{
+        "LateralForce": 0,
+        "NN_cell_criteria": 9 ,
+        "Fluid_Density": 0.0,
+	"Constant_pressure": 0.0,
+        "direction_x": 1,
+        "direction_y": 1,
+        "direction_z": 0,
+        "LatforceSideMag": 0.0
     }
 }
