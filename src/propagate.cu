@@ -361,7 +361,14 @@ __global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_EC
 
 }
 
-        
+
+__global__ void apply_abs_to_array(int* d_CellINdex, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        d_CellINdex[idx] = abs(d_CellINdex[idx]);
+    }
+}
+	    
 __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_sign[],
                            float d_X[],  float d_Y[],  float d_Z[],
                            float *d_CMx, float *d_CMy, float *d_CMz,
@@ -386,7 +393,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm, int* d_CellINdex,
                            int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
-						   bool LateralForce, float Fluid_Density, float Constant_Pressure , int NN_cell_criteria, bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
+						   bool LateralForce, float Fluid_Density, float Constant_Pressure , int NN_cell_criteria, int Surface_NN_cell_criteria,
+						   bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
+						   bool Look_for_Nearest_Node, float Dis_cutoff_Nodes,
                            R3Nptrs d_Polarity_Vec, bool Polarity)
 {
 
@@ -551,61 +560,37 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		float3 contactForce = make_float3(0.f, 0.f, 0.f);
 
 
-
-
-		if (LateralForce){
-			
-			// Lateral force
-			d_CellINdex[rank] = abs(d_CellINdex[rank]);
-			//if (atom == 0){
-			//printf("No of cells: %d , No of NN neighbors: %d\n ",No_of_C180s,  d_NoofNNlist[index]);
-			//}
-			if (d_NoofNNlist[index] < NN_cell_criteria){
-				float gap1, gap2; 
-				float center_x, center_y;
-				gap1 = d_CMz[rank] - BoxMin.z + 1.0e-3f;
-				gap2 = boxMax.z - d_CMz[rank] + 1.0e-3f;
-				center_x = BoxMin.x + 0.5*(boxMax.x - BoxMin.x);
-				center_y = BoxMin.y + 0.5*(boxMax.y - BoxMin.y);
-				d_CellINdex[rank] = - d_CellINdex[rank];
-
-
-				float rad_center = sqrt((X - center_x)*(X - center_x) + (Y - center_y)*(Y - center_y));
-				if (gap1 < 2.5 || gap2 < 2.5){
-					//printf("No neighbors for cell index %d , rank %d, atom %d , No NN %d \n", index, rank, atom, d_NoofNNlist[index]);
-					
-					FX += LatforceSideMag*(X - center_x)/rad_center;
-					FY += LatforceSideMag*(Y - center_y)/rad_center;
-					FX_ext += LatforceSideMag*(X - center_x)/rad_center;
-					FY_ext += LatforceSideMag*(Y - center_y)/rad_center;
-				}
-				
-				FX -= Constant_Pressure *(X - center_x)/rad_center;
-				FY -= Constant_Pressure *(Y - center_y)/rad_center;
-				FX_ext -= Constant_Pressure *(X - center_x)/rad_center;
-				FY_ext -= Constant_Pressure *(Y - center_y)/rad_center;
-			
-				
-			}
-		}
-
-
-
-        
+		//Find nearest Neighbors  
+		int Neighbor_Node_counter = 0;
 		for ( int nn_rank1 = 0; nn_rank1 < d_NoofNNlist[index]; ++nn_rank1 ){
-
 			nn_rank = d_NNlist[MaxNeighList*index + nn_rank1];
-		
+
+						//if (rank  == 5){
+                        //            	d_CellINdex[rank] = -abs(d_CellINdex[rank]);
+                        //				printf("rank %d with cell index %d has  %d as it's neighbor \n", rank,d_CellINdex[rank], nn_rank);
+                        //              d_CellINdex[nn_rank] = - abs(d_CellINdex[nn_rank]);
+                        //}
+
 			if ( nn_rank == rank )
 				continue;
 			
 			float3 CM_neigh = make_float3(d_CMx[nn_rank], 
 									d_CMy[nn_rank], 
 									d_CMz[nn_rank]);
-			
 			deltaX  = X - CM_neigh.x;
 			deltaY  = Y - CM_neigh.y;                
 			deltaZ  = Z - CM_neigh.z;
+
+
+				float COM_to_COM_dis = (CM_neigh.x-d_CMx[rank]) * (CM_neigh.x-d_CMx[rank]) + (CM_neigh.y-d_CMy[rank]) * (CM_neigh.y-d_CMy[rank]) + (CM_neigh.z-d_CMz[rank]) * (CM_neigh.z-d_CMz[rank]);
+				COM_to_COM_dis = sqrt(COM_to_COM_dis);
+
+				if (COM_to_COM_dis < Dis_cutoff_Nodes){
+					Neighbor_Node_counter++;
+				}
+				
+			
+			
 		
 			//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
 			range = f_range + attraction_range;	
@@ -664,8 +649,36 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 			}
 		
 		
-		}      	
+		}
 
+		
+
+		if (LateralForce && (Neighbor_Node_counter < NN_cell_criteria)){
+			float gap1, gap2; 
+			float center_x, center_y;
+			gap1 = d_CMz[rank] - BoxMin.z + 1.0e-3f;
+			gap2 = boxMax.z - d_CMz[rank] + 1.0e-3f;
+			center_x = BoxMin.x + 0.5*(boxMax.x - BoxMin.x);
+			center_y = BoxMin.y + 0.5*(boxMax.y - BoxMin.y);
+			float rad_center = sqrt((X - center_x)*(X - center_x) + (Y - center_y)*(Y - center_y)) + 1.0e-3f;
+			if (gap1 < 2.5 || gap2 < 2.5) {
+				if (Neighbor_Node_counter < Surface_NN_cell_criteria) {
+					//printf("No neighbors for cell index %d , rank %d, atom %d , No NN %d \n", index, rank, atom, d_NoofNNlist[index]);
+					d_CellINdex[rank] = - abs(d_CellINdex[rank]);
+					FX -= (Constant_Pressure -LatforceSideMag)*(X - center_x)/rad_center;
+					FY -= (Constant_Pressure -LatforceSideMag)*(Y - center_y)/rad_center;
+					FX_ext -= (Constant_Pressure -LatforceSideMag)*(X - center_x)/rad_center;
+					FY_ext -= (Constant_Pressure -LatforceSideMag)*(Y - center_y)/rad_center;
+				}
+				}
+				else {
+					d_CellINdex[rank] = - abs(d_CellINdex[rank]);
+					FX -= Constant_Pressure *(X - center_x)/rad_center;
+					FY -= Constant_Pressure *(Y - center_y)/rad_center;
+					FX_ext -= Constant_Pressure *(X - center_x)/rad_center;
+					FY_ext -= Constant_Pressure *(Y - center_y)/rad_center;
+				}
+		}
 		if (impurity){
 		
 			

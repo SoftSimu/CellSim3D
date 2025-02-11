@@ -599,7 +599,10 @@ R3Nptrs h_sysVCM_ecm, h_sysCM_All_ecm;
 
 bool LateralForce;
 int NN_cell_criteria;
+int Surface_NN_cell_criteria;
 float Fluid_Density;
+bool Look_for_Nearest_Node;
+float Dis_cutoff_Nodes;
 bool direction_x;
 bool direction_y;
 bool direction_z;
@@ -828,10 +831,10 @@ int main(int argc, char *argv[])
         shapeLim = Zratio;
   }
 
-  angleConstant = 10*Youngs_mod;
+  //angleConstant = 10*Youngs_mod;
   if(!colloidal_dynamics){
   	shapeLim = 1.0f;
-  	angleConstant = Youngs_mod;
+  	//angleConstant = Youngs_mod;
   }
   
   
@@ -4542,12 +4545,15 @@ int main(int argc, char *argv[])
                                                      		useRigidSimulationBox, useRigidBoxZ, useRigidBoxY, useRigidBoxX,
                                                      		MaxNeighList,
                                                      		ECM,
-                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, d_ECM_x, d_ECM_y, d_ECM_z,
+                                                     		d_Con_ECM_force_x, d_Con_ECM_force_y, d_Con_ECM_force_z, 
+															d_ECM_x, d_ECM_y, d_ECM_z,
 															attraction_strength_ecm, attraction_range_ecm,
 															repulsion_strength_ecm, repulsion_range_ecm,
 															d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm, d_CellINdex ,
 															MaxNeighList_ecm, wall_adhesion, LJ_epsilon, LJ_sigma,
-															LateralForce, Fluid_Density, Constant_Pressure, NN_cell_criteria, direction_x, direction_y, direction_z, LatforceSideMag,
+															LateralForce, Fluid_Density, Constant_Pressure, NN_cell_criteria, Surface_NN_cell_criteria,
+															direction_x, direction_y, direction_z, LatforceSideMag,
+															Look_for_Nearest_Node, Dis_cutoff_Nodes,
 															d_Polarity_Vec, Polarity); 
                                                      	
         CudaErrorCheck();
@@ -5164,6 +5170,8 @@ int main(int argc, char *argv[])
 	}
 	
 	if (No_of_C180s > 0 ) {
+		if (LateralForce)
+			apply_abs_to_array<<<No_of_C180s, threadsperblock>>>(d_CellINdex, No_of_C180s);
 		
 		
 		Integrate<<<No_of_C180s, threadsperblock>>>(d_X, d_Y, d_Z, 
@@ -8348,7 +8356,9 @@ CudaErrorCheck();
 															repulsion_strength_ecm, repulsion_range_ecm,
 															d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm, d_CellINdex,
 															MaxNeighList_ecm,  wall_adhesion, LJ_epsilon, LJ_sigma,
-															LateralForce, Fluid_Density, Constant_Pressure, NN_cell_criteria, direction_x, direction_y, direction_z, LatforceSideMag,
+															LateralForce, Fluid_Density, Constant_Pressure, NN_cell_criteria, Surface_NN_cell_criteria, 
+															direction_x, direction_y, direction_z, LatforceSideMag,
+															Look_for_Nearest_Node, Dis_cutoff_Nodes,
 															d_Polarity_Vec, Polarity); 
                                                      	
        CudaErrorCheck();
@@ -11952,6 +11962,7 @@ int read_json_params(const char* inpFile){
         correct_com = coreParams["correct_com"].asBool();
         correct_Vcom = coreParams["correct_Vcom"].asBool(); 
         Polarity = coreParams["Polarity"].asBool();
+		angleConstant = coreParams["angleConst"].asFloat();
                                 
     }
 
@@ -12173,7 +12184,9 @@ int read_json_params(const char* inpFile){
     }
     else{
         LateralForce = FluidParams["LateralForce"].asBool();
+		Dis_cutoff_Nodes = FluidParams["Dis_cutoff_Nodes"].asFloat();
 		NN_cell_criteria = FluidParams["NN_cell_criteria"].asInt();
+		Surface_NN_cell_criteria = FluidParams["Surface_NN_cell_criteria"].asInt();
 		Fluid_Density = FluidParams["Fluid_Density"].asFloat();
 		Constant_Pressure = FluidParams["Constant_pressure"].asFloat();
 		direction_x = FluidParams["direction_x"].asBool();
@@ -12210,6 +12223,7 @@ int read_json_params(const char* inpFile){
     	printf("      growth_rate         = %f\n", rMax);
     	printf("      squeeze_rate         = %f\n", squeeze_rate1);
     	printf("      checkSphericity     = %d\n", checkSphericity);
+		printf("	  Angle constant	   = %f\n", angleConstant);
     	printf("      gamma_visc          = %f\n\n", gamma_visc);
 		printf("	  Division:            \n\n");
     	printf("      useDivPlanebasis    = %d\n", useDivPlaneBasis);
@@ -12276,9 +12290,11 @@ int read_json_params(const char* inpFile){
 		printf("      Wound-induced viscotic damping = %f\n", viscotic_damp_after_wound);
 		printf("      Fluid:         \n\n");
 		printf("      LateralForce        = %d\n", LateralForce);
+		printf("      cutoff distance nodes = %f\n", Dis_cutoff_Nodes);
 		printf("      Fluid Density       = %f\n", Fluid_Density);
 		printf("      Constant_Pressure   = %f\n\n", Constant_Pressure);
 		printf("      NN_cell_criteria	  = %d\n", NN_cell_criteria);
+		printf("      Surface NN_cell_criteria	  = %d\n", Surface_NN_cell_criteria);
 		printf("      direction_x         = %d\n", direction_x);
 		printf("      direction_y         = %d\n", direction_y);
 		printf("      direction_z         = %d\n", direction_z);
