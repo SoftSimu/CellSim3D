@@ -117,6 +117,7 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
     
         volume = volume/6.0;
         vol[fullerene] = volume;
+	//printf("Volume of cell %d: %.4f\n",fullerene,volume);
         areaList[fullerene] = area;
         
         
@@ -128,6 +129,8 @@ __global__ void volumes( int No_of_C180s, int *C180_56,
         }
         
         if ( volume >  d_DivisionVolume[fullerene]){
+
+			//printf("volume of cell %d is %f", fullerene, volume);
             
             cell_div[fullerene] = 1;
             
@@ -205,19 +208,19 @@ __device__ void CalcAndUpdateDaughtPos(int daughtInd, int partInd, float halfGap
 }
 
 
-__global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
-				float *d_X,  float *d_Y,  float *d_Z,
-                               float* AllCMx, float* AllCMy, float* AllCMz,
-                               float* d_velListX, float* d_velListY, float* d_velListZ, 
-                               int No_of_C180s, float repulsion_range, float* d_asym,
-                               bool useDifferentCell, bool daughtSame,
-                               int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
-                               float squeeze_rate1, float Apo_rate1,
-                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
-                               float* d_squeeze_rate, float* d_Apo_rate,
-                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
-				R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, int* d_Generation, int* d_Fibre_index,
-				float minPressure){ 
+__global__ void  cell_division( bool Random_Div_Rule, bool Fibre, bool along_Major_axis,
+								float *d_X,  float *d_Y,  float *d_Z,
+								float* AllCMx, float* AllCMy, float* AllCMz,
+								float* d_velListX, float* d_velListY, float* d_velListZ, 
+								int No_of_C180s, float repulsion_range, float* d_asym,
+								bool useDifferentCell, bool daughtSame,
+								int NewCellInd, float stiffness1, float rMax, float divVol, float gamma_visc, float viscotic_damping,
+								float squeeze_rate1, float Apo_rate1,
+								float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
+								float* d_squeeze_rate, float* d_Apo_rate,
+								float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex,
+								R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, int* d_Generation, int* d_Fibre_index, R3Nptrs d_Polarity_Vec,
+								float minPressure){ 
    
          
     __shared__ float CMx, CMy, CMz;
@@ -257,7 +260,6 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
 	        	planeNy = d_DivPlane.y[loc];                 
 	        	planeNz = d_DivPlane.z[loc];                 
         	
-        	
         	} else {
         	
         		planeNx = d_DivPlane.x[newrank];                 
@@ -267,11 +269,20 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
         	}
         
         } else {
-        	
-        	int loc = d_Generation[rank];
-        	planeNx = d_DivPlane.x[loc];                 
-        	planeNy = d_DivPlane.y[loc];                 
-        	planeNz = d_DivPlane.z[loc];                 
+
+			if (along_Major_axis){
+				planeNx = d_Polarity_Vec.x[rank];
+				planeNy = d_Polarity_Vec.y[rank];
+				planeNz = d_Polarity_Vec.z[rank];
+				//if (atom == 0 && (CMz<2 || CMz>14))
+				//printf("Cell %d: Polarity Vector: [%.4f, %.4f, %.4f]\n",rank,planeNx,planeNy,planeNz);
+			}
+			else {
+				int loc = d_Generation[rank];
+				planeNx = d_DivPlane.x[loc];                 
+				planeNy = d_DivPlane.y[loc];                 
+				planeNz = d_DivPlane.z[loc];       
+			}          
         
         }
         
@@ -279,6 +290,7 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
 
 
         if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
+			printf("Plane x: %f, y: %f, z: %f\n",planeNx,planeNy,planeNz);
             printf("OH SHIT: normal is not normalized\n");
             printf("Crash now :(\n"); 
             asm("trap;");
@@ -328,7 +340,7 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre,
     	
     	if (useDifferentCell && daughtSame){
 	
-		d_ScaleFactor[newrank] = d_ScaleFactor[rank];
+			d_ScaleFactor[newrank] = d_ScaleFactor[rank];
         	d_Youngs_mod[newrank] = d_Youngs_mod[rank];
         	d_Growth_rate[newrank] = d_Growth_rate[rank];
         	d_DivisionVolume[newrank] = d_DivisionVolume[rank];      
@@ -617,8 +629,128 @@ __global__ void CellStressTensor( float *d_X,  float *d_Y,  float *d_Z,
 
 }  
 
+ 
+__global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
+				   float *d_CMx, float *d_CMy, float *d_CMz,
+				   float *d_volume, float* d_Shape)
+				   
+{  
 
-__global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_Polarity_Vec)
+
+	__shared__ float  Sxx[256];
+	__shared__ float  Sxy[256];
+	__shared__ float  Sxz[256];
+	
+	__shared__ float  Syx[256];
+	__shared__ float  Syy[256];
+	__shared__ float  Syz[256];
+	
+	__shared__ float  Szx[256];
+	__shared__ float  Szy[256];
+	__shared__ float  Szz[256];
+
+
+    int rank = blockIdx.x;
+    int atom = threadIdx.x;
+	long int atomInd = rank*192+atom;
+	
+	
+	Sxx[atom] = 0.0;
+	Sxy[atom] = 0.0;
+	Sxz[atom] = 0.0;
+	
+	Syx[atom] = 0.0;
+	Syy[atom] = 0.0;
+	Syz[atom] = 0.0;
+	
+	Szx[atom] = 0.0;
+	Szy[atom] = 0.0;
+	Szz[atom] = 0.0;
+	
+	if (atom < 180){
+	
+		
+		
+		float3 r_CM = make_float3(d_X[atomInd] - d_CMx[rank], 
+					   d_Y[atomInd] - d_CMy[rank],
+					   d_Z[atomInd] - d_CMz[rank]);
+					   
+		
+		Sxx[atom] = r_CM.x*r_CM.x;
+		Sxy[atom] = r_CM.x*r_CM.y;
+		Sxz[atom] = r_CM.x*r_CM.z;					   
+
+		Syx[atom] = r_CM.y*r_CM.x;
+		Syy[atom] = r_CM.y*r_CM.y;
+		Syz[atom] = r_CM.y*r_CM.z;
+
+		Szx[atom] = r_CM.z*r_CM.x;
+		Szy[atom] = r_CM.z*r_CM.y;
+		Szz[atom] = r_CM.z*r_CM.z;
+		
+		//printf("F_Z: %f, X : %f, Y : %f, Z : %f\n",Force.z,r_CM.x,r_CM.y,r_CM.z);
+
+	}
+				   
+	__syncthreads();
+
+	//if(atom == 0) printf("\n");
+
+	for ( int s = blockDim.x/2; s > 0; s>>=1)
+   	{
+   		if ( atom < s )
+      		{
+      		
+      			Sxx[atom] += Sxx[atom+s];
+      			Sxy[atom] += Sxy[atom+s];
+      			Sxz[atom] += Sxz[atom+s];
+      			
+      			Syx[atom] += Syx[atom+s];
+      			Syy[atom] += Syy[atom+s];
+      			Syz[atom] += Syz[atom+s];
+      		
+      			Szx[atom] += Szx[atom+s];
+      			Szy[atom] += Szy[atom+s];
+      			Szz[atom] += Szz[atom+s];
+      		
+      		
+      		}
+   		
+   		__syncthreads();
+   	
+   	}
+
+	
+	if ( atom == 0 ) 
+   	{
+   		
+   		int shift = rank*32;
+		float inv_N = 1.0f / 180.0f;
+   			
+   		d_Shape[shift + 0] = Sxx[0] * inv_N;
+   		d_Shape[shift + 1] = Sxy[0] * inv_N;
+   		d_Shape[shift + 2] = Sxz[0] * inv_N;
+   		
+   		d_Shape[shift + 3] = Syx[0] * inv_N;
+   		d_Shape[shift + 4] = Syy[0] * inv_N;
+   		d_Shape[shift + 5] = Syz[0] * inv_N;
+   		
+   		d_Shape[shift + 6] = Szx[0] * inv_N;
+   		d_Shape[shift + 7] = Szy[0] * inv_N;
+   		d_Shape[shift + 8] = Szz[0] * inv_N;
+   		
+   		//printf("Matrix\n");
+		//printf("%.4f, %.4f, %.4f\n", d_Shape[shift + 0], d_Shape[shift + 1], d_Shape[shift + 2]);
+		//printf("%.4f, %.4f, %.4f\n", d_Shape[shift + 3], d_Shape[shift + 4], d_Shape[shift + 5]);
+		//printf("%.4f, %.4f, %.4f\n", d_Shape[shift + 6], d_Shape[shift + 7], d_Shape[shift + 8]);
+		//printf("\n");
+   		
+	}
+
+
+} 
+
+__global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_Vec, float *d_init_guess)
 {				   
 
 	
@@ -636,92 +768,158 @@ __global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_
     		float S = d_Stress[tInd];
     		float lambda = 0.0;
     	 
-		if (tid < 9){
+		// if (tid < 9){
 	
-			matrix[tid] = S;
-			if (tid < 3) eigenVector[tid] = - 1.0;
+		// 	matrix[tid] = S;
+		// 	if (tid < 3) eigenVector[tid] = - 1.0;
 	
-		}
+		// }
 	
 		__syncthreads();
 	
 	
 		if(tid == 0 ){
+
+			for (int k = 0; k < 9; k++){
+				matrix[k] = d_Stress[k];
+			}
+			for (int k = 0; k < 3; k++){
+				eigenVector[k] = d_init_guess[rank*3+k];
+			}
+			
 			
 
-			
-			
-		}
-	
-	
-		if (tid < 3){
-	
-		
 			float normDiff = 1.0;
 			float norm = 1.0;
-		
-			while (normDiff > 1e-2)
-    			{
-			
-				prevEigenVector[tid] = eigenVector[tid];
+			int counter = 0 ; // OG noob solution
+			while ( normDiff > 1e-4){
+				counter ++;
+				for (int i = 0; i < 3; i++) 
+				prevEigenVector[i] = eigenVector[i];
 
-				__syncthreads();
+				float result[3] = {0.0f, 0.0f, 0.0f};
+				for (int j = 0; j < 3; j++){
+					for (int i = 0; i < 3; i++){
+						result[j] += matrix[j*3+i]*prevEigenVector[i];
+					}
+				}
 
-        			float result = 0.0;
-        			for (int j = 0; j < 3; j++) result += matrix[tid*3+j]*prevEigenVector[j];
-            			
-            			eigenVector[tid] = result;		
-			
-				__syncthreads();
-			
-			
-				norm = sqrtf(eigenVector[0]*eigenVector[0] + eigenVector[1]*eigenVector[1] + eigenVector[2]*eigenVector[2]);
-			
-				eigenVector[tid] /= norm;
-			
-			
-				__syncthreads();
-			
-			
+				norm = sqrtf(result[0]*result[0] + result[1]*result[1] + result[2]*result[2]);
+
+				for (int i = 0; i < 3; i++) 
+				eigenVector[i] = result[i]/norm;
+				
 				normDiff = sqrtf( (eigenVector[0]-prevEigenVector[0])*(eigenVector[0]-prevEigenVector[0]) +
                	        		   (eigenVector[1]-prevEigenVector[1])*(eigenVector[1]-prevEigenVector[1]) +
                	        		   (eigenVector[2]-prevEigenVector[2])*(eigenVector[2]-prevEigenVector[2]) );
+
+				}
+
+				lambda = 0.0;
+				for (int i = 0; i < 3; i++) {  // Loop over rows
+					float temp = 0.0;
+					for (int j = 0; j < 3; j++) {  // Dot product with eigenvector
+						temp += matrix[i * 3 + j] * eigenVector[j];
+					}
+					lambda += eigenVector[i] * temp;  // Rayleigh quotient
+				}
 			
-				//printf("EigenVector: [%.4f, %.4f, %.4f] and difference is: %.4f\n", eigenVector[0], eigenVector[1], eigenVector[2], normDiff);	
-		
-			}
-	
-	
-	    		// Calculate the eigenValue ???
-    	    	
-    			for (int i = 0; i < 3; i++)
-        		lambda += matrix[tid * 3 + i] * eigenVector[i];
-	
-	
-	
-		}
-	
-	
-		if (tid == 0){
-	
+
 			d_Polarity_Vec.x[rank] = eigenVector[0];
 			d_Polarity_Vec.y[rank] = eigenVector[1];
 			d_Polarity_Vec.z[rank] = eigenVector[2];
 	
-			if ( (step)%10 == 0 ){
+			//if ( (step)%10 == 0 ){
 			
-				printf("step: %d\n",step);
+				//printf("step: %d\n",step);
 			//	printf("Matrix\n");
 			//	printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
 			//	printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
 			//	printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
+			//
+			//printf("cell: %d, EigenVector: [%.4f, %.4f, %.4f]\n", rank, d_Polarity_Vec.x[rank], d_Polarity_Vec.y[rank], d_Polarity_Vec.x[rank]);
+			//printf("EigenValue: %.4f\n", lambda);
+    		//	
+    		//		printf("\n");
+			//}
 			
-			//	printf("EigenVector: [%.4f, %.4f, %.4f]\n", eigenVector[0], eigenVector[1], eigenVector[2]);
-    			
-    			//	printf("\n");
-			}
-	
 		}
+	
+	
+		// if (tid < 3){
+	
+		
+		// 	float normDiff = 1.0;
+		// 	float norm = 1.0;
+		// 	int counter = 0 ; // OG noob solution
+		
+		// 	while (normDiff > 1e-2)
+    	// 		{
+		// 			counter++;
+		// 		prevEigenVector[tid] = eigenVector[tid];
+
+		// 		__syncthreads();
+
+        // 			float result = 0.0;
+        // 			for (int j = 0; j < 3; j++) result += matrix[tid*3+j]*prevEigenVector[j];
+            			
+        //     			eigenVector[tid] = result;		
+			
+		// 		__syncthreads();
+			
+			
+		// 		norm = sqrtf(eigenVector[0]*eigenVector[0] + eigenVector[1]*eigenVector[1] + eigenVector[2]*eigenVector[2]);
+			
+		// 		eigenVector[tid] /= norm;
+			
+			
+		// 		__syncthreads();
+			
+			
+		// 		normDiff = sqrtf( (eigenVector[0]-prevEigenVector[0])*(eigenVector[0]-prevEigenVector[0]) +
+        //        	        		   (eigenVector[1]-prevEigenVector[1])*(eigenVector[1]-prevEigenVector[1]) +
+        //        	        		   (eigenVector[2]-prevEigenVector[2])*(eigenVector[2]-prevEigenVector[2]) );
+			
+		// 		//printf("EigenVector: [%.4f, %.4f, %.4f] and difference is: %.4f\n", eigenVector[0], eigenVector[1], eigenVector[2], normDiff);	
+		// 		if (counter > 200) {
+		// 			//printf("counter: %d\n",counter);
+		// 			break;
+		// 			} // If not converging, break
+		
+		// 	}
+	
+	
+	    // 		// Calculate the eigenValue ???
+    	    	
+    	// 		for (int i = 0; i < 3; i++)
+        // 		lambda += matrix[tid * 3 + i] * eigenVector[i];
+	
+	
+	
+		// }
+	
+	
+		// if (tid == 0){
+	
+		// 	d_Polarity_Vec.x[rank] = eigenVector[0];
+		// 	d_Polarity_Vec.y[rank] = eigenVector[1];
+		// 	d_Polarity_Vec.z[rank] = eigenVector[2];
+	
+		// 	//if ( (step)%10 == 0 ){
+			
+		// 		//printf("step: %d\n",step);
+		// 	//	printf("Matrix\n");
+		// 	//	printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
+		// 	//	printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
+		// 	//	printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
+		// 	//
+		// 	//	printf("cell: %d, EigenVector: [%.4f, %.4f, %.4f]\n", rank, d_Polarity_Vec.x[rank], d_Polarity_Vec.y[rank], d_Polarity_Vec.x[rank]);
+		// 	printf("EigenValue: %.4f\n", lambda);
+    	// 	//	
+    	// 	//		printf("\n");
+		// 	//}
+	
+		// }
 	
 	}
 

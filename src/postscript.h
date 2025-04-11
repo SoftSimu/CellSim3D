@@ -12,7 +12,7 @@ int getDevice(int idev);
 
 
 
-__global__ void cell_division( bool Random_Div_Rule, bool Fibre,
+__global__ void cell_division( bool Random_Div_Rule, bool Fibre, bool along_Major_axis,
 			       float *d_X,  float *d_Y,  float *d_Z,
                               float* AllCMx, float* AllCMy, float* AllCMz,
                               float* d_velListX, float* d_velListY, float* d_velListZ, 
@@ -23,7 +23,7 @@ __global__ void cell_division( bool Random_Div_Rule, bool Fibre,
                               float* d_ScaleFactor,float* d_Youngs_mod, float* d_Growth_rate, float* d_DivisionVolume,
                               float* d_squeeze_rate, float* d_Apo_rate,
                               float* d_gamma_env, float* d_viscotic_damp, int* d_CellINdex, 
-                              R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, int* d_Generation, int* d_Fibre_index,
+                              R3Nptrs d_DivPlane, int *num_cell_div, int *cell_div_inds, float *pressList, int* d_Generation, int* d_Fibre_index, R3Nptrs d_Polarity_Vec,
                               float minPressure);
 
 
@@ -140,7 +140,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
                            double3 BoxMin, float3 Subdivision_min, float Youngs_mod,  float angleConstant, 
-                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces,
+                           bool constrainAngles, const angles3 d_theta0[], R3Nptrs d_forceList, R3Nptrs d_ExtForces, R3Nptrs d_AttractiveForces, R3Nptrs d_Attractive_CellWall, R3Nptrs d_RepulsiveForces, R3Nptrs d_pressForces,
                            bool impurity, float f_range,
                            bool useRigidSimulationBox, bool useRigidBoxZ, bool useRigidBoxY, bool useRigidBoxX,
                            int MaxNeighList,
@@ -154,7 +154,8 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 						   bool LateralForce, float Fluid_Density, float Constant_Pressure , int NN_cell_criteria, int Surface_NN_cell_criteria,
 						   bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
 						   bool Look_for_Nearest_Node, float Dis_cutoff_Nodes,
-                           R3Nptrs d_Polarity_Vec, bool Polarity);
+                           R3Nptrs d_Polarity_Vec, bool Polarity, bool Create_wound , float wound_radius,
+						   bool Sphere, float Sphere_radius);
 
 
 __global__ void CalculateConForce_ECM( int Num_ECM,
@@ -299,6 +300,7 @@ __global__ void CalculateR0(float* d_R0, float* d_X, float* d_Y, float* d_Z,
                             float* d_youngsModArray, float stiffness2, int No_of_C180s);
 
 void writeForces(FILE* forceFile, int t_step, int num_cells);
+void write_ExtraForces(FILE* Extra_forces_file, int t_step, int num_cells);
 
 __global__ void CorrectCoMMotion( int No_cells_All, float* d_X, float* d_Y, float* d_Z,
                                  R3Nptrs d_sysCM, R3Nptrs d_sysCM_All, double3 BoxCen, long int numParts);
@@ -351,7 +353,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    int Xdiv, int Ydiv, int Zdiv, float3 Subdivision_min,
                                    int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                                    float* d_velListX, float* d_velListY, float* d_velListZ,
-                                   R3Nptrs d_fDisList, R3Nptrs d_ConFricForces, bool impurity, float f_range,
+                                   R3Nptrs d_fDisList, R3Nptrs d_ConFricForces, R3Nptrs d_medFricition, bool impurity, float f_range,
                                    int MaxNeighList,
                                    bool ECM,
                                    float* d_Dis_ECM_force_x, float* d_Dis_ECM_force_y, float *d_Dis_ECM_force_z,
@@ -704,4 +706,8 @@ __global__ void CellStressTensor( float *d_X,  float *d_Y,  float *d_Z,
 				   float *d_volume, R3Nptrs d_ExtForces,
 				   float* d_Stress);
 
-__global__ void PowerItr( int No_of_C180s, int step, float *d_Stress, R3Nptrs d_Polarity_Vec );
+__global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
+				   float *d_CMx, float *d_CMy, float *d_CMz,
+				   float *d_volume, float* d_Shape);
+
+__global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_Vec , float *d_init_guess);
