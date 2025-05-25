@@ -63,12 +63,17 @@ $(objDir)GPUbounce.o : src/GPUbounce.cu src/postscript.h
 $(objDir)GPUbounce-CudaAwareMPI.o : src/GPUbounce-CudaAwareMPI.cu src/postscript.h
 	$(compiler) $(oflags) -c src/GPUbounce-CudaAwareMPI.cu -o $(objDir)GPUbounce-CudaAwareMPI.o
 
+fix-path:
+	@echo "Updating path in scripts files..."
+	@sed -i 's|sys.path.append(.*)|sys.path.append("$(shell pwd)/scripts")|' scripts/render.py
+	@sed -i 's|sys.path.append(.*)|sys.path.append("$(shell pwd)/scripts")|' scripts/renderStiff-new.py
+	@echo "Done."
 
-CellDiv: $(linkObjects1)
+CellDiv: fix-path $(linkObjects1)
 	$(compiler) $(eflags1)
 
-CellDiv_CudaAwareMPI: $(linkObjects2)
-	$(compiler) $(eflags2)
+CellDiv_CudaAwareMPI: fix-path 
+	$(linkObjects2) $(compiler) $(eflags2)
 
 # Third party libraries
 $(objDir)jsoncpp.o: src/utils/jsoncpp.cpp inc/json/json.h
