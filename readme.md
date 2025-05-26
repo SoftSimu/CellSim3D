@@ -26,48 +26,37 @@ For example: -arch=sm_52 for a GPU of compute capability of 5.2
 Then:
 
 
-~~~bash
-mkdir bin
+```bash
 make -j12 CellDiv to compile the simulator.
-~~~
+```
 
 The simulator can be found in the bin directory
 
 ## Simulations
 
-After compiling `CellSim3D`, transfer the following files to the `bin` directory:
+To run a simulation, edit the parameters in the `inp.json`  file to define your system configuration.
 
-- `inp.json`
-- `C180C`
-- `C180N`
-- `C180NN`
-- `C180_original`
-- `C180_pentahexa`
-- `C180_scaled`
-- `C180_small`
+More details on the available features and input variables can be found in the [user guide](./description.md).
 
-Next, update the variables in the `inp.json` file to represent your desired system. 
+The command to run the simulation depends on which branch of the repository you are using:
 
-More details on the features and input variables can be found in the `description.md` file.
+- **Main branch** (older version):
+  
+  ```bash
+  ./CellDiv [num_initial_cells] inp.json [device_number]
+  ```
+  For example:
+  ```bash
+  ./CellDiv 50 inp.json 0
+  ```
+- **multigpu branch** (New version):
+  
+  ```bash
+   mpirun -np [num_processors] ./CellDiv [num_initial_cells] inp.json [sections_x] [sections_y] [sections_z]
+  ```
+  The last three arguments specify how the simulation domain is divided along the x, y, and z directions.
+  The product of `sections_x` × `sections_y` × `sections_z` must equal `num_processors`. This ensures the domain is properly split across all MPI processes.
 
-### Main Branch
-
-Navigate to the `bin` directory.
-If you are using the **main branch**, run the following command:
-   ~~~
-   ./CellDiv <# initial cells> inp.json <device number>
-   ~~~
-
-### multigpu branch
-
-To use the multigpu branch, make sure you have mpi installed on your system. Move to the bin directory.
-
-Run
-~~~
-mpirun -np <# processors> ./CellDiv <# initial cells> inp.json <# sections in x> <# setions in y> <# sections in z>
-~~~
-
-Note: The product of the number of sections in the x, y, and z dimensions must equal the number of processors.
 
 ## Visualization in Blender
 
@@ -75,18 +64,9 @@ To visualize the results of the simulations using Blender, follow these steps:
 
   From the `bin` directory, copy the following files to the `scripts` folder.
    - `inp.xyz`   
-   - `C180_pentahexa.csv`
-   - `CellDiv.blend`
 
   Open the `CellDiv.blend` file in Blender and adjust the camera settings as needed to capture the entire system.
   
-In the `render.py` file located in the `scripts` folder, update the module search path to match your system's configuration. Locate the following line:
-
-```python
-sys.path.append("/path/to/scripts")
-```
-Replace `"/path/to/scripts"` with the actual path to your `scripts` folder.
-
 Open a terminal and navigate to the `scripts` directory.
 
 Execute the following command to run Blender in the background and render the results:
@@ -97,51 +77,51 @@ blender --background CellDiv.blend --python render.py -- inp.xyz
 
 ## Simulator Source Code Description (note: subject to change):
 
-##### GPUBounce.cu
+- **GPUBounce.cu**
 
-This file contains the entry point for the simulator code. This is
-where the GPU is selected and memory is allocated. Simulation
-parameters are read from the input json file.
+   This file contains the entry point for the simulator code. This is
+   where the GPU is selected and memory is allocated. Simulation
+   parameters are read from the input json file.
 
-All GPU functions (force calculation, integration, cell division) is
-controlled from here.
+   All GPU functions (force calculation, integration, cell division) is
+   controlled from here.
 
-##### propagate.cu
+- **propagate.cu**
 
-This file contains GPU kernel code that is used for force
-calculations and integration.
+   This file contains GPU kernel code that is used for force
+   calculations and integration.
 
-##### centermass.cu
+- **centermass.cu**
 
-This file only contains a single GPU kernel that calculate the
-centers of mass of individual cells. This is needed for the
-calculation of cell volumes and the cell division algorithm
+   This file only contains a single GPU kernel that calculate the
+   centers of mass of individual cells. This is needed for the
+   calculation of cell volumes and the cell division algorithm
 
-##### BondKernels.cu
+ - **BondKernels.cu**
 
-This file calculates the equilibrium bond lengths of bonded nodes in
-a cell. For now, this code is not very crucial since this bond
-length does not change over the course of a simulation. It will be
-used in later releases more extensively.
+   This file calculates the equilibrium bond lengths of bonded nodes in
+   a cell. For now, this code is not very crucial since this bond
+   length does not change over the course of a simulation. It will be
+   used in later releases more extensively.
 
-##### postscriptinit.cu
+ - **postscriptinit.cu**
 
-This file contains some legacy code that is no longer used. It also
-contains the implementation of the cell division algorithm.
+   This file contains some legacy code that is no longer used. It also
+   contains the implementation of the cell division algorithm.
 
-##### propagatebound.cu
+- **propagatebound.cu**
 
-Code here is used to calculate the bounding boxes around cells,
-which are then used during neighbor list generation. Neighbor list
-generation itself is also carried out here.
+   Code here is used to calculate the bounding boxes around cells,
+   which are then used during neighbor list generation. Neighbor list
+   generation itself is also carried out here.
 
-##### PressureKernels.cu
+- **PressureKernels.cu**
 
-Cell internal pressure is managed with the code here.
+   Cell internal pressure is managed with the code here.
 
-##### IntegrationKernels.cu and AdaptiveTimeKernels.cu
+- **IntegrationKernels.cu** and **AdaptiveTimeKernels.cu**
 
-Code here is not currently used.
+   Code here is not currently used.
 
 ## Analysis Scripts (In the scripts/ directory):
 The scripts directory contains various analysis scripts. Their
