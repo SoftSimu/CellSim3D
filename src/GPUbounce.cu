@@ -88,7 +88,6 @@ float delta_t;
 
 float dt_max;
 float dt_tol;
-bool doAdaptive_dt;
 float c1 = 0; float c2 = 0; 
 
 bool write_cont_force=false;
@@ -12266,7 +12265,6 @@ int read_json_params(const char* inpFile){
         constrainAngles = coreParams["constrainAngles"].asBool();
         dt_max = coreParams["dt_max"].asFloat();
         dt_tol = coreParams["dt_tol"].asFloat();
-        doAdaptive_dt = coreParams["doAdaptive_dt"].asBool();
         write_cont_force = coreParams["write_cont_force"].asBool();
         write_vel_file = coreParams["write_vel_file"].asBool();
         write_for_file = coreParams["write_for_file"].asBool();
@@ -12595,7 +12593,6 @@ int read_json_params(const char* inpFile){
     	printf("      BoxMin_y            = %f\n", BoxMin.y);
     	printf("      BoxMin_z            = %f\n", BoxMin.z);
     	printf("      flatbox             = %d\n", flatbox); 
-    	printf("      doAdaptive_dt       = %d\n", doAdaptive_dt); 
    		printf("      dt_max              = %f\n", dt_max); 
     	printf("      dt_tol              = %f\n", dt_tol);
     	printf("      add_rands           = %d\n", add_rands);

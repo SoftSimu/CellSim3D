@@ -20,10 +20,11 @@ All notable changes to this project will be documented here.
 
 ## September 2023 - August 2024 *(by Yasamin Modabber)* 
 ### Added  
-- [Placeholder: TBA]
+- Added a documentation for the input file
 
 ### Changed  
-- [Placeholder: TBA]  
+- Changed Angle Constant from a fixed value to an input in the inp.json file
+- Updated the Readme file
 
 ### Fixed  
 -  Fixed arithmetic error: division by zero in angle force calculations
@@ -34,12 +35,15 @@ All notable changes to this project will be documented here.
 - Wound creation  
 - New boundary condition: Adhesive walls (Lennard–Jones 9:3 potential)  
 - Lévy-flight type random walks 
+- Fluid forces (lateral pressure, hydrostatic pressure)
 
 ### Changed  
 - Nodal growth force: $\mathbf{F}^P = 3P\hat{\mathbf{n}} \, \rightarrow 1000AP\hat{\mathbf{n}}$
+- Updated makefile 
+- Turned off correct_VCOM
 
 ### Fixed  
-- [Placeholder: TBA]  
+- Fixed celldiv.py rendering for single cell type case
 
 
 ## September 2025 *(by Yasamin Modabber)* 
@@ -47,7 +51,7 @@ All notable changes to this project will be documented here.
 - [Placeholder: TBA ] 
 
 ### Changed  
-- [Placeholder: TBA ]  
+- Removed "doAdaptive_dt" 
 
 ### Fixed  
 - Fixed unphysical net force due to internal pressure

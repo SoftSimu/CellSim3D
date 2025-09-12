@@ -27,7 +27,6 @@
         "growth_rate": 2e-05,
         "checkSphericity": 1,
         "constrainAngles": 1,
-        "doAdaptive_dt": 0,
         "dt_max": 0.0001,
         "dt_tol": 1e-08,
         "phase_count": 2000000000,
