@@ -132,7 +132,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float *d_CMx, float *d_CMy, float *d_CMz,
                            float d_XPin[],  float d_YPin[],  float d_ZPin[],
                            float *d_CMxPin, float *d_CMyPin, float *d_CMzPin,                           
-                           float* d_R0,float* d_ScaleFactor, float* d_pressList, float* d_stiffness, 
+                           float* d_R0,float* d_ScaleFactor, float* d_area, float* d_pressList, float* d_stiffness, 
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
@@ -361,8 +361,9 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                                    float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
 				    float attraction_range_ecm, float vis_ecm_cell,
                            	    int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           	    int MaxNeighList_ecm);
-                                 
+                           	    int MaxNeighList_ecm,
+								bool Surface_friction , float gamma_surface , double3 BoxMin , double3 boxMax);
+
                                    
 __global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
 					float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, float *d_Dis_ECM_force_z,
@@ -410,7 +411,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, bool impurity, float f_range);
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
-                                  R3Nptrs d_fRanList);
+                                  R3Nptrs d_fRanList, bool  Levi_flight, float Levi_alpha, bool Gaussian);
 
 
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 

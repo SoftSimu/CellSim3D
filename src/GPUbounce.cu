@@ -196,6 +196,7 @@ bool usePBCs;
 bool useLEbc;
 bool useRigidBoxZ, useRigidBoxY, useRigidBoxX;  
 bool rand_pos;
+bool rand_surface;
 bool impurity;
 int impurityNum;
 bool line;
@@ -204,6 +205,9 @@ float L  = 2.5f;
 bool wall_adhesion;
 float LJ_epsilon; 
 float LJ_sigma;
+
+bool Surface_friction;
+float gamma_surface;
 
 int No_of_threads; // ie number of staring cells
 int Side_length;
@@ -214,11 +218,14 @@ int ex, ey;
 // randomness parameters
 
 bool add_rands;
+bool Levi_flight;
+bool Levi_alpha;
+bool Gaussian;
 int rand_seed;
 int rand_dist;
 float rand_scale_factor;
 curandState *d_rngStates;
-unsigned int *d_seeds;  
+unsigned int *d_seeds; 
 
 
 float  *X,  *Y,  *Z;     // host: atom positions
@@ -626,6 +633,11 @@ float LatforceSideMag;
 
 float Sphere_radius;
 bool Sphere;
+bool Cut_out_Sphere;
+
+bool compress;
+float compression_ratio;
+float Compression_step_size;
 
 int main(int argc, char *argv[])
 {
@@ -1312,7 +1324,6 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_Apo_rate_mc_buffer  , BufferSize*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_squeeze_rate_mc_buffer  , BufferSize*sizeof(float))) return(-1);
     
-
 
   if(impurity){
   	

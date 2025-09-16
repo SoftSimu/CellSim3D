@@ -435,7 +435,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		float R0=0;
 		float range;
 		float Pressure = d_pressList[rank];
-		//printf("Pressure is %f\n", Pressure);
 		float stiffness = d_stiffness[rank];
 		float Scale = d_ScaleFactor[rank];
 			
@@ -481,18 +480,47 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 				FZ += +stiffness*(R-R0)/R0*deltaZ/R;
 		}
 
+		float Area;
+		float3 A = make_float3(d_X[rank*192+d_C180_nn[0*192+atom]] - d_X[rank*192+d_C180_nn[1*192+atom]],
+							d_Y[rank*192+d_C180_nn[0*192+atom]] - d_Y[rank*192+d_C180_nn[1*192+atom]],
+							d_Z[rank*192+d_C180_nn[0*192+atom]] - d_Z[rank*192+d_C180_nn[1*192+atom]]);
+		float3 B = make_float3(d_X[rank*192+d_C180_nn[0*192+atom]] - d_X[rank*192+d_C180_nn[2*192+atom]],
+							d_Y[rank*192+d_C180_nn[0*192+atom]] - d_Y[rank*192+d_C180_nn[2*192+atom]],
+							d_Z[rank*192+d_C180_nn[0*192+atom]] - d_Z[rank*192+d_C180_nn[2*192+atom]]);
+		Area = 0.5f* mag(cross(A,B));
 		// new growth force
 		float3 r_CM = make_float3(X - d_CMx[rank], 
 								Y - d_CMy[rank], 
 								Z - d_CMz[rank]);
 		r_CM = calcUnitVec(r_CM);
-		
 		float3 gForce  = make_float3(0.f, 0.f, 0.f);
+		// gForce = 3*Pressure*r_CM; /old version
+		gForce = Area*Pressure*r_CM*1000; //new version, uses the face areas in the calculation
 
-		gForce = 3*Pressure*r_CM;
-		//if (atom==0)
-		//printf("G force %f , cell %d \n", 3*Pressure, rank);
-		//printf("Growth force is %f, %f, %f\n", gForce.x, gForce.y, gForce.z);
+		//New addition- Sep 2025 - make the cell force free
+		__shared__ float sFx, sFy, sFz;
+		if (threadIdx.x == 0) { sFx = 0.f; sFy = 0.f; sFz = 0.f; }
+		__syncthreads();
+
+		// accumulate in shared 
+		atomicAdd(&sFx, gForce.x);
+		atomicAdd(&sFy, gForce.y);
+		atomicAdd(&sFz, gForce.z);
+		__syncthreads();
+
+		// average excess force per node
+		float3 favg;
+		if (threadIdx.x == 0) {
+			const float invN = 1.0f / 180.0f;
+			sFx *= invN; sFy *= invN; sFz *= invN;
+		}
+		__syncthreads();
+		favg = make_float3(sFx, sFy, sFz);
+
+		// subtract the mean: now the cell is force-free
+		gForce.x -= favg.x;
+		gForce.y -= favg.y;
+		gForce.z -= favg.z;			
 
 	
 		FX += gForce.x; 
@@ -503,13 +531,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		pressForces.y += gForce.y;
 		pressForces.z += gForce.z;
 
-		if (constrainAngles){
-				
-				float3 t = CalculateAngleForce(atom, d_C180_nn,
-											d_X, d_Y, d_Z,
-											d_theta0, angleConstant /*Youngs_mod*/, rank);
-				FX += t.x; FY += t.y; FZ += t.z;
-		}
         
         
         
@@ -530,17 +551,17 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
 		//Merdeka - Cell Marking
-		if ( (wound_radius >0 ) && Create_wound){
-			float center_x = BoxMin.x + 0.5*(boxMax.x - BoxMin.x);
-			float center_y = BoxMin.y + 0.5*(boxMax.y - BoxMin.y);
+		// if ( (wound_radius >0 ) && Create_wound){
+		// 	float center_x = BoxMin.x + 0.5*(boxMax.x - BoxMin.x);
+		// 	float center_y = BoxMin.y + 0.5*(boxMax.y - BoxMin.y);
 
-			float rad_center = sqrt((d_CMx[rank] - center_x)*(d_CMx[rank] - center_x) + (d_CMy[rank] - center_y)*(d_CMy[rank] - center_y));
-			if (rad_center < ( (boxMax.x - BoxMin.x) * wound_radius+1)){ //If box size x = box size y
-				//printf("rad center is %f, radius is %d \n", rad_center, ( (boxMax.x - BoxMin.x) * wound_radius+1));
-				d_CellINdex[rank] = - abs(d_CellINdex[rank]);
-				//FX -= 0; Adding tension forces (or any other forces) 
-			}
-		}
+		// 	float rad_center = sqrt((d_CMx[rank] - center_x)*(d_CMx[rank] - center_x) + (d_CMy[rank] - center_y)*(d_CMy[rank] - center_y));
+		// 	if (rad_center < ( (boxMax.x - BoxMin.x) * wound_radius+1)){ //If box size x = box size y
+		// 		//printf("rad center is %f, radius is %d \n", rad_center, ( (boxMax.x - BoxMin.x) * wound_radius+1));
+		// 		d_CellINdex[rank] = - abs(d_CellINdex[rank]);
+		// 		//FX -= 0; Adding tension forces (or any other forces) 
+		// 	}
+		// }
 
 		// interfullerene attraction and repulsion
 		
@@ -616,7 +637,6 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 			}
 				
 			
-			
 		
 			//range = f_range*d_ScaleFactor[nn_rank] + attraction_range;
 			range = f_range + attraction_range;	
@@ -676,11 +696,10 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 					contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
 					contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
 
-					RepulsiveForces.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-					RepulsiveForces.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-					RepulsiveForces.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+					// RepulsiveForces.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+					// RepulsiveForces.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+					// RepulsiveForces.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
 				}
-					
 				}
 		
 		
@@ -822,21 +841,39 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 				contactForce.y -= Lat_Force.y; 
 				contactForce.z -= Lat_Force.z;
 
-				RepulsiveForces.x += Lat_Force.x;
-				RepulsiveForces.y += Lat_Force.y;
-				RepulsiveForces.z += Lat_Force.z;
+				// RepulsiveForces.x += Lat_Force.x;
+				// RepulsiveForces.y += Lat_Force.y;
+				// RepulsiveForces.z += Lat_Force.z;
 				//printf("Lateral force is %f, %f, %f\n", Lat_Force.x, Lat_Force.y, Lat_Force.z);
 			}
 			
-
-	
-			
 		}
 
+		if (constrainAngles){ //used to be after gforce calculations
+
+			// NOT USED FOR NOW - USED TO CHANGE THE ANGLE FORCE OF CELLS ON THE SURFACE
+			// bool Change_Ang_on_surface = false;
+			// float angleConst_relative = 1.5;
+			// if (Change_Ang_on_surface && !Neigh_Nodes_to_node){
+			// 	if (d_CMz[rank] < ( BoxMin.z + (LJ_sigma+0.5 )) || d_CMz[rank] > (boxMax.z - (LJ_sigma+0.5 )) ){
+			// 		angleConstant = angleConst_relative*angleConstant; // Change the angle constant on the surface for cells not in contact with other cells
+			// 	}
+			// }
+	
+				float3 t = CalculateAngleForce(atom, d_C180_nn,
+											d_X, d_Y, d_Z,
+											d_theta0, angleConstant /*Youngs_mod*/, rank);
+				FX += t.x; FY += t.y; FZ += t.z;
+				// if (isnan(FX) || isnan(FY) || isnan(FZ)){
+				// 	printf("Angle force calculation failed for node %d in cell %d\n", atom, rank);
+				// 	printf("Fx = %f, Fy = %f, Fz = %f\n", FX, FY, FZ);
+				// 	//asm("trap;");
+				// }
+		}
 
 		FX += contactForce.x;
 		FY += contactForce.y;
-		FZ += contactForce.z; 
+		FZ += contactForce.z;  
 		
 
 		#ifdef FORCE_DEBUG
@@ -1023,9 +1060,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		d_Attractive.y[atomInd] = AttractiveForces.y;
 		d_Attractive.z[atomInd] = AttractiveForces.z;
 
-		d_RepulsiveForces.x[atomInd] = RepulsiveForces.x;
-		d_RepulsiveForces.y[atomInd] = RepulsiveForces.y;
-		d_RepulsiveForces.z[atomInd] = RepulsiveForces.z;
+		// d_RepulsiveForces.x[atomInd] = RepulsiveForces.x;
+		// d_RepulsiveForces.y[atomInd] = RepulsiveForces.y;
+		// d_RepulsiveForces.z[atomInd] = RepulsiveForces.z;
 
 		d_Attractive_CellWall.z[atomInd] = Attraction_Cell_Wall.z;
    	
@@ -1053,7 +1090,8 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 				    float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
 				    float attraction_range_ecm, float vis_ecm_cell,
                            	    int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
-                           	    int MaxNeighList_ecm)
+                           	    int MaxNeighList_ecm,
+								bool Surface_friction , float gamma_surface , double3 BoxMin , double3 boxMax)
 {
     
     
@@ -1183,13 +1221,19 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 	
 				float3 v_ij = nodeVelocity - neighVelocity;
 		
-        	        	// Tangential component of relative velocity
-        	        	float3 vTau = v_ij - dot(v_ij, normal)*normal;
+					// Tangential component of relative velocity
+					float3 vTau = v_ij - dot(v_ij, normal)*normal;
+					// check for nan
+					if (isnan(vTau.x) || isnan(vTau.y) || isnan(vTau.z))
+						continue;
+
+        	        	force = force - d_viscotic_damp[cellInd]*vTau;
         	        	force = force - d_viscotic_damp[cellInd]*vTau;
         	        	
-				force_fric = force_fric - d_viscotic_damp[cellInd]*vTau;
-
+					force = force - d_viscotic_damp[cellInd]*vTau;
         	        	
+					force_fric = force_fric - d_viscotic_damp[cellInd]*vTau;
+					
         	    	}
 
         	
@@ -1302,6 +1346,21 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 			d_medFricition.x[globalNodeInd] = d_gamma_env[cellInd]*nodeVelocity.x;
 			d_medFricition.y[globalNodeInd] = d_gamma_env[cellInd]*nodeVelocity.y;	
 			d_medFricition.z[globalNodeInd] = d_gamma_env[cellInd]*nodeVelocity.z;
+
+			if (Surface_friction){
+
+					float gap1, gap2; 
+					gap1 = Z - BoxMin.z ;
+					gap2 = boxMax.z - Z ;
+					float3 Lat_Force  = make_float3(0.f, 0.f, 0.f);
+					if (gap1 < 1.4 || gap2 < 1.4) {        // For now, appprox by 1.4
+					force_fric.x = force_fric.x - gamma_surface * nodeVelocity.x;
+					force_fric.y = force_fric.y - gamma_surface * nodeVelocity.y;
+					force.x = force.x - gamma_surface * nodeVelocity.x;
+					force.y = force.y - gamma_surface * nodeVelocity.y;
+					}
+					
+			}
         
         	// write forces to global memory
         	
@@ -1311,7 +1370,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         		
         	d_ConFricForces.x[globalNodeInd] = force_fric.x;
         	d_ConFricForces.y[globalNodeInd] = force_fric.y;
-        	d_ConFricForces.z[globalNodeInd] = force_fric.z;	
+        	d_ConFricForces.z[globalNodeInd] = force_fric.z;		
 
 			
         	
@@ -1324,53 +1383,40 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
-								R3Nptrs d_fRanList){
+								R3Nptrs d_fRanList, bool  Levi_flight, float Levi_alpha, bool Gaussian){
 
 	int cellInd = blockIdx.x;
-	int type;
-	type=1;
+	int node    = threadIdx.x; 
 
-	if (type ==1){
-	size_t nodeIdx = blockIdx.x*blockDim.x + threadIdx.x;
-	//const int cellInd = blockIdx.x;
+	if (Gaussian){ //Per node force
+		if (cellInd >= No_of_C180s || node >= 192) return;
+		const int nodeIdx = cellInd * 192 + node;
+		curandState rngState = d_rngStates[nodeIdx];
+		d_fRanList.x[nodeIdx] = rand_scale_factor * curand_normal(&rngState);
+		d_fRanList.y[nodeIdx] = rand_scale_factor * curand_normal(&rngState);
+		d_fRanList.z[nodeIdx] rand_scale_factor * curand_normal(&rngState);
+		d_rngStates[nodeIdx] = rngState;
 
-
-			if (nodeIdx < No_of_C180s*192){
-		   	curandState rngState = d_rngStates[nodeIdx];
-				d_fRanList.x[nodeIdx] = rand_scale_factor*curand_normal(&rngState); 
-		    	d_fRanList.y[nodeIdx] = rand_scale_factor*curand_normal(&rngState); 
-		    	d_fRanList.z[nodeIdx] = rand_scale_factor*curand_normal(&rngState);
-			d_rngStates[nodeIdx] = rngState;
-			}
 	}
-			if (type ==2){ 
+
+	if (Levi_flight){ //same force whole cell
 		if (cellInd < No_of_C180s){
 			float Rand_uni;
 			float alpha = 1.5;
 			curandState rngState = d_rngStates[cellInd];
 			Rand_uni = curand_uniform(&rngState);
 			float Rand_Levy = rand_scale_factor/ powf(Rand_uni, 1.0f/alpha);
-
-			float3 ran_unit_vec = calcUnitVec(make_float3(curand_uniform(&rngState)*2-1, curand_uniform(&rngState)*2-1, 0)); //in 2D
-
-
+			float3 ran_unit_vec = calcUnitVec(make_float3(curand_uniform(&rngState)*2-1, curand_uniform(&rngState)*2-1, curand_uniform(&rngState)*2-1)); //in 3D
 
 			for (int node = 0; node < 192; node++){
-				
-				
-				d_fRanList.x[node+cellInd*192] = Rand_Levy*ran_unit_vec.x; 
-				d_fRanList.y[node+cellInd*192] = Rand_Levy*ran_unit_vec.y;  
-				d_fRanList.z[node+cellInd*192] = Rand_Levy*ran_unit_vec.z; 
-				
+				d_fRanList.x[node+cellInd*192] = Rand_Levy*ran_unit_vec.x * rand_scale_factor; 
+				d_fRanList.y[node+cellInd*192] = Rand_Levy*ran_unit_vec.y * rand_scale_factor;  
+				d_fRanList.z[node+cellInd*192] = Rand_Levy*ran_unit_vec.z * rand_scale_factor; 
 			}
-			
 			d_rngStates[cellInd]  = rngState;
 		}
-			//printf("Rand_uni is %f , no of cells %d\n",Rand_Levy, No_of_C180s);
-		}
-
+	}
 }
-
 __global__ void Integrate(float *d_X, float *d_Y, float *d_Z, 
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float dt, float m,
