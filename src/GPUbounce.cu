@@ -218,14 +218,14 @@ int ex, ey;
 // randomness parameters
 
 bool add_rands;
-bool Levi_flight;
-bool Levi_alpha;
+bool Levy_flight;
+bool Levy_alpha;
 bool Gaussian;
 int rand_seed;
 int rand_dist;
 float rand_scale_factor;
 curandState *d_rngStates;
-unsigned int *d_seeds; 
+unsigned int *d_seeds;  
 
 
 float  *X,  *Y,  *Z;     // host: atom positions
@@ -927,7 +927,7 @@ int main(int argc, char *argv[])
   X = (float *)calloc(192*MaxNoofC180s,sizeof(float));
   Y = (float *)calloc(192*MaxNoofC180s,sizeof(float));
   Z = (float *)calloc(192*MaxNoofC180s,sizeof(float));
-  
+
   velListX = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListY = (float *)calloc(192*MaxNoofC180s, sizeof(float)); 
   velListZ = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -1323,7 +1323,7 @@ int main(int argc, char *argv[])
   if ( cudaSuccess != cudaMalloc((void **)&d_CellINdex_mc_buffer  , BufferSize*sizeof(int))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_Apo_rate_mc_buffer  , BufferSize*sizeof(float))) return(-1);
   if ( cudaSuccess != cudaMalloc((void **)&d_squeeze_rate_mc_buffer  , BufferSize*sizeof(float))) return(-1);
-    
+
 
   if(impurity){
   	
@@ -1536,7 +1536,6 @@ int main(int argc, char *argv[])
   cudaMemset(d_velListY_gc, 0, 192*BufferSize*sizeof(float));
   cudaMemset(d_velListZ_gc, 0, 192*BufferSize*sizeof(float));
   CudaErrorCheck();
-  
 
   cudaMemset(d_CMx_gc, 0, BufferSize*sizeof(float));
   cudaMemset(d_CMy_gc, 0, BufferSize*sizeof(float));
@@ -4635,6 +4634,17 @@ int main(int argc, char *argv[])
   }
 
   if (No_of_C180s > 0 ){
+
+	volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+                                     d_X, d_Y, d_Z,
+                                     d_CMx , d_CMy, d_CMz,
+                                     d_volume, d_cell_div, d_DivisionVolume,
+                                     checkSphericity, d_area, 
+                                     stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
+                                     recalc_r0, ApoVol , d_ScaleFactor,
+                                     d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
+
+		CudaErrorCheck();
   	
   		
   	
@@ -4643,7 +4653,7 @@ int main(int argc, char *argv[])
 															d_CMx, d_CMy, d_CMz,
 															d_XPin,  d_YPin,  d_ZPin,
 															d_CMxPin, d_CMyPin, d_CMzPin,
-                                                     		d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
+                                                     		d_R0, d_ScaleFactor, d_area, d_pressList, d_Youngs_mod, 
                                                      		attraction_strength, attraction_range,
                                                      		repulsion_strength, repulsion_range,
                                                      		d_viscotic_damp,
@@ -4690,7 +4700,8 @@ int main(int argc, char *argv[])
                                    					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
 				    								attraction_range_ecm, vis_ecm_cell,
                            	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           	    					MaxNeighList_ecm);
+                           	    					MaxNeighList_ecm,
+													Surface_friction, gamma_surface, BoxMin, boxMax);
         	                                                	
         	                                         
         CudaErrorCheck();  
@@ -4920,10 +4931,10 @@ int main(int argc, char *argv[])
 			cudaMemcpy(h_Attractive_CellWall.z, d_Attractive_CellWall.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			CudaErrorCheck();
 
-			cudaMemcpy(h_RepulsiveForces.x, d_RepulsiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_RepulsiveForces.y, d_RepulsiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_RepulsiveForces.z, d_RepulsiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+			// cudaMemcpy(h_RepulsiveForces.x, d_RepulsiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			// cudaMemcpy(h_RepulsiveForces.y, d_RepulsiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			// cudaMemcpy(h_RepulsiveForces.z, d_RepulsiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			// CudaErrorCheck();
 
 			cudaMemcpy(h_pressForces.x, d_pressForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			cudaMemcpy(h_pressForces.y, d_pressForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -4949,18 +4960,37 @@ int main(int argc, char *argv[])
 			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			CudaErrorCheck();
+
+			VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                		d_velListX, d_velListY, d_velListZ,
+        	                                	  	d_VCMx, d_VCMy, d_VCMz); //calculate the velocity center of mass
+      		CudaErrorCheck();
+
+			cudaMemcpy(VCMx, d_VCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(VCMy, d_VCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(VCMz, d_VCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
 			
 			
 			cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
 			cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_Generation, d_Generation, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);	
-			cudaMemcpy(h_Fibre_index, d_Fibre_index, No_of_C180s*sizeof(int), cudaMemcpyDeviceToHost);
 			CudaErrorCheck();
 
 			if (len_Extra_forceFile == 0) {
 				
-				fprintf(Extra_forceFile, "step,num_cells,cell_ind,F_Att,F_Att_cell_wall,F_REP,F_Press,F_medFric,F_contact,F_Ext,F_ConFric\n");
+				fprintf(Extra_forceFile,
+				"step,num_cells,cell_ind," 
+				"F_Att_CC_x,F_Att_CC_y,F_Att_CC_z,mag_F_Att_CC," 
+				"F_Att_CW_z,mag_F_Att_CW," 
+				"F_Press_x,F_Press_y,F_Press_z,mag_F_Press," 
+				"F_ConFric_x,F_ConFric_y,F_ConFric_z,mag_F_ConFric," 
+				"F_medFric_x,F_medFric_y,F_medFric_z,mag_F_medFric," 
+				"F_Total_x,F_Total_y,F_Total_z," 
+				"F_Ext_x,F_Ext_y,F_Ext_z," 
+				"VCMx,VCMy,VCMz,"
+				"Pressure,Area,Volume\n");
+
 		
 				if (Restart ==0) 
 					write_ExtraForces(Extra_forceFile, 0, No_of_C180s);
@@ -5264,19 +5294,19 @@ int main(int argc, char *argv[])
     	if(write_fcm_file){
     		
     		cudaMemcpy(FCMx, d_FCMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-       	CudaErrorCheck();
-       	
-       	if( lenfcmFile == 0 ) {
-       		
-       		MPI_Send(FCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(FCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(FCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
-    			MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
-    		}
-    	
-    	} 	
+			cudaMemcpy(FCMy, d_FCMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(FCMz, d_FCMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+			
+			if( lenfcmFile == 0 ) {
+				
+				MPI_Send(FCMx, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+					MPI_Send(FCMy, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+					MPI_Send(FCMz, No_of_C180s, MPI_FLOAT, 0, rank, cart_comm);
+					MPI_Send(CellINdex , No_of_C180s, MPI_INT, 0, rank, cart_comm);
+				}
+			
+			} 	
 
     
     }
@@ -5327,6 +5357,20 @@ int main(int argc, char *argv[])
 		BoxMin.y += CompressValue.y;
 		BoxMin.z += CompressValue.z;	
 	
+	}
+
+	if (compress){
+		if ( (Sphere_radius*2 * (1 - compression_ratio)) < (boxMax.z - BoxMin.z) ){
+			boxMax.z -= Compression_step_size;
+			BoxMin.z += Compression_step_size;
+
+			//printf("   Compression step %d, box height: %f\n", step, boxMax.z - BoxMin.z);
+		} else {
+			compress = false;
+			//printf("   Compression finished. Desired height: %f\n" ,(Sphere_radius*2 * (1 - compression_ratio)));
+			if (rank == 0) printf("   Compression finished. height of box:  %f\n" , boxMax.z - BoxMin.z);
+		}
+
 	}
 	
 	
@@ -5381,29 +5425,36 @@ int main(int argc, char *argv[])
 		// ----------------------------------------- Begin Cell Death ------------	
 		if (apoptosis && !WithoutApo) {	
 
-			if (Create_wound && step > Wound_creation_time) {
-			printf(" create Wound.\n");
+			if (Create_wound && step > Wound_creation_time) { //Apoptosis due to wound creation
+				printf(" create Wound.\n");
 
-				if (wound_radius > 0.f && wound_radius < 1.f) {
+					if (wound_radius > 0.f && wound_radius < 1.f) {
 
-					printf("Killing cells within %f radius\n", wound_radius);
-					Create_wound_center(No_of_C180s);
-					rMax = growth_rate_after_wound;
-					divVol = divisionV_after_wound;
-					gamma_visc = gamma_env_after_wound;
-					viscotic_damping = viscotic_damp_after_wound;
+						printf("Killing cells within %f radius\n", wound_radius);
+						Create_wound_center(No_of_C180s);
+						rMax = growth_rate_after_wound;
+						divVol = divisionV_after_wound;
+						gamma_visc = gamma_env_after_wound;
+						viscotic_damping = viscotic_damp_after_wound;
 
-					Wound_Induced_Param_Change<<<MaxNoofC180s, 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
-												d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
-												gamma_env_after_wound, viscotic_damp_after_wound);
+						Wound_Induced_Param_Change<<<MaxNoofC180s, 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
+													d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
+													gamma_env_after_wound, viscotic_damp_after_wound);
 
-					Create_wound = false;
-					apoptosis = false;
-				}
+						Create_wound = false;
+						apoptosis = false;
+					}
 			}
 
+			if (Cut_out_Sphere) {
 
-			else if (!Create_wound) {
+				printf("Cutting out a sphere.\n");
+				Create_wound_center(No_of_C180s);
+				Cut_out_Sphere = false;
+				apoptosis = false;
+			}
+
+			else if (!Create_wound && !Cut_out_Sphere) { //Apoptosis without wound or cutting out sphere
 
             		CellApoptosis<<<No_of_C180s/512 + 1, 512>>>(No_of_C180s, d_rngStatesApo, d_Apo_rate,
  					d_Growth_rate, d_squeeze_rate, d_Num_shrink_Cell);
@@ -5452,7 +5503,7 @@ int main(int argc, char *argv[])
       			CudaErrorCheck();
 				
 		
-      			}       	
+      		}       	
 
 		}
 	
@@ -8508,14 +8559,26 @@ CudaErrorCheck();
 
  numNodes = No_of_C180s*192;
  if (No_of_C180s > 0 ) {
+
+	volumes<<<No_of_C180s,192>>>(No_of_C180s, d_C180_56,
+                                     d_X, d_Y, d_Z,
+                                     d_CMx , d_CMy, d_CMz,
+                                     d_volume, d_cell_div, d_DivisionVolume,
+                                     checkSphericity, d_area, 
+                                     stiffness1, useDifferentCell, d_Youngs_mod, d_Growth_rate,
+                                     recalc_r0, ApoVol , d_ScaleFactor,
+                                     d_num_cell_div, d_cell_div_inds, d_cell_Apo, d_num_cell_Apo, d_cell_Apo_inds);
+
+		CudaErrorCheck();
+  	
  
 
   	CalculateConForce<<<No_of_C180s,threadsperblock>>>( No_of_C180s, d_C180_nn, d_C180_sign,
 															d_X,  d_Y,  d_Z,
 															d_CMx, d_CMy, d_CMz,
                                		                      	d_XPin,  d_YPin,  d_ZPin,
-                               		                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                     	
-                               		                      	d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
+                               		                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                 	
+                               		                      	d_R0, d_ScaleFactor, d_area,  d_pressList, d_Youngs_mod, 
                                		                      	attraction_strength, attraction_range,
                                		                      	repulsion_strength, repulsion_range,
                                		                      	d_viscotic_damp,
@@ -8561,7 +8624,8 @@ CudaErrorCheck();
                                    					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
 				    								attraction_range_ecm, vis_ecm_cell,
                            	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           	    					MaxNeighList_ecm);
+                           	    					MaxNeighList_ecm,
+													Surface_friction, gamma_surface, BoxMin, boxMax);
                        	                                 
                                                         
         CudaErrorCheck();
@@ -8569,8 +8633,7 @@ CudaErrorCheck();
       	// Calculate random Force here...
       	if (add_rands){
       	
-      	     CalculateRanForce<<<No_of_C180s, 1>>>(No_of_C180s, d_rngStates, rand_scale_factor,
-                                                              d_fRanList );
+      	    CalculateRanForce<<<No_of_C180s, 1>>>(No_of_C180s, d_rngStates, rand_scale_factor, d_fRanList , Levy_flight, Levy_alpha, Gaussian);
             CudaErrorCheck();
      	}
       
@@ -8636,7 +8699,8 @@ CudaErrorCheck();
                                    					d_ECM_Vx, d_ECM_Vy, d_ECM_Vz,
 				    								attraction_range_ecm, vis_ecm_cell,
                            	    					d_NoofNNlist_ECM, d_NNlist_ECM, DL_ecm, Xdiv_ecm, Ydiv_ecm,
-                           	    					MaxNeighList_ecm);
+                           	    					MaxNeighList_ecm,
+													Surface_friction, gamma_surface, BoxMin, boxMax);
                                                         
         CudaErrorCheck(); 
        	
@@ -9281,9 +9345,9 @@ CudaErrorCheck();
           	if(write_traj_Ecm_file){
           		
             		cudaMemcpy(ECM_x, d_ECM_x, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
-    			cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
-    			cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
-    			CudaErrorCheck();
+					cudaMemcpy(ECM_y, d_ECM_y, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+					cudaMemcpy(ECM_z, d_ECM_z, Num_ECM*sizeof(float), cudaMemcpyDeviceToHost);
+					CudaErrorCheck();
           	
               		WriteBinaryTrajECM(step + Laststep, trajfile_Ecm, frameCount + Lastframe);
 		
@@ -9302,9 +9366,9 @@ CudaErrorCheck();
               		CudaErrorCheck();
               		
               		cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+					cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+					cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+					CudaErrorCheck();
               
               		cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
               		cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -9318,52 +9382,69 @@ CudaErrorCheck();
           	}
 
 			if (write_extra_forces_file){
-			cudaMemcpy(h_AttractiveForces.x, d_AttractiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_AttractiveForces.y, d_AttractiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_AttractiveForces.z, d_AttractiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+				cudaMemcpy(h_AttractiveForces.x, d_AttractiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_AttractiveForces.y, d_AttractiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_AttractiveForces.z, d_AttractiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
 
-			cudaMemcpy(h_Attractive_CellWall.x, d_Attractive_CellWall.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_Attractive_CellWall.y, d_Attractive_CellWall.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_Attractive_CellWall.z, d_Attractive_CellWall.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+				cudaMemcpy(h_Attractive_CellWall.x, d_Attractive_CellWall.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_Attractive_CellWall.y, d_Attractive_CellWall.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_Attractive_CellWall.z, d_Attractive_CellWall.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
 
-			cudaMemcpy(h_RepulsiveForces.x, d_RepulsiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_RepulsiveForces.y, d_RepulsiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_RepulsiveForces.z, d_RepulsiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+				// cudaMemcpy(h_RepulsiveForces.x, d_RepulsiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				// cudaMemcpy(h_RepulsiveForces.y, d_RepulsiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				// cudaMemcpy(h_RepulsiveForces.z, d_RepulsiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				// CudaErrorCheck();
 
-			cudaMemcpy(h_pressForces.x, d_pressForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_pressForces.y, d_pressForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_pressForces.z, d_pressForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+				cudaMemcpy(h_pressForces.x, d_pressForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_pressForces.y, d_pressForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_pressForces.z, d_pressForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
 
-			cudaMemcpy(h_medFricition.x, d_medFricition.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_medFricition.y, d_medFricition.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_medFricition.z, d_medFricition.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+				cudaMemcpy(h_medFricition.x, d_medFricition.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_medFricition.y, d_medFricition.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_medFricition.z, d_medFricition.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
 
-			cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
+				cudaMemcpy(h_contactForces.x, d_fConList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_contactForces.y, d_fConList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_contactForces.z, d_fConList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+				
+				cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+				
+				cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+
+				if (No_of_C180s > 0 ){
+     
+      			VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+        	                                		d_velListX, d_velListY, d_velListZ,
+        	                                	  	d_VCMx, d_VCMy, d_VCMz);
+      			CudaErrorCheck();
+       		
+       			}
+
+				cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+
+				cudaMemcpy(pressList, d_pressList, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);      
+				cudaMemcpy(volume, d_volume, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(area, d_area, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+
+				
+				write_ExtraForces(Extra_forceFile, step + Laststep, No_of_C180s);
+				
 			
-			cudaMemcpy(h_ExtForces.x, d_ExtForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_ExtForces.y, d_ExtForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_ExtForces.z, d_ExtForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
-			
-			cudaMemcpy(h_ConFricForces.x, d_ConFricForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-			CudaErrorCheck();
-              
-
-			
-					write_ExtraForces(Extra_forceFile, step + Laststep, No_of_C180s);
-			
-			
-		}
+			}
           	
           	if(write_vel_file){
                          
@@ -10180,7 +10261,14 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
                        	               	0.f);
         	      			if (flatbox == 1){
         	         			CM.z = (boxMax.z - BoxMin.z)/2;
-        	      			} else {
+        	      			}
+
+							else if (rand_surface){
+								printf("   Random surface placement \n");
+								CM.z = BoxMin.z + 1.5;
+							}
+							
+							 else {
         	          			CM.z = rands[2]*((boxMax.z - BoxMin.z) - 1.f)  + BoxMin.z + 1.f;
         	      			}
 
@@ -11070,7 +11158,9 @@ int initialize_Vel(int Orig_No_of_C180s)
 
 int Create_wound_center(int Orig_No_of_C180s){
 
-			if (wound_radius > 0.f && wound_radius < 1.f){
+	if (Create_wound){
+
+		if (wound_radius > 0.f && wound_radius < 1.f){
           	
           	if( No_of_C180s> 0 ){
           	         	
@@ -11122,30 +11212,30 @@ int Create_wound_center(int Orig_No_of_C180s){
 
         	int c = 0; 
 			if (Epi_wound) { // only kill cells in the upper region of the z-axis - ephitelial wound
-			printf("killing cells in the upper region of the z-axis, %f\n" , Epi_wound_Zratio*boxMax.z);
+				printf("killing cells in the upper region of the z-axis, %f\n" , Epi_wound_Zratio*boxMax.z);
 
-			for (int i = 0; i < No_of_C180s; ++i){
-            if (mags[i] <= radMax* wound_radius && CMz[i] > Epi_wound_Zratio*boxMax.z){
-				int index = num_cell_Apo++;
-				cell_Apo_inds[index] = i;
-				cell_Apo[i] = 1;
-				c++;
-			}
-			}
+				for (int i = 0; i < No_of_C180s; ++i){
+				if (mags[i] <= radMax* wound_radius && CMz[i] > Epi_wound_Zratio*boxMax.z){
+					int index = num_cell_Apo++;
+					cell_Apo_inds[index] = i;
+					cell_Apo[i] = 1;
+					c++;
+				}
+				}
 
 			}
 			else { // kill cells in the center within the wound radius - 3D
-			for (int i = 0; i < No_of_C180s; ++i){
-            if (mags[i] <= radMax* wound_radius){
-				int index = num_cell_Apo++;
-				cell_Apo_inds[index] = i;
-				cell_Apo[i] = 1;
-				c++;
-			}
-			}
+				for (int i = 0; i < No_of_C180s; ++i){
+				if (mags[i] <= radMax* wound_radius){
+					int index = num_cell_Apo++;
+					cell_Apo_inds[index] = i;
+					cell_Apo[i] = 1;
+					c++;
+				}
+				}
 			}
 
-			  	for (int i =  0; i < MaxNoofC180s; ++i){
+			for (int i =  0; i < MaxNoofC180s; ++i){
 				if (colloidal_dynamics){
 					Growth_rate[i] = 0;
 				}else{
@@ -11154,11 +11244,79 @@ int Create_wound_center(int Orig_No_of_C180s){
 					gamma_env[i] = gamma_env_after_wound;
 					viscotic_damp[i] = viscotic_damp_after_wound;
 				}
-				}
+			}
 
           	printf("marked %d cells for death \n", c);
 	  }
+	}
+
+	
+
+	if (Cut_out_Sphere){
+
+		if( No_of_C180s> 0 ){
+          	         	
+              	CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
+                       	       	           d_X, d_Y, d_Z,
+                       	               	   d_CMx, d_CMy, d_CMz);
+				CudaErrorCheck();
+         		cudaMemcpy(CMx, d_CMx, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         	 	cudaMemcpy(CMy, d_CMy, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+         	 	cudaMemcpy(CMz, d_CMz, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+		
+			}
+
+         	 float3 sysCM = make_float3(0.f, 0.f, 0.f);
+
+         	 for(int i =0; i < No_of_C180s; ++i){
+         	     	
+         	     	sysCM = sysCM + make_float3(CMx[i], CMy[i], CMz[i]);
+         	 
+         	 }
+
+           	
+           	 float sysCMxAll, sysCMyAll, sysCMzAll;
+        	 int cells_All;
+        		
+        	 MPI_Allreduce(&sysCM.x, &sysCMxAll, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	 MPI_Allreduce(&sysCM.y, &sysCMyAll, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+        	 MPI_Allreduce(&sysCM.z, &sysCMzAll, 1, MPI_FLOAT, MPI_SUM, cart_comm);
+     
+        	 MPI_Allreduce(&No_of_C180s, &cells_All, 1, MPI_INT, MPI_SUM, cart_comm);
+        
+        	 sysCM.x = sysCMxAll / cells_All;
+        	 sysCM.y = sysCMyAll / cells_All;
+        	 sysCM.z = sysCMzAll / cells_All;
+         	 	 
+          
+         	 if(rank == 0) printf("COM = (%f, %f, %f)\n", sysCM.x, sysCM.y, sysCM.z);
+
+          	//  float radMax = 0;
+         	 float mags[No_of_C180s];
+          
+         	 for (int i =0; i < No_of_C180s; ++i){
+         	     
+         	     	float3 pos = make_float3(CMx[i], CMy[i], CMz[i]) - sysCM;
+         	     	mags[i] = mag(pos);
+         	 }
+
+
+		
+
+		for (int i = 0; i < No_of_C180s; ++i){
+            if (mags[i] >= Sphere_radius){
+				int index = num_cell_Apo++;
+				cell_Apo_inds[index] = i;
+				cell_Apo[i] = 1;
+			}
+
+
+	}
+	}
 	return 0;
+
+
+
 }
 
 
@@ -12264,7 +12422,7 @@ int read_json_params(const char* inpFile){
         Restart = coreParams["Restart"].asInt();
         trajWriteInt = coreParams["trajWriteInt"].asInt();
         equiStepCount = coreParams["non_div_time_steps"].asInt();
-	MaxNeighList = coreParams["MaxNeighList"].asInt();
+		MaxNeighList = coreParams["MaxNeighList"].asInt();
         std::strcpy (trajFileName, coreParams["trajFileName"].asString().c_str());
         binaryOutput = coreParams["binaryOutput"].asBool(); 	
         maxPressure = coreParams["maxPressure"].asFloat();
@@ -12475,6 +12633,7 @@ int read_json_params(const char* inpFile){
         flatbox = boxParams["flatbox"].asBool();
         LineCenter = boxParams["LineCenter"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
+		rand_surface = boxParams["rand_surface"].asBool();
 		impurity = boxParams["impurity"].asBool();
 		impurityNum = boxParams["impurityNum"].asInt();
 		line = boxParams["line"].asBool();
@@ -12482,6 +12641,11 @@ int read_json_params(const char* inpFile){
 		wall_adhesion = boxParams["wall_adhesion"].asBool();
 		LJ_epsilon = boxParams["LJ9_3_epsilon"].asFloat();
 		LJ_sigma = boxParams["LJ9_3_sigma"].asFloat();
+		Surface_friction  = boxParams["Surface_friction"].asBool();
+		gamma_surface = boxParams["gamma_surface"].asFloat();
+		compress = boxParams["compress"].asBool();
+		compression_ratio = boxParams["compression_ratio"].asFloat();
+		Compression_step_size = boxParams["Compression_step_size"].asFloat();
 	
     }
 
@@ -12500,6 +12664,9 @@ int read_json_params(const char* inpFile){
     }
     else {
         add_rands = randParams["add_rands"].asBool();
+		Levy_flight = randParams["Levy_flight"].asBool();
+		Levy_alpha = randParams["Levy_alpha"].asFloat();
+		Gaussian = randParams["Gaussian"].asBool();
         rand_seed = randParams["rand_seed"].asInt();
         rand_dist = randParams["rand_dist"].asInt();
         rand_scale_factor = randParams["rand_scale_factor"].asFloat();
@@ -12532,12 +12699,13 @@ int read_json_params(const char* inpFile){
 	else{
 		Sphere = InitializationParams["Sphere"].asBool();
 		Sphere_radius = InitializationParams["Sphere_radius"].asFloat();
+		Cut_out_Sphere = InitializationParams["Cut_out_Sphere"].asBool();
 	}
     
 
 
     if(rank == 0){	
-		printf("      Core:           		\n\n");
+		printf("\n\n      Core:           		\n\n");
     	printf("      mass                = %f\n",mass);
     	printf("      repulsion range     = %f\n",repulsion_range);
     	printf("      attraction range    = %f\n",attraction_range);
@@ -12560,9 +12728,9 @@ int read_json_params(const char* inpFile){
     	printf("      maxPressure         = %f\n", maxPressure);
     	printf("      minPressure         = %f\n", minPressure);
     	printf("      growth_rate         = %f\n", rMax);
-    	printf("      squeeze_rate         = %f\n", squeeze_rate1);
+    	printf("      squeeze_rate        = %f\n", squeeze_rate1);
     	printf("      checkSphericity     = %d\n", checkSphericity);
-		printf("	  Angle constant	   = %f\n", angleConstant);
+		printf("      Angle constant	  = %f\n", angleConstant);
     	printf("      gamma_visc          = %f\n\n", gamma_visc);
 		printf("	  Division:            \n\n");
     	printf("      useDivPlanebasis    = %d\n", useDivPlaneBasis);
@@ -12574,11 +12742,11 @@ int read_json_params(const char* inpFile){
 		printf("      Random_Div_Rule     = %d\n", Random_Div_Rule);
 		printf("      Fibre               = %d\n", Fibre);
 		printf("      asymDivision        = %d\n", asymDivision);
-		printf("	  along_Major_axis    = %d\n\n", along_Major_axis);
-		printf("	  Cell-wall interactions:\n\n");
-		printf("	  wall adhesion       = %d\n", wall_adhesion);
-		printf("	  LJ_epsilon          = %f\n", LJ_epsilon);
-		printf("	  LJ_sigma            = %f\n\n", LJ_sigma);
+		printf("      along_Major_axis    = %d\n\n", along_Major_axis);
+		printf("      Cell-wall interactions:\n\n");
+		printf("      wall adhesion       = %d\n", wall_adhesion);
+		printf("      LJ_epsilon          = %f\n", LJ_epsilon);
+		printf("      LJ_sigma            = %f\n\n", LJ_sigma);
 		printf("      second cell:         \n\n");
     	printf("      useDifferentCell = %d\n", useDifferentCell);
     	printf("      SizeFactor  	=%f\n", SizeFactor);
@@ -12617,8 +12785,8 @@ int read_json_params(const char* inpFile){
     	printf("      Apoptosis ratio     = %f\n",Apo_rate1);
     	printf("      apoptosis volume    = %f\n",ApoVol);
     	printf("      squeeze rate        = %f\n",squeeze_rate1);
-		printf("      Apoptosis radius    = %f\n", wound_radius);
-		printf("      apoptosis - wound           \n\n");
+		printf("      Apoptosis radius    = %f\n\n", wound_radius);
+		printf("      Apoptosis - Wound:           \n\n");
 		printf("      Create_wound        = %d\n", Create_wound);
 		printf("      Epithelial wound           = %d\n", Epi_wound);
 		printf("      Epithelial wound Z ratio   = %f\n", Epi_wound_Zratio);
@@ -12626,7 +12794,7 @@ int read_json_params(const char* inpFile){
 		printf("      Wound-induced division volume = %f\n", divisionV_after_wound);
 		printf("      Wound-induced growth rate = %f\n", growth_rate_after_wound);
 		printf("      Wound-induced gamma_visc = %f\n", gamma_env_after_wound);
-		printf("      Wound-induced viscotic damping = %f\n", viscotic_damp_after_wound);
+		printf("      Wound-induced viscotic damping = %f\n\n", viscotic_damp_after_wound);
 		printf("      Fluid:         \n\n");
 		printf("      LateralForce        = %d\n", LateralForce);
 		printf("      cutoff distance nodes = %f\n", Dis_cutoff_Nodes);
@@ -12637,10 +12805,15 @@ int read_json_params(const char* inpFile){
 		printf("      direction_x         = %d\n", direction_x);
 		printf("      direction_y         = %d\n", direction_y);
 		printf("      direction_z         = %d\n", direction_z);
-		printf("      LatforceSideMag     = %f\n", LatforceSideMag);
+		printf("      LatforceSideMag     = %f\n\n", LatforceSideMag);
 		printf("      Initialization:         \n\n");
 		printf("      Sphere              = %d\n", Sphere);
 		printf("      Sphere_radius       = %f\n\n", Sphere_radius);
+		printf("      Cut_out_Sphere      = %d\n\n", Cut_out_Sphere);
+		printf("      Compression:         \n\n");
+		printf("      compress            = %d\n", compress);
+		printf("      compression_ratio   = %f\n", compression_ratio);
+		printf("      Compression step size = %f\n", Compression_step_size);
     }
     
     
@@ -13017,79 +13190,83 @@ void write_ExtraForces(FILE* Extra_forceFile, int t_step, int num_cells){
 		exit(1);
 	}
 
-	int No_of_All_Cells = 0;
-
-	//Only works for a single processor
-	No_of_All_Cells = No_of_C180s;
+	int No_of_All_Cells = No_of_C180s;
 	numberofCells_InGPUs[0] = No_of_C180s;
 
-	int k = 0;
-	float3 Att_F , Att_cell_wall, Rep_F, Press_F, Med_Fric_F, F_con, F_ext, F_ConFric;
+	for (int c = 0; c < No_of_C180s; ++c) {
+		float3 Att_F = make_float3(0,0,0);
+		float3 Att_cell_wall = make_float3(0,0,0);
+		float3 Press_F = make_float3(0,0,0);
+		float3 Med_Fric_F = make_float3(0,0,0);
+		float3 F_con = make_float3(0,0,0);
+		float3 F_ext = make_float3(0,0,0);
+		float3 F_ConFric = make_float3(0,0,0);
 
-	for ( int c = 0; c < numberofCells_InGPUs[0]; c++){
-		
-		Att_F = make_float3(0,0,0); 
-		Att_cell_wall = make_float3(0,0,0);
-		Rep_F = make_float3(0,0,0); 
-		Press_F = make_float3(0,0,0); 
-		Med_Fric_F = make_float3(0,0,0);
-		F_con = make_float3(0,0,0); 
-		F_ext = make_float3(0,0,0); 
-		F_ConFric = make_float3(0,0,0);
-
+		float mag_Att_F = 0.0f;
+		float mag_Att_cell_wall = 0.0f;
+		float mag_Press_F = 0.0f;
+		float mag_Med_Fric_F = 0.0f;
+		float mag_F_ConFric = 0.0f;
 
 		for (int n = 0; n < 180; ++n){
+			int idx = c * 192 + n;
 
-			Att_F.x += h_AttractiveForces.x[c*192+n];
-			Att_F.y += h_AttractiveForces.y[c*192+n];
-			Att_F.z += h_AttractiveForces.z[c*192+n];
+			float3 f;
 
-			Att_cell_wall.x += h_Attractive_CellWall.x[c*192+n];
-			Att_cell_wall.y += h_Attractive_CellWall.y[c*192+n];
-			Att_cell_wall.z += h_Attractive_CellWall.z[c*192+n];
+			f = make_float3(h_AttractiveForces.x[idx], h_AttractiveForces.y[idx], h_AttractiveForces.z[idx]);
+			Att_F.x += f.x; Att_F.y += f.y; Att_F.z += f.z;
+			mag_Att_F += mag(f);
 
-			Rep_F.x += h_RepulsiveForces.x[c*192+n];
-			Rep_F.y += h_RepulsiveForces.y[c*192+n];
-			Rep_F.z += h_RepulsiveForces.z[c*192+n];
+			f = make_float3(h_Attractive_CellWall.x[idx], h_Attractive_CellWall.y[idx], h_Attractive_CellWall.z[idx]);
+			Att_cell_wall.x += f.x; Att_cell_wall.y += f.y; Att_cell_wall.z += f.z;
+			mag_Att_cell_wall += mag(f);
 
-			Press_F.x += h_pressForces.x[c*192+n];
-			Press_F.y += h_pressForces.y[c*192+n];
-			Press_F.z += h_pressForces.z[c*192+n];
+			f = make_float3(h_pressForces.x[idx], h_pressForces.y[idx], h_pressForces.z[idx]);
+			Press_F.x += f.x; Press_F.y += f.y; Press_F.z += f.z;
+			mag_Press_F += mag(f);
 
-			Med_Fric_F.x += h_medFricition.x[c*192+n];
-			Med_Fric_F.y += h_medFricition.y[c*192+n];
-			Med_Fric_F.z += h_medFricition.z[c*192+n];
+			f = make_float3(h_medFricition.x[idx], h_medFricition.y[idx], h_medFricition.z[idx]);
+			Med_Fric_F.x += f.x; Med_Fric_F.y += f.y; Med_Fric_F.z += f.z;
+			mag_Med_Fric_F += mag(f);
 
-			F_con.x += h_contactForces.x[c*192+n];
-			F_con.y += h_contactForces.y[c*192+n];
-			F_con.z += h_contactForces.z[c*192+n];
+			f = make_float3(h_contactForces.x[idx], h_contactForces.y[idx], h_contactForces.z[idx]);
+			F_con.x += f.x; F_con.y += f.y; F_con.z += f.z;
 
-			F_ext.x += h_ExtForces.x[c*192+n];
-			F_ext.y += h_ExtForces.y[c*192+n];
-			F_ext.z += h_ExtForces.z[c*192+n];
+			f = make_float3(h_ExtForces.x[idx], h_ExtForces.y[idx], h_ExtForces.z[idx]);
+			F_ext.x += f.x; F_ext.y += f.y; F_ext.z += f.z;
 
-			F_ConFric.x += h_ConFricForces.x[c*192+n];
-			F_ConFric.y += h_ConFricForces.y[c*192+n];
-			F_ConFric.z += h_ConFricForces.z[c*192+n];
-
+			f = make_float3(h_ConFricForces.x[idx], h_ConFricForces.y[idx], h_ConFricForces.z[idx]);
+			F_ConFric.x += f.x; F_ConFric.y += f.y; F_ConFric.z += f.z;
+			mag_F_ConFric += mag(f);
 		}
 
-			fprintf(Extra_forceFile, "%d,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
-			t_step, No_of_All_Cells, k,
-			mag(Att_F),
-			mag(Att_cell_wall),
-			mag(Rep_F),
-			mag(Press_F),
-			mag(Med_Fric_F),
-			mag(F_con),
-			mag(F_ext),
-			mag(F_ConFric)
-			);
-			k++;
+		fprintf(Extra_forceFile,
+			"%d,%d,%d,"               // step, num_cells, cell_ind
+			"%.6f,%.6f,%.6f,%.6f,"    // F_Att_CC (x,y,z), sum(|F_Att_CC_i|)
+			"%.6f,%.6f,"    // F_Att_CW (x,y,z), sum(|F_Att_CW_i|)
+			"%.6f,%.6f,%.6f,%.6f,"    // F_Press (x,y,z), sum(|F_Press_i|)
+			"%.6f,%.6f,%.6f,%.6f,"    // F_ConFric (x,y,z), sum(|F_ConFric_i|)
+			"%.6f,%.6f,%.6f,%.6f,"    // F_medFric (x,y,z), sum(|F_medFric_i|)
+			"%.6f,%.6f,%.6f,"         // F_Total (x,y,z)
+			"%.6f,%.6f,%.6f,"         // F_Ext (x,y,z)
+			"%.6f,%.6f,%.6f,"
+			"%.6f,%.6f,%.6f\n",
+			t_step, No_of_All_Cells, c,
+			Att_F.x, Att_F.y, Att_F.z, mag_Att_F,
+			Att_cell_wall.z, mag_Att_cell_wall,
+			Press_F.x, Press_F.y, Press_F.z, mag_Press_F,
+			F_ConFric.x, F_ConFric.y, F_ConFric.z, mag_F_ConFric,
+			Med_Fric_F.x, Med_Fric_F.y, Med_Fric_F.z, mag_Med_Fric_F,
+			F_con.x, F_con.y, F_con.z,
+			F_ext.x, F_ext.y, F_ext.z,
+			VCMx[c], VCMy[c], VCMz[c],
+			pressList[c], area[c], volume[c]
+		);
 	}
-
-
 }
+
+
+
 
 
 void writeForces(FILE* forceFile, int t_step, int num_cells){
@@ -15008,7 +15185,7 @@ int ReadRestartFile(){
     	for (int c = 0; c < Orig_Cells; c++){
     		
     		if ( fread(&pressList[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
-			printf("pressList[%d] = %f\n", c, pressList[c]);
+			// printf("pressList[%d] = %f\n", c, pressList[c]);
     		if ( fread(&youngsModArray[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
     		if ( fread(&Growth_rate[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");
     		if ( fread(&ScaleFactor[c], sizeof(float),1,infil) != 1 ) printf("Data missing from trajectory. \n");

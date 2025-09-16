@@ -186,8 +186,8 @@
     },
     "rand_params": {
         "add_rands": 0,
-        "Levi_flight": 1,
-        "Levi_alpha": 1.5,
+        "Levy_flight": 1,
+        "Levy_alpha": 1.5,
         "Gaussian": 0,
         "rand_seed": -1,
         "rand_dist": 0,
@@ -207,6 +207,7 @@
         "LatforceSideMag": 0.0
     },
     "Initial_shape": {
+        "_comment": "Initializing a certain shape ",
         "Sphere": 0,
         "Sphere_radius": 12.86,
         "Cut_out_Sphere": 0

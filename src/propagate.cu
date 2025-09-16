@@ -1383,7 +1383,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
-								R3Nptrs d_fRanList, bool  Levi_flight, float Levi_alpha, bool Gaussian){
+								R3Nptrs d_fRanList, bool  Levy_flight, float Levy_alpha, bool Gaussian){
 
 	int cellInd = blockIdx.x;
 	int node    = threadIdx.x; 
@@ -1399,7 +1399,7 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 
 	}
 
-	if (Levi_flight){ //same force whole cell
+	if (Levy_flight){ //same force whole cell
 		if (cellInd < No_of_C180s){
 			float Rand_uni;
 			float alpha = 1.5;
