@@ -411,7 +411,7 @@ __global__ void CalculateDisForceLEbc( int No_of_C180s, int d_C180_nn[], int d_C
                                    R3Nptrs d_fDisList,float Pshift, float Vshift ,bool useRigidBoxZ, bool impurity, float f_range);
 
 __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, float rand_scale_factor,
-                                  R3Nptrs d_fRanList, bool  Levi_flight, float Levi_alpha, bool Gaussian);
+                                  R3Nptrs d_fRanList, bool  Levy_flight, float Levy_alpha, bool Gaussian);
 
 
 __global__ void CoorUpdatePBC (float *d_X, float *d_Y, float *d_Z, 
