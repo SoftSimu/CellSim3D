@@ -1394,7 +1394,7 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 		curandState rngState = d_rngStates[nodeIdx];
 		d_fRanList.x[nodeIdx] = rand_scale_factor * curand_normal(&rngState);
 		d_fRanList.y[nodeIdx] = rand_scale_factor * curand_normal(&rngState);
-		d_fRanList.z[nodeIdx] rand_scale_factor * curand_normal(&rngState);
+		d_fRanList.z[nodeIdx] = rand_scale_factor * curand_normal(&rngState);
 		d_rngStates[nodeIdx] = rngState;
 
 	}
