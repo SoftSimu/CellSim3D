@@ -276,6 +276,12 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre, bool along_Maj
 				planeNz = d_Polarity_Vec.z[rank];
 				//if (atom == 0 && (CMz<2 || CMz>14))
 				//printf("Cell %d: Polarity Vector: [%.4f, %.4f, %.4f]\n",rank,planeNx,planeNy,planeNz);
+				//Check for polarity vector normalization
+				if (fabs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1.0f) > 1e-3f){
+					printf("Cell %d: Polarity vector not normalized: [%.4f, %.4f, %.4f]\n",
+						rank, planeNx, planeNy, planeNz);
+					planeNx = 0.0f; planeNy = 0.0f; planeNz = 1.0f; 
+    }
 			}
 			else {
 				int loc = d_Generation[rank];
@@ -288,8 +294,8 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre, bool along_Maj
         
         float asym = d_asym[newrank];                          
 
-
-        if (abs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1) > 1e-3){
+		//Check for division plane normalization
+        if (fabs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1.0f) > 1e-3){
 			printf("Plane x: %f, y: %f, z: %f\n",planeNx,planeNy,planeNz);
             printf("OH SHIT: normal is not normalized\n");
             printf("Crash now :(\n"); 
@@ -632,7 +638,7 @@ __global__ void CellStressTensor( float *d_X,  float *d_Y,  float *d_Z,
  
 __global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
 				   float *d_CMx, float *d_CMy, float *d_CMz,
-				   float *d_volume, float* d_Shape)
+				   float *d_volume, float* d_Shape, int *cell_div_inds, int num_cell_div)
 				   
 {  
 
@@ -650,7 +656,14 @@ __global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
 	__shared__ float  Szz[256];
 
 
-    int rank = blockIdx.x;
+    //int rank = blockIdx.x;
+
+	int div_i = blockIdx.x;
+	if (div_i >= num_cell_div) return;
+	int rank = cell_div_inds[div_i];
+
+	//if (threadIdx.x == 0) printf("Calculating shape tensor for cell %d (block %d)\n", rank, blockIdx.x);
+
     int atom = threadIdx.x;
 	long int atomInd = rank*192+atom;
 	
@@ -680,12 +693,12 @@ __global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
 		Sxy[atom] = r_CM.x*r_CM.y;
 		Sxz[atom] = r_CM.x*r_CM.z;					   
 
-		Syx[atom] = r_CM.y*r_CM.x;
+		Syx[atom] = Sxy[atom];	//r_CM.y*r_CM.x; // symmetric
 		Syy[atom] = r_CM.y*r_CM.y;
 		Syz[atom] = r_CM.y*r_CM.z;
 
-		Szx[atom] = r_CM.z*r_CM.x;
-		Szy[atom] = r_CM.z*r_CM.y;
+		Szx[atom] = Sxz[atom];	//r_CM.z*r_CM.x;
+		Szy[atom] = Syz[atom];	//r_CM.z*r_CM.y;
 		Szz[atom] = r_CM.z*r_CM.z;
 		
 		//printf("F_Z: %f, X : %f, Y : %f, Z : %f\n",Force.z,r_CM.x,r_CM.y,r_CM.z);
@@ -750,16 +763,110 @@ __global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
 
 } 
 
-__global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_Vec, float *d_init_guess)
+// Yasamin's adaptation, only does the calculation for cells undergoing division to cut down computational load
+// fallback: If the power iteration does not meet the criteria ( convergence, residual, or both (can be adapted if needed)) -> a random division axis will be used
+// Double checked using good old Chat - I'll loose my shit if there's another bug somewhere
+__global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_Polarity_Vec, float *d_init_guess, int *cell_div_inds, int num_cell_div)
+{
+    //int rank = blockIdx.x;
+	int div_i = blockIdx.x;
+	if (div_i >= num_cell_div) return;
+	int rank = cell_div_inds[div_i];
+
+	//if (threadIdx.x == 0) printf("Power iteration for cell %d (block %d)\n", rank, blockIdx.x);
+
+    if (rank >= No_of_C180s) return;
+
+    if (threadIdx.x == 0) {
+        // Read the 3x3 shape matrix
+        float A[9];
+        for (int k = 0; k < 9; ++k) A[k] = d_Shape[rank*32 + k];
+
+        // Seed from initial guess (random axis)
+        float v0[3] = {
+            d_init_guess[rank*3 + 0],
+            d_init_guess[rank*3 + 1],
+            d_init_guess[rank*3 + 2]
+        };
+
+        float n0 = v0[0]*v0[0] + v0[1]*v0[1] + v0[2]*v0[2];
+        if (n0 < 1e-20f) { v0[0]=1.f; v0[1]=0.f; v0[2]=0.f; n0=1.f; 
+		printf("Cell %d: using default initial guess for power iteration\n", rank);
+		}
+
+        n0 = rsqrtf(n0);
+        v0[0]*=n0; v0[1]*=n0; v0[2]*=n0;
+
+        // Power iteration
+        float v[3] = {v0[0], v0[1], v0[2]};
+        float prev[3], w[3];
+        const float tol = 1e-4f;       // vector change tolerance
+        const float rtol = 1e-3f;      // residual tolerance
+        const int   max_it = 200; 		// Keeping it at 200 to avoid unnecessary calculations. Can be changed if needed
+        bool converged = false;
+
+        for (int it = 0; it < max_it; ++it) {
+            prev[0]=v[0]; prev[1]=v[1]; prev[2]=v[2];
+
+            // w = A * prev
+            w[0] = A[0]*prev[0] + A[1]*prev[1] + A[2]*prev[2];
+            w[1] = A[3]*prev[0] + A[4]*prev[1] + A[5]*prev[2];
+            w[2] = A[6]*prev[0] + A[7]*prev[1] + A[8]*prev[2];
+
+            // Normalize
+            float nw = w[0]*w[0] + w[1]*w[1] + w[2]*w[2];
+            if (nw < 1e-30f) break;  // singular/zero -> bail
+            nw = rsqrtf(nw);
+            v[0]=w[0]*nw; v[1]=w[1]*nw; v[2]=w[2]*nw;
+
+            // Convergence on vector difference
+            float dx=v[0]-prev[0], dy=v[1]-prev[1], dz=v[2]-prev[2];
+            if (dx*dx + dy*dy + dz*dz < tol*tol) { converged = true; break; }
+        }
+
+        // checking residual
+        float Av0 = A[0]*v[0] + A[1]*v[1] + A[2]*v[2];
+        float Av1 = A[3]*v[0] + A[4]*v[1] + A[5]*v[2];
+        float Av2 = A[6]*v[0] + A[7]*v[1] + A[8]*v[2];
+        float lambda = v[0]*Av0 + v[1]*Av1 + v[2]*Av2;
+        float r0 = Av0 - lambda*v[0];
+        float r1 = Av1 - lambda*v[1];
+        float r2 = Av2 - lambda*v[2];
+        float resid2 = r0*r0 + r1*r1 + r2*r2;
+
+        // Fallback if not converged or residual too large:
+		//if (!converged || (resid2 > rtol*rtol)) { 
+        if ((resid2 > rtol*rtol)) {
+			printf("Vector found is %f, %f, %f with lambda=%f and residual %.6f\n", v[0], v[1], v[2], lambda, sqrtf(resid2));
+            v[0]=v0[0]; v[1]=v0[1]; v[2]=v0[2];  // keep initial polarity
+			printf("Cell %d: Power iteration did not converge %d: (residual %.6f); using initial guess %.3f, %.3f, %.3f\n", rank, converged,  sqrtf(resid2), v0[0], v0[1], v0[2]);
+			
+        }
+		// else if (converged ) {
+    	// 	printf("Cell %d: CONVERGED - lambda=%.6f, vector=[%.4f,%.4f,%.4f]\n",
+        //    rank, lambda, v[0], v[1], v[2]);
+		// }
+		
+		// // uncomment to check:
+		// printf("Final polarity for cell %d: [%.4f, %.4f, %.4f]\n", rank, v[0], v[1], v[2]);
+        // d_Polarity_Vec.x[rank] = v[0];
+        // d_Polarity_Vec.y[rank] = v[1];
+        // d_Polarity_Vec.z[rank] = v[2];
+    }
+}
+
+
+// Older ver - keeping this version for polarity vector calculation done by Mahmood
+// I've changed it a bit so if something is wrong when using polarity ...
+// Mahmood's og code can be found using ver control (multigpu branch before 2024)
+__global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_Vec, float *d_init_guess) 
 {				   
 
-	
     	int tid = threadIdx.x;
     	int rank = blockIdx.x;
     	int tInd = blockIdx.x*blockDim.x + threadIdx.x;
     	
     	if (rank < No_of_C180s){ 
-
 
 		__shared__ float matrix[9];
 		__shared__ float eigenVector[3];
@@ -768,12 +875,6 @@ __global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_V
     		float S = d_Stress[tInd];
     		float lambda = 0.0;
     	 
-		// if (tid < 9){
-	
-		// 	matrix[tid] = S;
-		// 	if (tid < 3) eigenVector[tid] = - 1.0;
-	
-		// }
 	
 		__syncthreads();
 	
@@ -821,105 +922,15 @@ __global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_V
 					for (int j = 0; j < 3; j++) {  // Dot product with eigenvector
 						temp += matrix[i * 3 + j] * eigenVector[j];
 					}
-					lambda += eigenVector[i] * temp;  // Rayleigh quotient
+					lambda += eigenVector[i] * temp;  
 				}
 			
 
 			d_Polarity_Vec.x[rank] = eigenVector[0];
 			d_Polarity_Vec.y[rank] = eigenVector[1];
 			d_Polarity_Vec.z[rank] = eigenVector[2];
-	
-			//if ( (step)%10 == 0 ){
-			
-				//printf("step: %d\n",step);
-			//	printf("Matrix\n");
-			//	printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
-			//	printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
-			//	printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
-			//
-			//printf("cell: %d, EigenVector: [%.4f, %.4f, %.4f]\n", rank, d_Polarity_Vec.x[rank], d_Polarity_Vec.y[rank], d_Polarity_Vec.x[rank]);
-			//printf("EigenValue: %.4f\n", lambda);
-    		//	
-    		//		printf("\n");
-			//}
 			
 		}
-	
-	
-		// if (tid < 3){
-	
-		
-		// 	float normDiff = 1.0;
-		// 	float norm = 1.0;
-		// 	int counter = 0 ; // OG noob solution
-		
-		// 	while (normDiff > 1e-2)
-    	// 		{
-		// 			counter++;
-		// 		prevEigenVector[tid] = eigenVector[tid];
-
-		// 		__syncthreads();
-
-        // 			float result = 0.0;
-        // 			for (int j = 0; j < 3; j++) result += matrix[tid*3+j]*prevEigenVector[j];
-            			
-        //     			eigenVector[tid] = result;		
-			
-		// 		__syncthreads();
-			
-			
-		// 		norm = sqrtf(eigenVector[0]*eigenVector[0] + eigenVector[1]*eigenVector[1] + eigenVector[2]*eigenVector[2]);
-			
-		// 		eigenVector[tid] /= norm;
-			
-			
-		// 		__syncthreads();
-			
-			
-		// 		normDiff = sqrtf( (eigenVector[0]-prevEigenVector[0])*(eigenVector[0]-prevEigenVector[0]) +
-        //        	        		   (eigenVector[1]-prevEigenVector[1])*(eigenVector[1]-prevEigenVector[1]) +
-        //        	        		   (eigenVector[2]-prevEigenVector[2])*(eigenVector[2]-prevEigenVector[2]) );
-			
-		// 		//printf("EigenVector: [%.4f, %.4f, %.4f] and difference is: %.4f\n", eigenVector[0], eigenVector[1], eigenVector[2], normDiff);	
-		// 		if (counter > 200) {
-		// 			//printf("counter: %d\n",counter);
-		// 			break;
-		// 			} // If not converging, break
-		
-		// 	}
-	
-	
-	    // 		// Calculate the eigenValue ???
-    	    	
-    	// 		for (int i = 0; i < 3; i++)
-        // 		lambda += matrix[tid * 3 + i] * eigenVector[i];
-	
-	
-	
-		// }
-	
-	
-		// if (tid == 0){
-	
-		// 	d_Polarity_Vec.x[rank] = eigenVector[0];
-		// 	d_Polarity_Vec.y[rank] = eigenVector[1];
-		// 	d_Polarity_Vec.z[rank] = eigenVector[2];
-	
-		// 	//if ( (step)%10 == 0 ){
-			
-		// 		//printf("step: %d\n",step);
-		// 	//	printf("Matrix\n");
-		// 	//	printf("%.4f, %.4f, %.4f\n", matrix[0], matrix[1], matrix[2]);
-		// 	//	printf("%.4f, %.4f, %.4f\n", matrix[3], matrix[4], matrix[5]);
-		// 	//	printf("%.4f, %.4f, %.4f\n", matrix[6], matrix[7], matrix[8]);
-		// 	//
-		// 	//	printf("cell: %d, EigenVector: [%.4f, %.4f, %.4f]\n", rank, d_Polarity_Vec.x[rank], d_Polarity_Vec.y[rank], d_Polarity_Vec.x[rank]);
-		// 	printf("EigenValue: %.4f\n", lambda);
-    	// 	//	
-    	// 	//		printf("\n");
-		// 	//}
-	
-		// }
 	
 	}
 

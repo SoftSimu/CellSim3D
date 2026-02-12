@@ -208,7 +208,8 @@ float LJ_sigma;
 
 bool Surface_friction;
 float gamma_surface;
-
+// Compression of a sphere - parameters
+double Initial_Center;
 int No_of_threads; // ie number of staring cells
 int Side_length;
 int ex, ey;
@@ -635,9 +636,12 @@ float Sphere_radius;
 bool Sphere;
 bool Cut_out_Sphere;
 
+float gravity;
+
 bool compress;
 float compression_ratio;
 float Compression_step_size;
+bool Single_wall;
 
 int main(int argc, char *argv[])
 {
@@ -1755,7 +1759,102 @@ int main(int argc, char *argv[])
   
   }
 
-  
+// if (along_Major_axis){
+//     //calculate the initial shape tensor of the cells from "C180"
+// 	float initx[181], inity[181], initz[181];
+//     FILE *infilC;
+//     infilC = fopen("C180","r");
+//     if ( infilC == NULL ) {
+//         printf("Unable to open file C180, rank %d\n", rank);
+//         return(-1);
+//     }
+    
+//     for ( int atom = 0 ; atom < 180 ; ++atom) {
+//         if ( fscanf(infilC,"%f %f %f",&initx[atom], &inity[atom], &initz[atom]) != 3 ) {
+//             printf("   Unable to read file C180 on line %d, rank %d\n",atom+1, rank);
+//             fclose(infilC);
+//             return(-1);
+//         }
+//     }
+//     fclose(infilC);
+    
+//     // Center the reference coordinates to COM = (0,0,0)
+//     float sumx = 0.0f, sumy = 0.0f, sumz = 0.0f;
+//     for (int i = 0; i < 180; ++i) {
+//         sumx += initx[i];
+//         sumy += inity[i];
+//         sumz += initz[i];
+//     }
+//     sumx /= 180.0f;
+//     sumy /= 180.0f;
+//     sumz /= 180.0f;
+    
+//     for (int i = 0; i < 180; ++i) {
+//         initx[i] -= sumx;
+//         inity[i] -= sumy;
+//         initz[i] -= sumz;
+//     }
+    
+//     // Calculate reference shape tensor: S_ij = (1/N) * Σ r_i * r_j
+//     float Sxx = 0.0f, Sxy = 0.0f, Sxz = 0.0f;
+//     float Syy = 0.0f, Syz = 0.0f, Szz = 0.0f;
+    
+//     for (int i = 0; i < 180; ++i) {
+//         Sxx += initx[i] * initx[i];
+//         Sxy += initx[i] * inity[i];
+//         Sxz += initx[i] * initz[i];
+//         Syy += inity[i] * inity[i];
+//         Syz += inity[i] * initz[i];
+//         Szz += initz[i] * initz[i];
+//     }
+    
+//     float inv_N = 1.0f / 180.0f;
+    
+//     // Store in row-major order (3x3 matrix as 9 elements)
+//     float ReferenceShape[9];
+//     ReferenceShape[0] = Sxx * inv_N;  // S_xx
+//     ReferenceShape[1] = Sxy * inv_N;  // S_xy
+//     ReferenceShape[2] = Sxz * inv_N;  // S_xz
+//     ReferenceShape[3] = Sxy * inv_N;  // S_yx (symmetric)
+//     ReferenceShape[4] = Syy * inv_N;  // S_yy
+//     ReferenceShape[5] = Syz * inv_N;  // S_yz
+//     ReferenceShape[6] = Sxz * inv_N;  // S_zx (symmetric)
+//     ReferenceShape[7] = Syz * inv_N;  // S_zy (symmetric)
+//     ReferenceShape[8] = Szz * inv_N;  // S_zz
+    
+//     // Print for verification
+//     if (rank == 0) {
+//         printf("\n=== Reference C180 Shape Tensor ===\n");
+//         printf("[%.6f, %.6f, %.6f]\n", ReferenceShape[0], ReferenceShape[1], ReferenceShape[2]);
+//         printf("[%.6f, %.6f, %.6f]\n", ReferenceShape[3], ReferenceShape[4], ReferenceShape[5]);
+//         printf("[%.6f, %.6f, %.6f]\n", ReferenceShape[6], ReferenceShape[7], ReferenceShape[8]);
+        
+//         // Quick check: trace and diagonal values
+//         float trace = ReferenceShape[0] + ReferenceShape[4] + ReferenceShape[8];
+//         printf("Trace: %.6f\n", trace);
+//         printf("Diagonal: Sxx=%.6f, Syy=%.6f, Szz=%.6f\n", 
+//                ReferenceShape[0], ReferenceShape[4], ReferenceShape[8]);
+        
+//         // Check if nearly isotropic (all diagonal elements similar)
+//         float max_diag = fmaxf(ReferenceShape[0], fmaxf(ReferenceShape[4], ReferenceShape[8]));
+//         float min_diag = fminf(ReferenceShape[0], fminf(ReferenceShape[4], ReferenceShape[8]));
+//         float anisotropy = max_diag / min_diag;
+//         printf("Anisotropy ratio (max/min diagonal): %.4f\n", anisotropy);
+        
+//         if (anisotropy > 1.2f) {
+//             printf("WARNING: C180 reference shape is anisotropic!\n");
+//             printf("This may cause preferential division directions.\n");
+//         }
+//         printf("===================================\n\n");
+//     }
+    
+//     // Copy to device for use in shape difference calculations
+//     // (Add this if you haven't already declared d_ReferenceShape)
+//     // float* d_ReferenceShape;
+//     // cudaMalloc(&d_ReferenceShape, 9 * sizeof(float));
+//     //cudaMemcpy(d_ReferenceShape, ReferenceShape, 9 * sizeof(float), 
+//     //           cudaMemcpyHostToDevice);
+// }
   
   //cudaMemcpyToSymbol(d_dt, &delta_t, sizeof(float),0, cudaMemcpyHostToDevice);
 
@@ -4676,7 +4775,7 @@ int main(int argc, char *argv[])
 															direction_x, direction_y, direction_z, LatforceSideMag,
 															Look_for_Nearest_Node, Dis_cutoff_Nodes,
 															d_Polarity_Vec, Polarity, Create_wound, wound_radius,
-															Sphere, Sphere_radius); 
+															Sphere, Sphere_radius, gravity); 
                                                      	
         CudaErrorCheck();
         
@@ -5359,15 +5458,21 @@ int main(int argc, char *argv[])
 	
 	}
 
-	if (compress){
+	if (compress && !Single_wall){
 		if ( (Sphere_radius*2 * (1 - compression_ratio)) < (boxMax.z - BoxMin.z) ){
 			boxMax.z -= Compression_step_size;
 			BoxMin.z += Compression_step_size;
-
-			//printf("   Compression step %d, box height: %f\n", step, boxMax.z - BoxMin.z);
 		} else {
 			compress = false;
-			//printf("   Compression finished. Desired height: %f\n" ,(Sphere_radius*2 * (1 - compression_ratio)));
+			if (rank == 0) printf("   Compression finished. height of box:  %f\n" , boxMax.z - BoxMin.z);
+		}
+
+	} else if (compress){ //Set the middle by hand -> 25
+		if ( (Sphere_radius* (1 - compression_ratio)) < (Initial_Center - BoxMin.z) ){
+			BoxMin.z += Compression_step_size;
+			boxMax.z += 1;
+		} else {
+			compress = false;
 			if (rank == 0) printf("   Compression finished. height of box:  %f\n" , boxMax.z - BoxMin.z);
 		}
 
@@ -8601,7 +8706,7 @@ CudaErrorCheck();
 															direction_x, direction_y, direction_z, LatforceSideMag,
 															Look_for_Nearest_Node, Dis_cutoff_Nodes,
 															d_Polarity_Vec, Polarity, Create_wound, wound_radius,
-															Sphere, Sphere_radius); 
+															Sphere, Sphere_radius, gravity); 
                                                      	
        CudaErrorCheck();
                                                      	
@@ -8736,19 +8841,14 @@ CudaErrorCheck();
    		
    		CudaErrorCheck();
 
-		CellShapeTensor<<<No_of_C180s,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz,
-							d_volume, d_Shape);
-		CudaErrorCheck();
    		
-   		//printf("I am here\n");
 		float init_guess[3*MaxNoofC180s];
 		ranmar(init_guess,3*MaxNoofC180s);
 
 		cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
-   		PowerItr<<<No_of_C180s,32>>>( No_of_C180s, d_Stress, d_Polarity_Vec, d_init_guess);
-		//PowerItr<<<No_of_C180s,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess);
-   
+   		PowerItr<<<No_of_C180s,32>>>( No_of_C180s, d_Stress, d_Polarity_Vec, d_init_guess); // Uses the stress tensor to define polarity
+
    		CudaErrorCheck();
    
    
@@ -8800,13 +8900,14 @@ CudaErrorCheck();
 	 
           		//printf("step: %d\n",step);
 
-				if (along_Major_axis){
+				if (along_Major_axis){// If along major axis is true, calculates and passes the polarity vector to cell division
 
 				CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
 
 				CudaErrorCheck();
 
-				CellShapeTensor<<<No_of_C180s,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz, d_volume, d_Shape);
+				CellShapeTensor<<<num_cell_div,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz, d_volume, d_Shape, d_cell_div_inds, num_cell_div);
+				cudaDeviceSynchronize();
 				CudaErrorCheck();
 
 				float init_guess[3*MaxNoofC180s];
@@ -8814,8 +8915,9 @@ CudaErrorCheck();
 
 				cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
-				PowerItr<<<No_of_C180s,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess);
+				PowerItr_long_axis<<<num_cell_div,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess, d_cell_div_inds, num_cell_div); //We use the shape tensor to find the major axis
 	
+				cudaDeviceSynchronize();
 				CudaErrorCheck();
 
 				}
@@ -8831,7 +8933,7 @@ CudaErrorCheck();
                		                    		d_ScaleFactor, d_Youngs_mod, d_Growth_rate, d_DivisionVolume,
                		                    		d_squeeze_rate, d_Apo_rate, 
                		                    		d_gamma_env, d_viscotic_damp, d_CellINdex,
-               		                    		d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, d_Generation, d_Fibre_index, d_Polarity_Vec,
+               		                    		d_DivPlane, d_num_cell_div, d_cell_div_inds, d_pressList, d_Generation, d_Fibre_index, d_Polarity_Vec, //I falong long axis true- uses the polarity vector to define division axis
                		                    		minPressure);       
                                    
           		CudaErrorCheck();                                                                                
@@ -10447,7 +10549,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 						
 						CM.x = l * col + 0.5 * l + (boxMax.x - BoxMin.x)/2;
 						CM.y = l * row + 0.5 * l + (boxMax.y - BoxMin.y)/2;
-						CM.z = BoxMin.z + 1;
+						CM.z = BoxMin.z + 2.0; //feel free to change
 						
 						allCMs[cell] = CM;
 					}
@@ -10461,8 +10563,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
         				ex=cell%Side;         
         	          		CM.x = l*ex + 0.5*l + (boxMax.x - BoxMin.x)/2; // BoxMin.x;
         	          		CM.y = l*ey + 0.5*l + (boxMax.y - BoxMin.y)/2; // BoxMin.y;
-        	    	      		CM.z = BoxMin.z + 1 ;
-					allCMs[cell] = CM; 
+        	    	      	CM.z = BoxMin.z + 2.0 ; //feel free to change
+							allCMs[cell] = CM; 
         	   		}
 
         			if (impurity){
@@ -10954,7 +11056,7 @@ inline void initialize_Plane(int MaxNoofC180s){
 
 	//Random division, along_elongation, else
 
-   if(Random_Div_Rule) {	
+	if(Random_Div_Rule || along_Major_axis) {	
    	
 		float v[3], w[3];
 		
@@ -10984,7 +11086,7 @@ inline void initialize_Plane(int MaxNoofC180s){
 				}
 
 				// Orthogonalize
-			float f = (w[0]*v[0] + w[1]*v[1] + w[2]*w[2])/(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+			float f = (w[0]*v[0] + w[1]*v[1] + v[2]*w[2])/(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 
 				w[0] = w[0] - f*v[0];
 				w[1] = w[1] - f*v[1];
@@ -11023,56 +11125,58 @@ inline void initialize_Plane(int MaxNoofC180s){
 			DivPlane.z[i] = norm[2]; 
 
 		}
+    	}
 
-    
-    } 
-	else if (along_Major_axis){
+		// here's the deal: The long axis needs to be calculated once before each division
+		// Elongation does not apply in the begining of the sim, taking this out for now
+	// else if (along_Major_axis){
 
-				cudaError_t err;
+	// 			cudaError_t err;
 
-				CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
+	// 			CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
 
-				CudaErrorCheck();
+	// 			CudaErrorCheck();
 
-				CellShapeTensor<<<No_of_C180s,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz, d_volume, d_Shape);
-				CudaErrorCheck();
+	// 			CellShapeTensor<<<No_of_C180s,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz, d_volume, d_Shape, d_cell_div_inds);
+	// 			CudaErrorCheck();
 
-				float init_guess[3*MaxNoofC180s];
-				ranmar(init_guess,3*MaxNoofC180s);
+	// 			float init_guess[3*MaxNoofC180s];
+	// 			ranmar(init_guess,3*MaxNoofC180s);
 
-				cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+	// 			cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
-				PowerItr<<<No_of_C180s,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess);
+	// 			PowerItr_long_axis<<<num_cell_div,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess, d_cell_div_inds, num_cell_div); 
+	// 			// not sure if num_cell_divs is called yet
+	// 			// CAlculate for all
 	
-				CudaErrorCheck();
-				cudaDeviceSynchronize();
+	// 			CudaErrorCheck();
+	// 			cudaDeviceSynchronize();
 
-				err = cudaMemcpy(h_Polarity_Vec.x, d_Polarity_Vec.x, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-				if (err != cudaSuccess) {
-    				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
-				}
+	// 			err = cudaMemcpy(h_Polarity_Vec.x, d_Polarity_Vec.x, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+	// 			if (err != cudaSuccess) {
+    // 				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
+	// 			}
 
-				err = cudaMemcpy(h_Polarity_Vec.y, d_Polarity_Vec.y, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-				if (err != cudaSuccess) {
-    				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
-				}
+	// 			err = cudaMemcpy(h_Polarity_Vec.y, d_Polarity_Vec.y, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+	// 			if (err != cudaSuccess) {
+    // 				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
+	// 			}
 
-				err = cudaMemcpy(h_Polarity_Vec.z, d_Polarity_Vec.z, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-				if (err != cudaSuccess) {
-    				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
-				}
+	// 			err = cudaMemcpy(h_Polarity_Vec.z, d_Polarity_Vec.z, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+	// 			if (err != cudaSuccess) {
+    // 				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
+	// 			}
 
-				for (int i = 0; i < No_of_C180s; i++){
-					DivPlane.x[i] = h_Polarity_Vec.x[i];
-					DivPlane.y[i] = h_Polarity_Vec.y[i];
-					DivPlane.z[i] = h_Polarity_Vec.z[i];
-				}
+	// 			for (int i = 0; i < No_of_C180s; i++){
+	// 				DivPlane.x[i] = h_Polarity_Vec.x[i];
+	// 				DivPlane.y[i] = h_Polarity_Vec.y[i];
+	// 				DivPlane.z[i] = h_Polarity_Vec.z[i];
+	// 			}
 
-				//printf("h_Polarity_Vec.x[0] = %f, h_Polarity_Vec.y[0] = %f, h_Polarity_Vec.z[0] = %f\n", h_Polarity_Vec.x[0], h_Polarity_Vec.y[0], h_Polarity_Vec.z[0]);
-	} 
+	// 			//printf("h_Polarity_Vec.x[0] = %f, h_Polarity_Vec.y[0] = %f, h_Polarity_Vec.z[0] = %f\n", h_Polarity_Vec.x[0], h_Polarity_Vec.y[0], h_Polarity_Vec.z[0]);
+	// } 
 	else {
     
-	
 		float norm[3];
 		float arg_radian = (Rotation_angle*3.14159)/180;
 		float Rot_rate_rad = (Rotation_rate*3.14159)/180;
@@ -12630,6 +12734,7 @@ int read_json_params(const char* inpFile){
         BoxMin.x = boxParams["BoxMin_x"].asDouble();
         BoxMin.y = boxParams["BoxMin_y"].asDouble(); 
         BoxMin.z = boxParams["BoxMin_z"].asDouble();
+		Initial_Center = (boxMax.z + BoxMin.z)/2.0;
         flatbox = boxParams["flatbox"].asBool();
         LineCenter = boxParams["LineCenter"].asBool();
         rand_pos = boxParams["rand_pos"].asBool();
@@ -12646,6 +12751,7 @@ int read_json_params(const char* inpFile){
 		compress = boxParams["compress"].asBool();
 		compression_ratio = boxParams["compression_ratio"].asFloat();
 		Compression_step_size = boxParams["Compression_step_size"].asFloat();
+		Single_wall = boxParams["Single_wall"].asBool();
 	
     }
 
@@ -12679,6 +12785,7 @@ int read_json_params(const char* inpFile){
     }
     else{
         LateralForce = FluidParams["LateralForce"].asBool();
+		gravity = FluidParams["gravity"].asFloat();
 		Dis_cutoff_Nodes = FluidParams["Dis_cutoff_Nodes"].asFloat();
 		NN_cell_criteria = FluidParams["NN_cell_criteria"].asInt();
 		Surface_NN_cell_criteria = FluidParams["Surface_NN_cell_criteria"].asInt();

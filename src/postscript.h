@@ -155,7 +155,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 						   bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
 						   bool Look_for_Nearest_Node, float Dis_cutoff_Nodes,
                            R3Nptrs d_Polarity_Vec, bool Polarity, bool Create_wound , float wound_radius,
-						   bool Sphere, float Sphere_radius);
+						   bool Sphere, float Sphere_radius, float gravity);
 
 
 __global__ void CalculateConForce_ECM( int Num_ECM,
@@ -709,6 +709,8 @@ __global__ void CellStressTensor( float *d_X,  float *d_Y,  float *d_Z,
 
 __global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
 				   float *d_CMx, float *d_CMy, float *d_CMz,
-				   float *d_volume, float* d_Shape);
+				   float *d_volume, float* d_Shape, int *cell_div_inds, int num_cell_div);
 
 __global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_Vec , float *d_init_guess);
+
+__global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_Polarity_Vec , float *d_init_guess, int *cell_div_inds, int num_cell_div);
