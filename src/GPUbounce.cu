@@ -864,7 +864,7 @@ int main(int argc, char *argv[])
         shapeLim = Zratio;
   }
 
-
+  //angleConstant = 10*Youngs_mod;
   if(!colloidal_dynamics){
   	shapeLim = 1.0f;
   	//angleConstant = Youngs_mod;
@@ -4751,7 +4751,7 @@ int main(int argc, char *argv[])
 															d_CMx, d_CMy, d_CMz,
 															d_XPin,  d_YPin,  d_ZPin,
 															d_CMxPin, d_CMyPin, d_CMzPin,
-                                                     		d_R0, d_ScaleFactor, d_pressList, d_Youngs_mod, 
+                                                     		d_R0, d_ScaleFactor, d_area, d_pressList, d_Youngs_mod, 
                                                      		attraction_strength, attraction_range,
                                                      		repulsion_strength, repulsion_range,
                                                      		d_viscotic_damp,
@@ -8682,7 +8682,7 @@ CudaErrorCheck();
 															d_CMx, d_CMy, d_CMz,
                                		                      	d_XPin,  d_YPin,  d_ZPin,
                                		                      	d_CMxPin, d_CMyPin, d_CMzPin,                                                 	
-                               		                      	d_R0, d_ScaleFactor,  d_pressList, d_Youngs_mod, 
+                               		                      	d_R0, d_ScaleFactor, d_area,  d_pressList, d_Youngs_mod, 
                                		                      	attraction_strength, attraction_range,
                                		                      	repulsion_strength, repulsion_range,
                                		                      	d_viscotic_damp,
@@ -8899,13 +8899,14 @@ CudaErrorCheck();
 	 
           		//printf("step: %d\n",step);
 
-				if (along_Major_axis){// If along major axis is true, calculates and passes the polarity vector to cell division
+				if (along_Major_axis){// If along major axis is true, passes the polarity vector to cell division
 
 				CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
 
 				CudaErrorCheck();
 
 				CellShapeTensor<<<num_cell_div,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz, d_volume, d_Shape, d_cell_div_inds, num_cell_div);
+				CudaErrorCheck();
 				cudaDeviceSynchronize();
 				CudaErrorCheck();
 
@@ -8916,6 +8917,7 @@ CudaErrorCheck();
 
 				PowerItr_long_axis<<<num_cell_div,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess, d_cell_div_inds, num_cell_div); //We use the shape tensor to find the major axis
 	
+				CudaErrorCheck();
 				cudaDeviceSynchronize();
 				CudaErrorCheck();
 
@@ -8937,8 +8939,7 @@ CudaErrorCheck();
                                    
           		CudaErrorCheck();                                                                                
           
-          
-        		No_of_C180s += num_cell_div;                           
+        		No_of_C180s += num_cell_div;                        
         		NewCellInd  += num_cell_div; 
         		//printf("num_cell_div %d, NewCellInd %d\n",num_cell_div,NewCellInd);                          
         	
@@ -10536,7 +10537,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 
 				if (Orig_Cells % 5 == 0){
 					int rowSize = 5;
-					int totalRows = (Orig_Cells + rowSize - 1) / rowSize;
+					//int totalRows = (Orig_Cells + rowSize - 1) / rowSize;
     
 					//printf("Max number of initial cells: %d\n", totalRows * rowSize);
 					
@@ -10548,7 +10549,7 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
 						
 						CM.x = l * col + 0.5 * l + (boxMax.x - BoxMin.x)/2;
 						CM.y = l * row + 0.5 * l + (boxMax.y - BoxMin.y)/2;
-						CM.z = BoxMin.z + 2.0; //feel free to change
+						CM.z = BoxMin.z + 3.0;
 						
 						allCMs[cell] = CM;
 					}
@@ -10562,8 +10563,8 @@ int initialize_C180s(int* Orig_No_of_C180s, int* impurityNum)
         				ex=cell%Side;         
         	          		CM.x = l*ex + 0.5*l + (boxMax.x - BoxMin.x)/2; // BoxMin.x;
         	          		CM.y = l*ey + 0.5*l + (boxMax.y - BoxMin.y)/2; // BoxMin.y;
-        	    	      	CM.z = BoxMin.z + 2.0 ; //feel free to change
-							allCMs[cell] = CM; 
+        	    	      		CM.z = BoxMin.z + 3.0 ;
+					allCMs[cell] = CM; 
         	   		}
 
         			if (impurity){

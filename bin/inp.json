@@ -180,22 +180,7 @@
         "Levy_alpha": 1.5,
         "Gaussian": false,
         "rand_seed": -1,
-        "rand_dist": 0,
         "rand_scale_factor": 1
-    },
-
-    "Fluid": {
-        "LateralForce": false,
-        "Constant_pressure": 0.4,
-        "_comment2": "The folowing parameters are not being used",
-        "Dis_cutoff_Nodes": 4.5,
-        "NN_cell_criteria": 24,
-        "Surface_NN_cell_criteria": 8,
-        "Fluid_Density": 0.001,
-        "direction_x": 0,
-        "direction_y": 0,
-        "direction_z": 0,
-        "LatforceSideMag": 0.0
     },
 
     "ColloidParams": {
@@ -217,6 +202,20 @@
         "Compress_Value_X": 2.5e-05,
         "Compress_Value_Y": 2.5e-05,
         "Compress_Value_Z": 2.5e-05
+    },
+
+    "Fluid": {
+        "LateralForce": false,
+        "Constant_pressure": 0.4,
+        "_comment2": "The folowing parameters are not being used",
+        "Dis_cutoff_Nodes": 4.5,
+        "NN_cell_criteria": 24,
+        "Surface_NN_cell_criteria": 8,
+        "Fluid_Density": 0.001,
+        "direction_x": 0,
+        "direction_y": 0,
+        "direction_z": 0,
+        "LatforceSideMag": 0.0
     },
 
     "counting": {
