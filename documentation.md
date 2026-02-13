@@ -116,7 +116,7 @@ Each cell in the simulation is made of 180 nodes, and each node and its neighbor
 
 <div align="center">
 
-  ![Scheme of a Single Cell](images/Cell_ShapeInd4.89.png)
+  ![Scheme_Cell](https://github.com/SoftSimu/CellSim3D/tree/multigpu_2025/images/Cell_ShapeInd4.89.png)
 
 </div>
 
