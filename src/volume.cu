@@ -849,14 +849,15 @@ __global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_P
 		
 		// // uncomment to check:
 		// printf("Final polarity for cell %d: [%.4f, %.4f, %.4f]\n", rank, v[0], v[1], v[2]);
-        // d_Polarity_Vec.x[rank] = v[0];
-        // d_Polarity_Vec.y[rank] = v[1];
-        // d_Polarity_Vec.z[rank] = v[2];
+		
+        d_Polarity_Vec.x[rank] = v[0];
+        d_Polarity_Vec.y[rank] = v[1];
+        d_Polarity_Vec.z[rank] = v[2];
     }
 }
 
 
-// Older ver - keeping this version for polarity vector calculation done by Mahmood
+// Older ver - keeping his version for polarity vector calculation done by Mahmood
 // I've changed it a bit so if something is wrong when using polarity ...
 // Mahmood's og code can be found using ver control (multigpu branch before 2024)
 __global__ void PowerItr( int No_of_C180s, float *d_Stress, R3Nptrs d_Polarity_Vec, float *d_init_guess) 

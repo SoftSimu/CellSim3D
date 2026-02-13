@@ -178,7 +178,6 @@ int cellLifeTime;
 float cellFoodCons; // baseline food consumption
 float cellFoodConsDiv; // Extra good consumption when cell divides
 float cellFoodRel; // Food released when cell dies (should < total consumed food)
-float maxPop;
  
 
 double3 boxMax;
@@ -865,7 +864,7 @@ int main(int argc, char *argv[])
         shapeLim = Zratio;
   }
 
-  //angleConstant = 10*Youngs_mod;
+
   if(!colloidal_dynamics){
   	shapeLim = 1.0f;
   	//angleConstant = Youngs_mod;
@@ -12501,7 +12500,7 @@ int read_json_params(const char* inpFile){
 
     // begin detailed parameter extraction
 
-    Json::Value coreParams = inpRoot.get("core", Json::nullValue);
+    Json::Value coreParams = inpRoot.get("simulation_core", Json::nullValue);
 
     // load core simulation parameters
     if (coreParams == Json::nullValue){
@@ -12509,33 +12508,16 @@ int read_json_params(const char* inpFile){
         return -1;
     }
     else {
-        MaxNoofC180s = coreParams["MaxNoofC180s"].asInt();
+        MaxNoofC180s = coreParams["Max_cell_count"].asInt();
         Max_Buffer_Size =  coreParams["MaxBuffer"].asInt();
-        mass = coreParams["particle_mass"].asFloat();
-        repulsion_range = coreParams["repulsion_range"].asFloat();
-        attraction_range = coreParams["attraction_range"].asFloat();
-        repulsion_strength = coreParams["repulsion_strength"].asFloat();
-        attraction_strength = coreParams["attraction_strength"].asFloat();
-        Youngs_mod = coreParams["Youngs_mod"].asFloat(); 
-        stiffness1 = coreParams["stiffFactor1"].asFloat()*Youngs_mod;
-        viscotic_damping = coreParams["viscotic_damping"].asFloat();
-        internal_damping = coreParams["internal_damping"].asFloat();
-        divVol = coreParams["division_Vol"].asFloat();
-        Time_steps = coreParams["div_time_steps"].asFloat();
-        delta_t = coreParams["time_interval"].asFloat();
-        Restart = coreParams["Restart"].asInt();
+        Time_steps = coreParams["div_time_steps"].asInt();
+        delta_t = coreParams["dt"].asFloat();
+        Restart = coreParams["Restart_simulation"].asInt();
         trajWriteInt = coreParams["trajWriteInt"].asInt();
         equiStepCount = coreParams["non_div_time_steps"].asInt();
-		MaxNeighList = coreParams["MaxNeighList"].asInt();
+		MaxNeighList = coreParams["MaxNeighborList_size"].asInt();
         std::strcpy (trajFileName, coreParams["trajFileName"].asString().c_str());
         binaryOutput = coreParams["binaryOutput"].asBool(); 	
-        maxPressure = coreParams["maxPressure"].asFloat();
-        minPressure = coreParams["minPressure"].asFloat();
-        gamma_visc = coreParams["gamma_visc"].asFloat();
-        shear_rate = coreParams["shear_rate"].asFloat();
-        rMax = coreParams["growth_rate"].asFloat();
-        checkSphericity = coreParams["checkSphericity"].asBool();
-        constrainAngles = coreParams["constrainAngles"].asBool();
         dt_max = coreParams["dt_max"].asFloat();
         dt_tol = coreParams["dt_tol"].asFloat();
         write_cont_force = coreParams["write_cont_force"].asBool();
@@ -12549,11 +12531,39 @@ int read_json_params(const char* inpFile){
 		write_extra_forces_file = coreParams["write_extra_force_file"].asBool();
 		std::strcpy(Extra_forces_file, coreParams["Extra_Forces_file"].asString().c_str());
         correct_com = coreParams["correct_com"].asBool();
-        correct_Vcom = coreParams["correct_Vcom"].asBool(); 
-        Polarity = coreParams["Polarity"].asBool();
-		angleConstant = coreParams["angleConst"].asFloat();
-                                
+        correct_Vcom = coreParams["correct_Vcom"].asBool();                      
     }
+
+	Json::Value cell_physics = inpRoot.get("cell_physics", Json::nullValue);
+
+    // load core simulation parameters
+    if (cell_physics == Json::nullValue){
+        printf("ERROR: Cannot load Physical parameters\nExiting");
+        return -1;
+    }
+    else {
+		attraction_range = cell_physics["attraction_range"].asFloat();
+		repulsion_range = cell_physics["repulsion_range"].asFloat();
+        repulsion_strength = cell_physics["repulsion_strength"].asFloat();
+        attraction_strength = cell_physics["attraction_strength"].asFloat();
+        Youngs_mod = cell_physics["Youngs_modulus"].asFloat(); 
+        stiffness1 = cell_physics["StiffFactor"].asFloat()*Youngs_mod;
+        viscotic_damping = cell_physics["intercellular_damping"].asFloat();
+        internal_damping = cell_physics["Internal_damping"].asFloat();
+        divVol = cell_physics["division_volume"].asFloat();
+		maxPressure = cell_physics["maxPressure"].asFloat();
+        minPressure = cell_physics["minPressure"].asFloat();
+        gamma_visc = cell_physics["medium_viscosity"].asFloat();
+		Polarity = cell_physics["Polarity"].asBool();
+		angleConstant = cell_physics["angle_Constant"].asFloat();
+		checkSphericity = cell_physics["checkSphericity"].asBool();
+        constrainAngles = cell_physics["constrainAngles"].asBool();
+		mass = cell_physics["particle_mass"].asFloat();
+		shear_rate = cell_physics["shear_rate"].asFloat();
+		rMax = cell_physics["growth_rate"].asFloat();
+		gravity = cell_physics["gravity"].asFloat();
+
+	}
 
     Json::Value countParams = inpRoot.get("counting", Json::nullValue);
     if (countParams == Json::nullValue){
@@ -12584,7 +12594,6 @@ int read_json_params(const char* inpFile){
         cellFoodConsDiv = popParams["division_consumption"].asFloat();
         cellFoodRel = popParams["death_release_food"].asFloat();
         cellLifeTime = popParams["cellLifeTime"].asInt();
-        maxPop = popParams["max_pop"].asFloat(); 
     }
 
     
@@ -12621,7 +12630,7 @@ int read_json_params(const char* inpFile){
     	
         Random_Div_Rule = divParams["Random_Div_Rule"].asBool();
         Fibre = divParams["Fibre"].asBool();
-        useDivPlaneBasis = divParams["useDivPlaneBasis"].asInt();
+        useDivPlaneBasis = divParams["useDivPlaneBasis"].asBool();
         divPlaneBasis[0] = divParams["divPlaneBasisX"].asFloat();
         divPlaneBasis[1] = divParams["divPlaneBasisY"].asFloat();
         divPlaneBasis[2] = divParams["divPlaneBasisZ"].asFloat();
@@ -12639,7 +12648,7 @@ int read_json_params(const char* inpFile){
         return -1;
     } else{
 	
-	ECM = ECMparams["ECM"].asBool();
+	ECM = ECMparams["Add-ECM"].asBool();
 	Clamped = ECMparams["clamped"].asBool();
 	MaxNoofECMs = ECMparams["Max_ECM_nodes"].asInt();
 	DL_ecm = ECMparams["Div_size"].asFloat();
@@ -12648,7 +12657,7 @@ int read_json_params(const char* inpFile){
 	mass_ecm = ECMparams["mass"].asFloat();
 	stiffness_ecm_min = ECMparams["stiffness_min"].asFloat()*1000;
 	stiffness_ecm_max = ECMparams["stiffness_max"].asFloat()*1000;
-	angleConstant_ecm = ECMparams["stiffness"].asFloat()*1000;
+	angleConstant_ecm = ECMparams["angleConstant"].asFloat()*1000;
 	vis_damp_ecm = ECMparams["vis_damp"].asFloat();
 	gamma_env_ecm = ECMparams["gamma_env"].asFloat();
 	vis_ecm_cell = ECMparams["vis_ecm_cell"].asFloat();
@@ -12669,18 +12678,18 @@ int read_json_params(const char* inpFile){
         
         useDifferentCell = NewCell["useDifferentCell"].asBool();
         SizeFactor = NewCell["SizeFactor"].asFloat();
-        Stiffness2 = NewCell["StiffFactor"].asFloat() * Youngs_mod;
+        Stiffness2 = NewCell["StiffFactor2"].asFloat() * Youngs_mod;
         gRate = NewCell["GrowthRate"].asFloat();
         divisionV = NewCell["divisionV"].asFloat();
-        gEnv = NewCell["gamma"].asFloat();
-        gVis = NewCell["VisDamping"].asFloat();
+        gEnv = NewCell["medium_viscosity2"].asFloat();
+        gVis = NewCell["intercellular_damping2"].asFloat();
         Apo_rate2 = NewCell["Apo_rate2"].asFloat();
         squeeze_rate2 = -1 * NewCell["squeeze_rate2"].asFloat();
         numberOfCells = NewCell["numberOfCells"].asInt();
         fractionOfCells = NewCell["fractionOfCells"].asFloat();
         closenessToCenter = NewCell["closenessToCenter"].asFloat();
         Yseparation = NewCell["Yseparation"].asFloat();
-        chooseRandomCellIndices = NewCell["chooseRandomCellIndices"].asBool(); 
+        chooseRandomCellIndices = NewCell["chooseRandomCellindices"].asBool(); 
         daughtSame = NewCell["daughtSame"].asBool(); 
         duringGrowth = NewCell["duringGrowth"].asBool();
         recalc_r0 = NewCell["recalc_r0"].asBool(); 
@@ -12737,8 +12746,8 @@ int read_json_params(const char* inpFile){
 		Initial_Center = (boxMax.z + BoxMin.z)/2.0;
         flatbox = boxParams["flatbox"].asBool();
         LineCenter = boxParams["LineCenter"].asBool();
-        rand_pos = boxParams["rand_pos"].asBool();
-		rand_surface = boxParams["rand_surface"].asBool();
+        rand_pos = boxParams["rand_in_3D"].asBool();
+		rand_surface = boxParams["rand_in_2D"].asBool();
 		impurity = boxParams["impurity"].asBool();
 		impurityNum = boxParams["impurityNum"].asInt();
 		line = boxParams["line"].asBool();
@@ -12746,8 +12755,8 @@ int read_json_params(const char* inpFile){
 		wall_adhesion = boxParams["wall_adhesion"].asBool();
 		LJ_epsilon = boxParams["LJ9_3_epsilon"].asFloat();
 		LJ_sigma = boxParams["LJ9_3_sigma"].asFloat();
-		Surface_friction  = boxParams["Surface_friction"].asBool();
-		gamma_surface = boxParams["gamma_surface"].asFloat();
+		Surface_friction  = boxParams["Have_Surface_friction"].asBool();
+		gamma_surface = boxParams["surface_friction_coeff"].asFloat();
 		compress = boxParams["compress"].asBool();
 		compression_ratio = boxParams["compression_ratio"].asFloat();
 		Compression_step_size = boxParams["Compression_step_size"].asFloat();
@@ -12762,8 +12771,7 @@ int read_json_params(const char* inpFile){
     }
 
     Json::Value randParams = inpRoot.get("rand_params", Json::nullValue);
-	impurity = boxParams["impurity"].asBool();
-	line = boxParams["line"].asBool();
+
     if (randParams == Json::nullValue){
         printf("ERROR: Cannot load randomness parameters\n");
         return -1;
@@ -12785,7 +12793,6 @@ int read_json_params(const char* inpFile){
     }
     else{
         LateralForce = FluidParams["LateralForce"].asBool();
-		gravity = FluidParams["gravity"].asFloat();
 		Dis_cutoff_Nodes = FluidParams["Dis_cutoff_Nodes"].asFloat();
 		NN_cell_criteria = FluidParams["NN_cell_criteria"].asInt();
 		Surface_NN_cell_criteria = FluidParams["Surface_NN_cell_criteria"].asInt();
@@ -12798,7 +12805,7 @@ int read_json_params(const char* inpFile){
 
 	}
 
-	Json::Value InitializationParams = inpRoot.get("Initial_shape", Json::nullValue);
+	Json::Value InitializationParams = inpRoot.get("System_shape", Json::nullValue);
 	if (InitializationParams == Json::nullValue){
 		printf("ERROR: Cannot load Initial shape parameters\nExiting");
 		return -1;
