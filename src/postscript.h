@@ -363,7 +363,7 @@ __global__ void CalculateDisForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            	    int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm,
                            	    int MaxNeighList_ecm,
 								bool Surface_friction , float gamma_surface , double3 BoxMin , double3 boxMax);
-
+                                 
                                    
 __global__ void CalculateDisForce_ECM( int Num_ECM, float* d_ECM_Vx, float* d_ECM_Vy, float* d_ECM_Vz,
 					float *d_Dis_ECM_force_x, float *d_Dis_ECM_force_y, float *d_Dis_ECM_force_z,

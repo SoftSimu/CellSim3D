@@ -1026,6 +1026,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 
 		}
 
+
 		// if initialize shape is on:
 		if (Sphere){
 			float3 center = make_float3(BoxMin.x + 0.5*(boxMax.x - BoxMin.x), BoxMin.y + 0.5*(boxMax.y - BoxMin.y), BoxMin.z + 0.5*(boxMax.z - BoxMin.z));
@@ -1419,6 +1420,7 @@ __global__ void CalculateRanForce(int No_of_C180s, curandState *d_rngStates, flo
 		}
 	}
 }
+
 __global__ void Integrate(float *d_X, float *d_Y, float *d_Z, 
                           float *d_velListX, float *d_velListY, float *d_velListZ, 
                           float dt, float m,

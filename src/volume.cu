@@ -280,7 +280,7 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre, bool along_Maj
 				if (fabs(sqrt(planeNx*planeNx + planeNy*planeNy + planeNz*planeNz) - 1.0f) > 1e-3f){
 					printf("Cell %d: Polarity vector not normalized: [%.4f, %.4f, %.4f]\n",
 						rank, planeNx, planeNy, planeNz);
-					planeNx = 0.0f; planeNy = 0.0f; planeNz = 1.0f; 
+					asm("trap;");
     }
 			}
 			else {
@@ -301,6 +301,9 @@ __global__ void  cell_division( bool Random_Div_Rule, bool Fibre, bool along_Maj
             printf("Crash now :(\n"); 
             asm("trap;");
         }
+
+		//print division plane
+		//if (rank == 0) printf("Plane x: %f, y: %f, z: %f\n",planeNx,planeNy,planeNz);
 
 
         // First generate and write positions for the first daughter
@@ -693,7 +696,7 @@ __global__ void CellShapeTensor( float *d_X,  float *d_Y,  float *d_Z,
 		Sxy[atom] = r_CM.x*r_CM.y;
 		Sxz[atom] = r_CM.x*r_CM.z;					   
 
-		Syx[atom] = Sxy[atom];	//r_CM.y*r_CM.x; // symmetric
+		Syx[atom] = Sxy[atom];	//r_CM.y*r_CM.x;
 		Syy[atom] = r_CM.y*r_CM.y;
 		Syz[atom] = r_CM.y*r_CM.z;
 
@@ -837,9 +840,9 @@ __global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_P
         // Fallback if not converged or residual too large:
 		//if (!converged || (resid2 > rtol*rtol)) { 
         if ((resid2 > rtol*rtol)) {
-			printf("Vector found is %f, %f, %f with lambda=%f and residual %.6f\n", v[0], v[1], v[2], lambda, sqrtf(resid2));
+			//printf("Vector found is %f, %f, %f with lambda=%f and residual %.6f\n", v[0], v[1], v[2], lambda, sqrtf(resid2));
             v[0]=v0[0]; v[1]=v0[1]; v[2]=v0[2];  // keep initial polarity
-			printf("Cell %d: Power iteration did not converge %d: (residual %.6f); using initial guess %.3f, %.3f, %.3f\n", rank, converged,  sqrtf(resid2), v0[0], v0[1], v0[2]);
+			//printf("Cell %d: Power iteration did not converge %d: (residual %.6f); using initial guess %.3f, %.3f, %.3f\n", rank, converged,  sqrtf(resid2), v0[0], v0[1], v0[2]);
 			
         }
 		// else if (converged ) {
