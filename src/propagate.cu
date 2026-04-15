@@ -378,7 +378,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength, float attraction_range,
                            float repulsion_strength, float repulsion_range,
                            float* d_viscotic_damp,
-                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax, 
+                           int Xdiv, int Ydiv, int Zdiv, double3 boxMax, double3 Moving_Min, double3 Moving_Max,
                            int *d_NoofNNlist, int *d_NNlist, int *d_NoofNNlistPin, int *d_NNlistPin, float DL, float* d_gamma_env,
                            float threshDist, 
                            double3 BoxMin, float3 Subdivision_min, float Youngs_mod,  float angleConstant, 
@@ -392,7 +392,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
                            float attraction_strength_ecm, float attraction_range_ecm,
                            float repulsion_strength_ecm, float repulsion_range_ecm,
                            int *d_NoofNNlist_ECM, int *d_NNlist_ECM, float DL_ecm, int Xdiv_ecm, int Ydiv_ecm, int* d_CellINdex,
-                           int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma,
+                           int MaxNeighList_ecm, bool wall_adhesion, float LJ_epsilon , float LJ_sigma, int Single_wall,
 						   bool LateralForce, float Fluid_Density, float Constant_Pressure , int NN_cell_criteria, int Surface_NN_cell_criteria,
 						   bool direction_x, bool direction_y, bool direction_z, float LatforceSideMag,
 						   bool Look_for_Nearest_Node, float Dis_cutoff_Nodes,
@@ -603,7 +603,7 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		float3 contactForce = make_float3(0.f, 0.f, 0.f);
 		float3 AttractiveForces = make_float3(0.f, 0.f, 0.f);
 		float3 Attraction_Cell_Wall = make_float3(0.f, 0.f, 0.f);
-		// float3 RepulsiveForces = make_float3(0.f, 0.f, 0.f);
+		float3 RepulsiveForces = make_float3(0.f, 0.f, 0.f);
 
 
 		//Find nearest Neighbors  
@@ -696,9 +696,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 					contactForce.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
 					contactForce.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
 
-					// RepulsiveForces.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
-					// RepulsiveForces.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
-					// RepulsiveForces.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
+					RepulsiveForces.x += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaX;
+					RepulsiveForces.y += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaY;
+					RepulsiveForces.z += +repulsion_strength*Youngs_mod*(repulsion_range-R)/R*deltaZ;
 				}
 				}
 		
@@ -1004,25 +1004,24 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
         
 		const float MIN_GAP = 1e-8f;
 		if (wall_adhesion){ //add 9:3 LJ potential
-			float gap1, gap2; 
+			// float gap1, gap2; 
 
-			gap1 =  fmaxf(fabsf(Z - BoxMin.z), MIN_GAP);
-			gap2 = fmaxf(fabsf(boxMax.z - Z), MIN_GAP);
-
-			//if (gap1 < LJ_sigma+1){  //gap1 or gap1-threshDist ??
-			float inv_gap1 = 1.0f / gap1;
-			float Force_wall_lower = 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f / gap1 * powf(LJ_sigma * inv_gap1, 9) - 3.0f / gap1 * powf(LJ_sigma * inv_gap1, 3));
+			// float inv_gap1 =  1.0f / fmaxf(fabsf(Z - BoxMin.z), MIN_GAP);
+			float inv_gap1 =  1.0f / fmaxf(fabsf(Z -  Moving_Min.z), MIN_GAP);
+			float Force_wall_lower = 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f * inv_gap1 * powf(LJ_sigma * inv_gap1, 9) - 3.0f * inv_gap1 * powf(LJ_sigma * inv_gap1, 3));
 			FZ += Force_wall_lower;
 			contactForce.z += Force_wall_lower;
 			Attraction_Cell_Wall.z += Force_wall_lower;
-			//}
 
-			//if (gap2 < LJ_sigma+1){
-			float Force_wall_upper = 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f / gap2 * powf(LJ_sigma / gap2, 9) - 3.0f / gap2 * powf(LJ_sigma / gap2, 3));
-			FZ -= Force_wall_upper;
-			contactForce.z -= Force_wall_upper;
-			Attraction_Cell_Wall.z -= Force_wall_upper;
-			//}
+
+			if (!Single_wall){ // if single wall is true, will not apply adhesion to upper wall
+				// float inv_gap2 = 1.0f / fmaxf(fabsf(boxMax.z - Z), MIN_GAP);
+				float inv_gap2 = 1.0f / fmaxf(fabsf( Moving_Max.z - Z), MIN_GAP);
+				float Force_wall_upper = 3.14159f * sqrtf(10.0f / 3.0f) * LJ_epsilon * (9.0f * inv_gap2 * powf(LJ_sigma * inv_gap2, 9) - 3.0f * inv_gap2 * powf(LJ_sigma * inv_gap2, 3));
+				FZ -= Force_wall_upper;
+				contactForce.z -= Force_wall_upper;
+				Attraction_Cell_Wall.z -= Force_wall_upper;
+			}
 
 		}
 
@@ -1063,9 +1062,9 @@ __global__ void CalculateConForce( int No_of_C180s, int d_C180_nn[], int d_C180_
 		d_Attractive.y[atomInd] = AttractiveForces.y;
 		d_Attractive.z[atomInd] = AttractiveForces.z;
 
-		// d_RepulsiveForces.x[atomInd] = RepulsiveForces.x;
-		// d_RepulsiveForces.y[atomInd] = RepulsiveForces.y;
-		// d_RepulsiveForces.z[atomInd] = RepulsiveForces.z;
+		d_RepulsiveForces.x[atomInd] = RepulsiveForces.x;
+		d_RepulsiveForces.y[atomInd] = RepulsiveForces.y;
+		d_RepulsiveForces.z[atomInd] = RepulsiveForces.z;
 
 		d_Attractive_CellWall.z[atomInd] = Attraction_Cell_Wall.z;
    	
