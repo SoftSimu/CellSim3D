@@ -255,6 +255,7 @@ R3Nptrs d_pressForces;
 R3Nptrs h_contactForces;
 R3Nptrs h_ExtForces;
 R3Nptrs h_ConFricForces;
+R3Nptrs h_fRanList;
 R3Nptrs h_AttractiveForces;
 R3Nptrs h_Attractive_CellWall;
 R3Nptrs h_medFricition;
@@ -970,6 +971,9 @@ int main(int argc, char *argv[])
   h_ConFricForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ConFricForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_ConFricForces.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_fRanList.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_fRanList.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
+  h_fRanList.z = (float *)calloc(192*MaxNoofC180s, sizeof(float));
 
   h_AttractiveForces.x = (float *)calloc(192*MaxNoofC180s, sizeof(float));
   h_AttractiveForces.y = (float *)calloc(192*MaxNoofC180s, sizeof(float));
@@ -5062,6 +5066,13 @@ int main(int argc, char *argv[])
 			cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 			CudaErrorCheck();
 
+			cudaMemcpy(h_fRanList.x, d_fRanList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_fRanList.y, d_fRanList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_fRanList.z, d_fRanList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+			CudaErrorCheck();
+
+			
+
 			VelocityCenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,
         	                                		d_velListX, d_velListY, d_velListZ,
         	                                	  	d_VCMx, d_VCMy, d_VCMz); //calculate the velocity center of mass
@@ -5085,12 +5096,13 @@ int main(int argc, char *argv[])
 				"F_Att_CC_x,F_Att_CC_y,F_Att_CC_z,mag_F_Att_CC," 
 				"F_Att_CW_z,mag_F_Att_CW," 
 				"F_Press_x,F_Press_y,F_Press_z,mag_F_Press," 
-				"F_ConFric_x,F_ConFric_y,F_ConFric_z,mag_F_ConFric," 
 				"F_medFric_x,F_medFric_y,F_medFric_z,mag_F_medFric," 
-				"F_Total_x,F_Total_y,F_Total_z," 
 				"F_Ext_x,F_Ext_y,F_Ext_z," 
 				"VCMx,VCMy,VCMz,"
-				"Pressure,Area,Volume\n");
+				"Pressure,Area,Volume,"
+				"Fx_ConTotal,Fy_ConTotal,Fz_ConTotal, mag_F_ConTotal," 
+				"Fx_DisConTotal,Fy_DisConTotal,Fz_DisConTotal,mag_F_DisConTotal," 
+				"Fx_RanTotal,Fy_RanTotal,Fz_RanTotal,mag_F_RanTotal\n");
 
 		
 				if (Restart ==0) 
@@ -5539,7 +5551,7 @@ int main(int argc, char *argv[])
 		// ----------------------------------------- Begin Cell Death ------------	
 		if (apoptosis && !WithoutApo) {	
 
-			if (Create_wound && step > Wound_creation_time) { //Apoptosis due to wound creation
+			if (Create_wound && (step > Wound_creation_time)) { //Apoptosis due to wound creation
 				printf(" create Wound.\n");
 
 					if (wound_radius > 0.f && wound_radius < 1.f) {
@@ -5563,7 +5575,7 @@ int main(int argc, char *argv[])
 			if (Cut_out_Sphere) {
 
 				printf("Cutting out a sphere.\n");
-				Create_wound_center(No_of_C180s);
+				Create_wound_center(No_of_C180s); // Can either create an epithelial wound OR Cut_out the Sphere, multi-purpose function
 				Cut_out_Sphere = false;
 				apoptosis = false;
 			}
@@ -5599,11 +5611,11 @@ int main(int argc, char *argv[])
 				
 				CudaErrorCheck();
 
-				Wound_Induced_Param_Change<<<MaxNoofC180s , 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
-										d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
-										gamma_env_after_wound, viscotic_damp_after_wound);
+				// Wound_Induced_Param_Change<<<MaxNoofC180s , 192>>>(No_of_C180s, d_Growth_rate, d_DivisionVolume, d_gamma_env,
+				// 						d_viscotic_damp, growth_rate_after_wound, divisionV_after_wound, 
+				// 						gamma_env_after_wound, viscotic_damp_after_wound);
 
-				CudaErrorCheck();
+				// CudaErrorCheck();
 
 				//printf("Wound created\n");
 				
@@ -8851,11 +8863,10 @@ CudaErrorCheck();
    		CudaErrorCheck();
 
    		
-		float init_guess[3*MaxNoofC180s];
-		ranmar(init_guess,3*MaxNoofC180s);
-
-		cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-
+		// d_init_guess is the isotropic random seed pool, filled once at startup
+		// (see GetRandomVector fill near the d_DivPlane precompute). No per-step
+		// regeneration needed: power-iteration results are seed-independent for
+		// elongated cells, and the random fallback only needs an isotropic seed.
    		PowerItr<<<No_of_C180s,32>>>( No_of_C180s, d_Stress, d_Polarity_Vec, d_init_guess); // Uses the stress tensor to define polarity
 
    		CudaErrorCheck();
@@ -8919,11 +8930,6 @@ CudaErrorCheck();
 				CudaErrorCheck();
 				cudaDeviceSynchronize();
 				CudaErrorCheck();
-
-				float init_guess[3*MaxNoofC180s];
-				ranmar(init_guess,3*MaxNoofC180s);
-
-				cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
 
 				PowerItr_long_axis<<<num_cell_div,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess, d_cell_div_inds, num_cell_div); //We use the shape tensor to find the major axis
 	
@@ -9097,7 +9103,6 @@ CudaErrorCheck();
                   
                   bool indexChosen = false;
                   int cellInd = -1;
-
                   printf("Make cells with indices "); 
                   
                   while (softCellCounter < numberOfCells){
@@ -9494,6 +9499,7 @@ CudaErrorCheck();
           	}
 
 			if (write_extra_forces_file){
+				
 				cudaMemcpy(h_AttractiveForces.x, d_AttractiveForces.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 				cudaMemcpy(h_AttractiveForces.y, d_AttractiveForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 				cudaMemcpy(h_AttractiveForces.z, d_AttractiveForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
@@ -9533,6 +9539,13 @@ CudaErrorCheck();
 				cudaMemcpy(h_ConFricForces.y, d_ConFricForces.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 				cudaMemcpy(h_ConFricForces.z, d_ConFricForces.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
 				CudaErrorCheck();
+
+				cudaMemcpy(h_fRanList.x, d_fRanList.x, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_fRanList.y, d_fRanList.y, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_fRanList.z, d_fRanList.z, 192*No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
+				CudaErrorCheck();
+
+				
 
 				if (No_of_C180s > 0 ){
      
@@ -11066,7 +11079,7 @@ inline void initialize_Plane(int MaxNoofC180s){
 
 	//Random division, along_elongation, else
 
-	if(Random_Div_Rule || along_Major_axis) {	
+	if(Random_Div_Rule) {
    	
 		float v[3], w[3];
 		
@@ -11136,55 +11149,8 @@ inline void initialize_Plane(int MaxNoofC180s){
 
 		}
     	}
-		// here's the deal: The long axis needs to be calculated once before each division
-		// Elongation does not apply in the begining of the sim, taking this out for now
-	// else if (along_Major_axis){
 
-	// 			cudaError_t err;
-
-	// 			CenterOfMass<<<No_of_C180s,256>>>(No_of_C180s,d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz);
-
-	// 			CudaErrorCheck();
-
-	// 			CellShapeTensor<<<No_of_C180s,256>>>(d_X, d_Y, d_Z, d_CMx, d_CMy, d_CMz, d_volume, d_Shape, d_cell_div_inds);
-	// 			CudaErrorCheck();
-
-	// 			float init_guess[3*MaxNoofC180s];
-	// 			ranmar(init_guess,3*MaxNoofC180s);
-
-	// 			cudaMemcpy(d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-
-	// 			PowerItr_long_axis<<<num_cell_div,32>>>( No_of_C180s, d_Shape, d_Polarity_Vec, d_init_guess, d_cell_div_inds, num_cell_div); 
-	// 			// not sure if num_cell_divs is called yet
-	// 			// CAlculate for all
-	
-	// 			CudaErrorCheck();
-	// 			cudaDeviceSynchronize();
-
-	// 			err = cudaMemcpy(h_Polarity_Vec.x, d_Polarity_Vec.x, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-	// 			if (err != cudaSuccess) {
-    // 				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
-	// 			}
-
-	// 			err = cudaMemcpy(h_Polarity_Vec.y, d_Polarity_Vec.y, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-	// 			if (err != cudaSuccess) {
-    // 				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
-	// 			}
-
-	// 			err = cudaMemcpy(h_Polarity_Vec.z, d_Polarity_Vec.z, No_of_C180s*sizeof(float), cudaMemcpyDeviceToHost);
-	// 			if (err != cudaSuccess) {
-    // 				printf("cudaMemcpy error (x): %s\n", cudaGetErrorString(err));
-	// 			}
-
-	// 			for (int i = 0; i < No_of_C180s; i++){
-	// 				DivPlane.x[i] = h_Polarity_Vec.x[i];
-	// 				DivPlane.y[i] = h_Polarity_Vec.y[i];
-	// 				DivPlane.z[i] = h_Polarity_Vec.z[i];
-	// 			}
-
-	// 			//printf("h_Polarity_Vec.x[0] = %f, h_Polarity_Vec.y[0] = %f, h_Polarity_Vec.z[0] = %f\n", h_Polarity_Vec.x[0], h_Polarity_Vec.y[0], h_Polarity_Vec.z[0]);
-	// } 
-	else {
+	else if (!along_Major_axis) {
     
 		float norm[3];
 		float arg_radian = (Rotation_angle*3.14159)/180;
@@ -11231,7 +11197,22 @@ inline void initialize_Plane(int MaxNoofC180s){
    
    
    cudaMemcpy( d_asym, asym, MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
-   CudaErrorCheck();	
+   CudaErrorCheck();
+
+   // Precompute random seed for PowerItr_long_axis.
+   if (along_Major_axis || Polarity) {
+      float* init_guess = (float*)malloc(3*MaxNoofC180s*sizeof(float));
+      for (int i = 0; i < MaxNoofC180s; i++) {
+         float norm[3];
+         GetRandomVector(norm);
+         init_guess[3*i+0] = norm[0];
+         init_guess[3*i+1] = norm[1];
+         init_guess[3*i+2] = norm[2];
+      }
+      cudaMemcpy( d_init_guess, init_guess, 3*MaxNoofC180s*sizeof(float), cudaMemcpyHostToDevice);
+      CudaErrorCheck();
+      free(init_guess);
+   }
 
 }
 
@@ -13313,6 +13294,8 @@ void write_traj(int t_step, FILE* trajfile)
 
 }
 
+			
+
 
 void write_ExtraForces(FILE* Extra_forceFile, int t_step, int num_cells){
 
@@ -13329,15 +13312,18 @@ void write_ExtraForces(FILE* Extra_forceFile, int t_step, int num_cells){
 		float3 Att_cell_wall = make_float3(0,0,0);
 		float3 Press_F = make_float3(0,0,0);
 		float3 Med_Fric_F = make_float3(0,0,0);
-		float3 F_con = make_float3(0,0,0);
+		float3 F_Total_con = make_float3(0,0,0); //Total contact forces
 		float3 F_ext = make_float3(0,0,0);
-		float3 F_ConFric = make_float3(0,0,0);
+		float3 F_Con_Fric = make_float3(0,0,0); //Total friction forces (contact = cell-cell and cell-medium, not the damping term)
+		float3 F_ran_forces = make_float3(0,0,0); //Total random forces
 
 		float mag_Att_F = 0.0f;
 		float mag_Att_cell_wall = 0.0f;
 		float mag_Press_F = 0.0f;
 		float mag_Med_Fric_F = 0.0f;
-		float mag_F_ConFric = 0.0f;
+		float mag_F_Total_Con = 0.0f;
+		float mag_Total_Ran_Forces = 0.0f;
+		float mag_F_Total_Fric = 0.0f;
 
 		for (int n = 0; n < 180; ++n){
 			int idx = c * 192 + n;
@@ -13360,43 +13346,62 @@ void write_ExtraForces(FILE* Extra_forceFile, int t_step, int num_cells){
 			Med_Fric_F.x += f.x; Med_Fric_F.y += f.y; Med_Fric_F.z += f.z;
 			mag_Med_Fric_F += mag(f);
 
-			f = make_float3(h_contactForces.x[idx], h_contactForces.y[idx], h_contactForces.z[idx]);
-			F_con.x += f.x; F_con.y += f.y; F_con.z += f.z;
-
 			f = make_float3(h_ExtForces.x[idx], h_ExtForces.y[idx], h_ExtForces.z[idx]);
 			F_ext.x += f.x; F_ext.y += f.y; F_ext.z += f.z;
 
+			f = make_float3(h_contactForces.x[idx], h_contactForces.y[idx], h_contactForces.z[idx]);
+			F_Total_con.x += f.x; F_Total_con.y += f.y; F_Total_con.z += f.z;
+			mag_F_Total_Con += mag(f);
+
+
 			f = make_float3(h_ConFricForces.x[idx], h_ConFricForces.y[idx], h_ConFricForces.z[idx]);
-			F_ConFric.x += f.x; F_ConFric.y += f.y; F_ConFric.z += f.z;
-			mag_F_ConFric += mag(f);
+			F_Con_Fric.x += f.x; F_Con_Fric.y += f.y; F_Con_Fric.z += f.z;
+			mag_F_Total_Fric += mag(f);
+
+			f = make_float3(h_fRanList.x[idx], h_fRanList.y[idx], h_fRanList.z[idx]);
+			F_ran_forces.x += f.x; F_ran_forces.y += f.y; F_ran_forces.z += f.z;
+			mag_Total_Ran_Forces += mag(f);
+
 		}
 
 		fprintf(Extra_forceFile,
 			"%d,%d,%d,"               // step, num_cells, cell_ind
 			"%.6f,%.6f,%.6f,%.6f,"    // F_Att_CC (x,y,z), sum(|F_Att_CC_i|)
-			"%.6f,%.6f,"    // F_Att_CW (x,y,z), sum(|F_Att_CW_i|)
+			"%.6f,%.6f,"    		  // F_Att_CW (x,y,z), sum(|F_Att_CW_i|)
 			"%.6f,%.6f,%.6f,%.6f,"    // F_Press (x,y,z), sum(|F_Press_i|)
-			"%.6f,%.6f,%.6f,%.6f,"    // F_ConFric (x,y,z), sum(|F_ConFric_i|)
 			"%.6f,%.6f,%.6f,%.6f,"    // F_medFric (x,y,z), sum(|F_medFric_i|)
-			"%.6f,%.6f,%.6f,"         // F_Total (x,y,z)
-			"%.6f,%.6f,%.6f,"         // F_Ext (x,y,z)
-			"%.6f,%.6f,%.6f,"
-			"%.6f,%.6f,%.6f\n",
+			"%.6f,%.6f,%.6f,"    	  // F_Ext (x,y,z)
+			"%.6f,%.6f,%.6f,"         // VCMx,VCMy,VCMz,
+			"%.6f,%.6f,%.6f,"   // Pressure,Area,Volume    
+			"%.6f,%.6f,%.6f, %.6f,"		  // F_ConTotal (x,y,z)
+			"%.6f,%.6f,%.6f, %.6f,"		  // F_ConFric (x,y,z), sum(|F_ConFric_i|) // Both contact and medium frictions
+			"%.6f,%.6f,%.6f, %.6f\n",		  // Fx_RanTotal,Fy_RanTotal,Fz_RanTotal,mag_F_RanTotal\n");
 			t_step, No_of_All_Cells, c,
 			Att_F.x, Att_F.y, Att_F.z, mag_Att_F,
 			Att_cell_wall.z, mag_Att_cell_wall,
 			Press_F.x, Press_F.y, Press_F.z, mag_Press_F,
-			F_ConFric.x, F_ConFric.y, F_ConFric.z, mag_F_ConFric,
 			Med_Fric_F.x, Med_Fric_F.y, Med_Fric_F.z, mag_Med_Fric_F,
-			F_con.x, F_con.y, F_con.z,
 			F_ext.x, F_ext.y, F_ext.z,
 			VCMx[c], VCMy[c], VCMz[c],
-			pressList[c], area[c], volume[c]
+			pressList[c], area[c], volume[c],
+			F_Total_con.x, F_Total_con.y, F_Total_con.z, mag_F_Total_Con,
+			F_Con_Fric.x, F_Con_Fric.y, F_Con_Fric.z, mag_F_Total_Fric,
+			F_ran_forces.x, F_ran_forces.y, F_ran_forces.z, mag_Total_Ran_Forces
 		);
 	}
 }
 
-
+				// "step,num_cells,cell_ind," ~3
+				// "F_Att_CC_x,F_Att_CC_y,F_Att_CC_z,mag_F_Att_CC," ~4
+				// "F_Att_CW_z,mag_F_Att_CW,"  ~2
+				// "F_Press_x,F_Press_y,F_Press_z,mag_F_Press," ~4
+				// "F_medFric_x,F_medFric_y,F_medFric_z,mag_F_medFric," ~4
+				// "F_Ext_x,F_Ext_y,F_Ext_z," ~3
+				// "VCMx,VCMy,VCMz," ~3
+				// "Pressure,Area,Volume,"~3
+				// "Fx_ConTotal,Fy_ConTotal,Fz_ConTotal, mag_F_ConTotal," 
+				// "Fx_DisConTotal,Fy_DisConTotal,Fz_DisConTotal,mag_F_DisConTotal," 
+				// "Fx_RanTotal,Fy_RanTotal,Fz_RanTotal,mag_F_RanTotal\n");
 
 
 

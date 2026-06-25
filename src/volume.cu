@@ -776,6 +776,10 @@ __global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_P
 	if (div_i >= num_cell_div) return;
 	int rank = cell_div_inds[div_i];
 
+	// New daughter slot for division event; indexes the isotropic seed (fixed - uses GetRandomVector now), matching d_DivPlane.x[newrank] in the random-div path.
+	// used to be in the positive octant
+	int newrank = No_of_C180s + div_i;
+
 	//if (threadIdx.x == 0) printf("Power iteration for cell %d (block %d)\n", rank, blockIdx.x);
 
     if (rank >= No_of_C180s) return;
@@ -787,9 +791,9 @@ __global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_P
 
         // Seed from initial guess (random axis)
         float v0[3] = {
-            d_init_guess[rank*3 + 0],
-            d_init_guess[rank*3 + 1],
-            d_init_guess[rank*3 + 2]
+            d_init_guess[newrank*3 + 0],
+            d_init_guess[newrank*3 + 1],
+            d_init_guess[newrank*3 + 2]
         };
 
         float n0 = v0[0]*v0[0] + v0[1]*v0[1] + v0[2]*v0[2];
@@ -837,11 +841,14 @@ __global__ void PowerItr_long_axis( int No_of_C180s, float *d_Shape, R3Nptrs d_P
         float r2 = Av2 - lambda*v[2];
         float resid2 = r0*r0 + r1*r1 + r2*r2;
 
-        // Fallback if not converged or residual too large:
-		//if (!converged || (resid2 > rtol*rtol)) { 
+        // If the residual ||Av - lambda*v|| is too large the cell has no well-defined
+        // long axis, so fall back to the random initial guess
+        // -> oblate cells with two near-equal eigenvalues never invoke `converged`
+        // flag but still have a valid in-plane axis we want to keep.
+		//if (!converged || (resid2 > rtol*rtol)) {   // the !converged term is dropped: residual is the eigenvector test
         if ((resid2 > rtol*rtol)) {
 			//printf("Vector found is %f, %f, %f with lambda=%f and residual %.6f\n", v[0], v[1], v[2], lambda, sqrtf(resid2));
-            v[0]=v0[0]; v[1]=v0[1]; v[2]=v0[2];  // keep initial polarity
+            v[0]=v0[0]; v[1]=v0[1]; v[2]=v0[2];  // random initial guess
 			//printf("Cell %d: Power iteration did not converge %d: (residual %.6f); using initial guess %.3f, %.3f, %.3f\n", rank, converged,  sqrtf(resid2), v0[0], v0[1], v0[2]);
 			
         }
